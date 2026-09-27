@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54">
+        <!-- Helm outer ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFD54F"
+            android:strokeWidth="3.2"
+            android:pathData="M 54,32 A 22,22 0 1,0 54,76 A 22,22 0 1,0 54,32" />
+
+        <!-- Helm inner ring -->
+        <path
+            android:fillColor="#00000000"
+            android:strokeColor="#FFC107"
+            android:strokeWidth="1.2"
+            android:pathData="M 54,36 A 18,18 0 1,0 54,72 A 18,18 0 1,0 54,36" />
+
+        <!-- 8 Helm Spokes and Handles -->
+        <!-- Top / Bottom (0 & 180 deg) -->
+        <path
+            android:strokeColor="#FFE082"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M 54,23 L 54,85" />
+        <path
+            android:fillColor="#FFD54F"
+            android:pathData="M 52,22 L 56,22 L 54,19 Z M 52,86 L 56,86 L 54,89 Z" />
+
+        <!-- Left / Right (90 & 270 deg) -->
+        <path
+            android:strokeColor="#FFE082"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M 23,54 L 85,54" />
+        <path
+            android:fillColor="#FFD54F"
+            android:pathData="M 22,52 L 22,56 L 19,54 Z M 86,52 L 86,56 L 89,54 Z" />
+
+        <!-- Diagonal 1 (45 & 225 deg) -->
+        <path
+            android:strokeColor="#FFE082"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M 32.1,32.1 L 75.9,75.9" />
+        <path
+            android:fillColor="#FFD54F"
+            android:pathData="M 29.5,29.5 L 32.5,28.5 L 30.5,31.5 Z M 78.5,78.5 L 75.5,79.5 L 77.5,76.5 Z" />
+
+        <!-- Diagonal 2 (135 & 315 deg) -->
+        <path
+            android:strokeColor="#FFE082"
+            android:strokeWidth="2.8"
+            android:strokeLineCap="round"
+            android:pathData="M 75.9,32.1 L 32.1,75.9" />
+        <path
+            android:fillColor="#FFD54F"
+            android:pathData="M 78.5,29.5 L 75.5,28.5 L 77.5,31.5 Z M 29.5,78.5 L 32.5,79.5 L 30.5,76.5 Z" />
+
+        <!-- Central Hub Ring -->
+        <path
+            android:fillColor="#0D2547"
+            android:strokeColor="#FFC107"
+            android:strokeWidth="2"
+            android:pathData="M 54,46 A 8,8 0 1,0 54,62 A 8,8 0 1,0 54,46" />
+
+        <!-- 4-Point Compass Star in center -->
+        <!-- North Point -->
+        <path
+            android:fillColor="#FFF8E1"
+            android:pathData="M 54,43 L 56,54 L 54,54 Z" />
+        <path
+            android:fillColor="#FFA000"
+            android:pathData="M 54,43 L 52,54 L 54,54 Z" />
+
+        <!-- South Point -->
+        <path
+            android:fillColor="#FFA000"
+            android:pathData="M 54,65 L 56,54 L 54,54 Z" />
+        <path
+            android:fillColor="#FFF8E1"
+            android:pathData="M 54,65 L 52,54 L 54,54 Z" />
+
+        <!-- East Point -->
+        <path
+            android:fillColor="#FFF8E1"
+            android:pathData="M 65,54 L 54,52 L 54,54 Z" />
+        <path
+            android:fillColor="#FFA000"
+            android:pathData="M 65,54 L 54,56 L 54,54 Z" />
+
+        <!-- West Point -->
+        <path
+            android:fillColor="#FFA000"
+            android:pathData="M 43,54 L 54,52 L 54,54 Z" />
+        <path
+            android:fillColor="#FFF8E1"
+            android:pathData="M 43,54 L 54,56 L 54,54 Z" />
+
+        <!-- Center Golden Pivot Dot -->
+        <path
+            android:fillColor="#FFD54F"
+            android:pathData="M 54,52.5 A 1.5,1.5 0 1,0 54,55.5 A 1.5,1.5 0 1,0 54,52.5" />
+    </group>
+</vector>

@@ -1,0 +1,70 @@
+package com.example.data.local
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface MistakeDao {
+    @Query("SELECT * FROM mistakes ORDER BY lastFailedTimestamp DESC")
+    fun getAllMistakes(): Flow<List<MistakeEntity>>
+
+    @Query("SELECT * FROM mistakes WHERE questionId = :questionId LIMIT 1")
+    suspend fun getMistake(questionId: String): MistakeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(mistake: MistakeEntity)
+
+    @Query("DELETE FROM mistakes WHERE questionId = :questionId")
+    suspend fun deleteMistake(questionId: String)
+
+    @Query("DELETE FROM mistakes")
+    suspend fun clearAll()
+}
+
+@Dao
+interface BookmarkDao {
+    @Query("SELECT * FROM bookmarks ORDER BY addedTimestamp DESC")
+    fun getAllBookmarks(): Flow<List<BookmarkEntity>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE questionId = :questionId)")
+    fun isBookmarked(questionId: String): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBookmark(bookmark: BookmarkEntity)
+
+    @Query("DELETE FROM bookmarks WHERE questionId = :questionId")
+    suspend fun removeBookmark(questionId: String)
+}
+
+@Dao
+interface ActiveSessionDao {
+    @Query("SELECT * FROM active_session WHERE id = 'current_session' LIMIT 1")
+    fun getActiveSession(): Flow<ActiveSessionEntity?>
+
+    @Query("SELECT * FROM active_session WHERE id = 'current_session' LIMIT 1")
+    suspend fun getActiveSessionOnce(): ActiveSessionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveActiveSession(session: ActiveSessionEntity)
+
+    @Query("DELETE FROM active_session WHERE id = 'current_session'")
+    suspend fun clearActiveSession()
+}
+
+@Dao
+interface ExamRecordDao {
+    @Query("SELECT * FROM exam_records ORDER BY timestamp DESC")
+    fun getAllExamRecords(): Flow<List<ExamRecordEntity>>
+
+    @Query("SELECT * FROM exam_records WHERE id = :id LIMIT 1")
+    suspend fun getExamRecordById(id: String): ExamRecordEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecord(record: ExamRecordEntity)
+
+    @Query("DELETE FROM exam_records")
+    suspend fun clearHistory()
+}

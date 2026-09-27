@@ -1,0 +1,890 @@
+package com.example.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Dangerous
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FolderSpecial
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.local.ActiveSessionEntity
+import com.example.data.local.ExamRecordEntity
+import com.example.data.model.QuizMode
+import com.example.data.model.Track
+import com.example.ui.components.MaritimeTopBar
+import com.example.ui.theme.FailRed
+import com.example.ui.theme.MaritimeGold
+import com.example.ui.theme.MaritimeGoldBright
+import com.example.ui.theme.NauticalNavyDark
+import com.example.ui.theme.PassGreen
+import com.example.ui.theme.PureWhite
+import com.example.ui.theme.SeaCyan
+import com.example.viewmodel.ReviewerViewModel
+import com.example.viewmodel.Screen
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun HomeScreen(
+    viewModel: ReviewerViewModel,
+    modifier: Modifier = Modifier
+) {
+    val selectedTrack by viewModel.selectedTrack.collectAsState()
+    val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
+    val mistakes by viewModel.mistakeEntities.collectAsState()
+    val examRecords by viewModel.examRecords.collectAsState()
+    val activeSession by viewModel.activeSession.collectAsState()
+    val isActivated by viewModel.isActivated.collectAsState()
+
+    val totalMistakes = mistakes.size
+    val totalBookmarks = bookmarkedIds.size
+
+    val trackExams = examRecords.filter { it.track == selectedTrack.name }
+    val totalExamsTaken = trackExams.size
+    val passedExams = trackExams.count { it.isPassed }
+    val averageScore = if (totalExamsTaken > 0) {
+        trackExams.map { it.percentage }.average()
+    } else 0.0
+
+    BackHandler {
+        viewModel.navigateTo(Screen.TrackSelection)
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .navigationBarsPadding()
+    ) {
+        MaritimeTopBar(
+            title = "HYPERION",
+            showBackButton = false,
+            onBackClick = { viewModel.navigateTo(Screen.TrackSelection) },
+            onMenuClick = { viewModel.openDrawer() },
+            onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) },
+            onSearchClick = { viewModel.navigateTo(Screen.Search) },
+            onHistoryClick = { viewModel.navigateTo(Screen.History) },
+            onBookmarksClick = { viewModel.navigateTo(Screen.Bookmarks) },
+            onVaultClick = { viewModel.navigateTo(Screen.Vault) },
+            bookmarkCount = totalBookmarks,
+            vaultCount = totalMistakes
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                // Hero Banner
+                HeroBanner(track = selectedTrack)
+            }
+
+            item {
+                // Live KPI Stats Grid
+                StatsGrid(
+                    examsCount = totalExamsTaken,
+                    avgScore = averageScore,
+                    mistakeCount = totalMistakes,
+                    bookmarkCount = totalBookmarks
+                )
+            }
+
+            // Resume Active Session Card (if unfinished session exists)
+            activeSession?.let { session ->
+                item {
+                    ResumeActiveSessionCard(
+                        session = session,
+                        onResume = { viewModel.resumeActiveSession(session) },
+                        onDiscard = { viewModel.discardActiveSession() }
+                    )
+                }
+            }
+
+            item {
+                Text(
+                    text = "EXAMINATION MODES",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaritimeGoldBright,
+                    letterSpacing = 1.sp
+                )
+            }
+
+            // Quick Mode Launchers
+            if (!isActivated) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
+                        border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = MaritimeGoldBright,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Free Tier Active",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaritimeGoldBright
+                                )
+                                Text(
+                                    text = "Try sample questions in Free Practice, or enter your offline key to unlock Hyperion Pro.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = PureWhite.copy(alpha = 0.8f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = { viewModel.navigateTo(Screen.Activation) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Activate", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Free Practice Sample",
+                    subtitle = "10 curated diagnostic questions across competencies • No activation required",
+                    badge = "FREE TIER",
+                    badgeColor = SeaCyan,
+                    icon = Icons.Default.School,
+                    accentColor = SeaCyan,
+                    onClick = {
+                        viewModel.startFreePractice()
+                    }
+                )
+            }
+
+            if (selectedTrack == Track.GMDSS_GOC) {
+                item {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    ModeLauncherCard(
+                        title = "GMDSS STCW Reviewer (C1 & C2)",
+                        subtitle = "Competence 1 (10 Parts • 1,911 items) & Competence 2 (2 Parts • 349 items)",
+                        badge = if (isActivated) "12 PARTS PRO" else "PRO LOCKED",
+                        badgeColor = if (isActivated) PassGreen else MaritimeGoldBright,
+                        icon = Icons.Default.CellTower,
+                        accentColor = SeaCyan,
+                        onClick = {
+                            viewModel.openGmdssProCompetencies(context)
+                        }
+                    )
+                }
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Practice Drill Configuration",
+                    subtitle = "Two-step setup: select competence, then configure sequential/randomized ordering & item count",
+                    badge = if (isActivated) "CUSTOMIZABLE" else "PRO LOCKED",
+                    badgeColor = if (isActivated) SeaCyan else MaritimeGoldBright,
+                    icon = Icons.Default.Tune,
+                    accentColor = SeaCyan,
+                    onClick = {
+                        viewModel.requireActivationOr {
+                            viewModel.navigateTo(Screen.PracticeCompetenceSelect)
+                        }
+                    }
+                )
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Official Timed Mock Exam",
+                    subtitle = if (selectedTrack == Track.DECK_OIC_NW) "200 Items • 200 Minutes • 70% Cutoff" else "100 Items • 100 Minutes • 70% Cutoff",
+                    badge = if (isActivated) "STCW TOS MOCK" else "PRO LOCKED",
+                    badgeColor = MaritimeGoldBright,
+                    icon = Icons.Default.Timer,
+                    accentColor = MaritimeGoldBright,
+                    onClick = {
+                        viewModel.requireActivationOr {
+                            viewModel.startQuizSession(
+                                mode = QuizMode.MOCK_EXAM
+                            )
+                        }
+                    }
+                )
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Flashcard Revision Mode",
+                    subtitle = "Active recall study • Tap to flip cards • Rationale & Bloom's taxonomy breakdown",
+                    badge = "ACTIVE RECALL",
+                    badgeColor = Color(0xFFF59E0B),
+                    icon = Icons.Default.Style,
+                    accentColor = MaritimeGoldBright,
+                    onClick = {
+                        viewModel.navigateTo(Screen.Flashcards)
+                    }
+                )
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Mistakes Notebook (Vault)",
+                    subtitle = "$totalMistakes questions to redeem. Removed after 2 consecutive correct answers.",
+                    badge = if (totalMistakes > 0) "$totalMistakes ITEMS" else "EMPTY",
+                    badgeColor = if (totalMistakes > 0) FailRed else MaterialTheme.colorScheme.outline,
+                    icon = Icons.Default.AutoFixHigh,
+                    accentColor = FailRed,
+                    onClick = {
+                        viewModel.navigateTo(Screen.Vault)
+                    }
+                )
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Historical Session Logs",
+                    subtitle = "Past mock exam attempts, Bloom's scoring, and 70% competence diagnostics",
+                    badge = if (examRecords.isNotEmpty()) "${examRecords.size} LOGS" else "EMPTY",
+                    badgeColor = SeaCyan,
+                    icon = Icons.Default.Analytics,
+                    accentColor = SeaCyan,
+                    onClick = {
+                        viewModel.navigateTo(Screen.History)
+                    }
+                )
+            }
+
+            item {
+                ModeLauncherCard(
+                    title = "Competence & Function Directory",
+                    subtitle = "Browse by Function (F1, F2, F3) or specific STCW Competences",
+                    badge = "DIRECTORY",
+                    badgeColor = PassGreen,
+                    icon = Icons.Default.FolderSpecial,
+                    accentColor = PassGreen,
+                    onClick = {
+                        viewModel.navigateTo(Screen.Topics)
+                    }
+                )
+            }
+
+            item {
+                // MARINA Strict Passing Policy Card
+                MarinaPolicyCard()
+            }
+
+            if (trackExams.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "RECENT EXAM ATTEMPTS",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaritimeGoldBright,
+                            letterSpacing = 1.sp
+                        )
+                        TextButton(onClick = { viewModel.navigateTo(Screen.History) }) {
+                            Text(
+                                "View All Logs",
+                                color = SeaCyan,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                items(trackExams.take(3)) { exam ->
+                    RecentExamCard(
+                        exam = exam,
+                        onClick = { viewModel.loadPastExamResult(exam) }
+                    )
+                }
+            }
+
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+                        .padding(vertical = 8.dp),
+                    color = Color.Transparent
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = SeaCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Legal Disclaimer, Academic Terms & Privacy Agreement",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SeaCyan,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroBanner(track: Track) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeGold.copy(alpha = 0.5f))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF0F1E36),
+                            Color(0xFF162D4F)
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaritimeGoldBright.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = "STCW '78 AS AMENDED",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaritimeGoldBright
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = PassGreen.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = "100% OFFLINE",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PassGreen
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = PureWhite
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = if (track == Track.DECK_OIC_NW) {
+                        "Navigation (F1: 125 items), Cargo Stowage (F2: 30 items), and Ship Operations (F3: 45 items)."
+                    } else {
+                        "Subsystems & Equipment (C1: 85 items) and Emergency Communications (C2: 15 items)."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatsGrid(
+    examsCount: Int,
+    avgScore: Double,
+    mistakeCount: Int,
+    bookmarkCount: Int
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatTile(
+            title = "Mocks Taken",
+            value = "$examsCount",
+            color = SeaCyan,
+            modifier = Modifier.weight(1f)
+        )
+        StatTile(
+            title = "Avg. Score",
+            value = if (examsCount > 0) String.format("%.0f%%", avgScore) else "--",
+            color = if (avgScore >= 70.0) PassGreen else MaritimeGoldBright,
+            modifier = Modifier.weight(1f)
+        )
+        StatTile(
+            title = "Error Vault",
+            value = "$mistakeCount",
+            color = if (mistakeCount > 0) FailRed else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        StatTile(
+            title = "Bookmarks",
+            value = "$bookmarkCount",
+            color = MaritimeGoldBright,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun StatTile(
+    title: String,
+    value: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = color
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModeLauncherCard(
+    title: String,
+    subtitle: String,
+    badge: String,
+    badgeColor: Color,
+    icon: ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = accentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = badgeColor.copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = badge,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = badgeColor,
+                    fontSize = 9.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarinaPolicyCard() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeGold.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Icon(
+                imageVector = Icons.Default.Security,
+                contentDescription = "MARINA Policy",
+                tint = MaritimeGoldBright,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = "MARINA Evaluation & Weighted Scoring",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaritimeGoldBright
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Passing Threshold: 70.0% per competence. A candidate passes only if obtaining >= 70% in EVERY competence within the function. Easy: 3 pts, Moderate: 6 pts, Difficult: 9 pts.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentExamCard(
+    exam: ExamRecordEntity,
+    onClick: () -> Unit = {}
+) {
+    val dateStr = SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()).format(Date(exam.timestamp))
+    val statusColor = if (exam.isPassed) PassGreen else FailRed
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "${exam.track.replace('_', ' ')} Mock",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = dateStr,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = String.format("%.1f%%", exam.percentage),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor
+                    )
+                    Text(
+                        text = if (exam.isPassed) "PASSED" else "FAILED",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResumeActiveSessionCard(
+    session: ActiveSessionEntity,
+    onResume: () -> Unit,
+    onDiscard: () -> Unit
+) {
+    val trackLabel = if (session.track == Track.DECK_OIC_NW.name) "OIC-NW Deck" else "GMDSS GOC"
+    val modeLabel = session.mode.replace('_', ' ')
+    val progressFraction = session.answeredCount.toFloat() / session.totalQuestions.coerceAtLeast(1)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        border = BorderStroke(1.5.dp, MaritimeGoldBright)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = MaritimeGoldBright,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "RESUME ACTIVE SESSION",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaritimeGoldBright,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaritimeGoldBright.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "$trackLabel $modeLabel",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaritimeGoldBright
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Progress: Answered ${session.answeredCount} / ${session.totalQuestions} questions",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LinearProgressIndicator(
+                progress = { progressFraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = MaritimeGoldBright,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+
+            if (session.timeRemainingSeconds > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val mins = session.timeRemainingSeconds / 60
+                val secs = session.timeRemainingSeconds % 60
+                Text(
+                    text = "Time Remaining: ${mins}m ${String.format("%02d", secs)}s",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onResume,
+                    modifier = Modifier.weight(1.2f),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaritimeGoldBright,
+                        contentColor = NauticalNavyDark
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Resume",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Resume Exam",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onDiscard,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Discard & Reset",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
