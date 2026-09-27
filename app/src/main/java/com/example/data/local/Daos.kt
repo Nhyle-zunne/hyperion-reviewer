@@ -41,17 +41,20 @@ interface BookmarkDao {
 
 @Dao
 interface ActiveSessionDao {
-    @Query("SELECT * FROM active_session WHERE id = 'current_session' LIMIT 1")
-    fun getActiveSession(): Flow<ActiveSessionEntity?>
+    @Query("SELECT * FROM active_session WHERE track = :trackName LIMIT 1")
+    fun getActiveSessionForTrack(trackName: String): Flow<ActiveSessionEntity?>
 
-    @Query("SELECT * FROM active_session WHERE id = 'current_session' LIMIT 1")
-    suspend fun getActiveSessionOnce(): ActiveSessionEntity?
+    @Query("SELECT * FROM active_session WHERE track = :trackName LIMIT 1")
+    suspend fun getActiveSessionForTrackOnce(trackName: String): ActiveSessionEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveActiveSession(session: ActiveSessionEntity)
 
-    @Query("DELETE FROM active_session WHERE id = 'current_session'")
-    suspend fun clearActiveSession()
+    @Query("DELETE FROM active_session WHERE track = :trackName")
+    suspend fun clearActiveSessionForTrack(trackName: String)
+
+    @Query("DELETE FROM active_session")
+    suspend fun clearAllActiveSessions()
 }
 
 @Dao
@@ -59,11 +62,23 @@ interface ExamRecordDao {
     @Query("SELECT * FROM exam_records ORDER BY timestamp DESC")
     fun getAllExamRecords(): Flow<List<ExamRecordEntity>>
 
+    @Query("SELECT * FROM exam_records WHERE track LIKE :track COLLATE NOCASE ORDER BY timestamp DESC")
+    fun getSessionsByTrack(track: String): Flow<List<ExamRecordEntity>>
+
     @Query("SELECT * FROM exam_records WHERE id = :id LIMIT 1")
     suspend fun getExamRecordById(id: String): ExamRecordEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecord(record: ExamRecordEntity)
+
+    @Query("DELETE FROM exam_records WHERE id = :id")
+    suspend fun deleteSessionById(id: String)
+
+    @Query("DELETE FROM exam_records WHERE id IN (:ids)")
+    suspend fun deleteSessionsByIds(ids: List<String>)
+
+    @Query("DELETE FROM exam_records WHERE track LIKE :track COLLATE NOCASE")
+    suspend fun clearAllSessionsByTrack(track: String)
 
     @Query("DELETE FROM exam_records")
     suspend fun clearHistory()

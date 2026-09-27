@@ -62,13 +62,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Question
+import com.example.data.model.Track
 import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.data.repository.MaritimeQuestionBank
+import com.example.data.repository.ProQuestionRepository
 import com.example.ui.components.DifficultyBadge
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.theme.MaritimeGold
@@ -93,6 +96,7 @@ fun FlashcardScreen(
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
+    val context = LocalContext.current
 
     // Back navigation to Track Dashboard
     BackHandler {
@@ -103,11 +107,20 @@ fun FlashcardScreen(
     var selectedCompetenceId by remember { mutableStateOf<String?>(null) }
 
     // Cards list based on competence filter
-    var cards by remember(selectedCompetenceId, selectedTrack) {
-        val initial = if (selectedCompetenceId == null) {
-            MaritimeQuestionBank.getQuestionsByTrack(selectedTrack)
+    var cards by remember(selectedCompetenceId, selectedTrack, context) {
+        val initial = if (selectedTrack == Track.GMDSS_GOC) {
+            if (selectedCompetenceId != null) {
+                ProQuestionRepository.loadAllCompetenceQuestions(context, selectedCompetenceId!!).map { it.toQuestion() }
+            } else {
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C1").map { it.toQuestion() } +
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C2").map { it.toQuestion() }
+            }
         } else {
-            MaritimeQuestionBank.getQuestionsByCompetence(selectedCompetenceId!!, selectedTrack)
+            if (selectedCompetenceId == null) {
+                MaritimeQuestionBank.getQuestionsByTrack(selectedTrack)
+            } else {
+                MaritimeQuestionBank.getQuestionsByCompetence(selectedCompetenceId!!, selectedTrack)
+            }
         }
         mutableStateOf(initial)
     }

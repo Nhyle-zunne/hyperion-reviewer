@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dangerous
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.FolderSpecial
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -162,7 +161,7 @@ fun HomeScreen(
                 item {
                     ResumeActiveSessionCard(
                         session = session,
-                        onResume = { viewModel.resumeActiveSession(session) },
+                        onResume = { viewModel.resumeSession(session.track, session.id) },
                         onDiscard = { viewModel.discardActiveSession() }
                     )
                 }
@@ -229,20 +228,6 @@ fun HomeScreen(
 
             item {
                 ModeLauncherCard(
-                    title = "Free Practice Sample",
-                    subtitle = "10 curated diagnostic questions across competencies • No activation required",
-                    badge = "FREE TIER",
-                    badgeColor = SeaCyan,
-                    icon = Icons.Default.School,
-                    accentColor = SeaCyan,
-                    onClick = {
-                        viewModel.startFreePractice()
-                    }
-                )
-            }
-
-            item {
-                ModeLauncherCard(
                     title = "Practice Drill Configuration",
                     subtitle = "Two-step setup: select competence, then configure sequential/randomized ordering & item count",
                     badge = if (isActivated) "CUSTOMIZABLE" else "PRO LOCKED",
@@ -305,7 +290,7 @@ fun HomeScreen(
 
             item {
                 ModeLauncherCard(
-                    title = "Historical Session Logs",
+                    title = "Session Log",
                     subtitle = "Past mock exam attempts, Bloom's scoring, and 70% competence diagnostics",
                     badge = if (examRecords.isNotEmpty()) "${examRecords.size} LOGS" else "EMPTY",
                     badgeColor = SeaCyan,
@@ -313,20 +298,6 @@ fun HomeScreen(
                     accentColor = SeaCyan,
                     onClick = {
                         viewModel.navigateTo(Screen.History)
-                    }
-                )
-            }
-
-            item {
-                ModeLauncherCard(
-                    title = "Competence & Function Directory",
-                    subtitle = "Browse by Function (F1, F2, F3) or specific STCW Competences",
-                    badge = "DIRECTORY",
-                    badgeColor = PassGreen,
-                    icon = Icons.Default.FolderSpecial,
-                    accentColor = PassGreen,
-                    onClick = {
-                        viewModel.navigateTo(Screen.Topics)
                     }
                 )
             }
@@ -743,8 +714,8 @@ private fun ResumeActiveSessionCard(
     onResume: () -> Unit,
     onDiscard: () -> Unit
 ) {
-    val trackLabel = if (session.track == Track.DECK_OIC_NW.name) "OIC-NW Deck" else "GMDSS GOC"
-    val modeLabel = session.mode.replace('_', ' ')
+    val trackName = if (session.track == Track.DECK_OIC_NW.name) "OIC-NW" else if (session.track == Track.GMDSS_GOC.name) "GMDSS" else session.track.replace('_', ' ')
+    val modeStr = if (session.mode.contains("MOCK")) "MOCK" else "PRACTICE"
     val progressFraction = session.answeredCount.toFloat() / session.totalQuestions.coerceAtLeast(1)
 
     Card(
@@ -783,7 +754,7 @@ private fun ResumeActiveSessionCard(
                     color = MaritimeGoldBright.copy(alpha = 0.15f)
                 ) {
                     Text(
-                        text = "$trackLabel $modeLabel",
+                        text = "$trackName $modeStr",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,

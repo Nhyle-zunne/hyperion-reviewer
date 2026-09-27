@@ -44,13 +44,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CompetenceInfo
+import com.example.data.model.Track
 import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.data.repository.MaritimeQuestionBank
+import com.example.data.repository.ProQuestionRepository
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.theme.MaritimeGold
 import com.example.ui.theme.MaritimeGoldBright
@@ -73,6 +76,7 @@ fun PracticeCompetenceSelectScreen(
     modifier: Modifier = Modifier
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
+    val context = LocalContext.current
 
     // Back navigation to Track Dashboard
     BackHandler {
@@ -81,7 +85,12 @@ fun PracticeCompetenceSelectScreen(
 
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
     val groupedByFunction = competences.groupBy { it.functionId }
-    val totalTrackItems = MaritimeQuestionBank.getQuestionsByTrack(selectedTrack).size
+    val totalTrackItems = if (selectedTrack == Track.GMDSS_GOC) {
+        ProQuestionRepository.loadAllCompetenceQuestions(context, "C1").size +
+        ProQuestionRepository.loadAllCompetenceQuestions(context, "C2").size
+    } else {
+        MaritimeQuestionBank.getQuestionsByTrack(selectedTrack).size
+    }
 
     Column(
         modifier = modifier
@@ -263,7 +272,11 @@ fun PracticeCompetenceSelectScreen(
                 }
 
                 items(compList) { comp ->
-                    val itemCount = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, selectedTrack).size
+                    val itemCount = if (selectedTrack == Track.GMDSS_GOC) {
+                        ProQuestionRepository.loadAllCompetenceQuestions(context, comp.competenceId).size
+                    } else {
+                        MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, selectedTrack).size
+                    }
 
                     Card(
                         modifier = Modifier

@@ -23,6 +23,8 @@ object MarinaScoringEngine {
         var totalMaxPoints = 0
         var totalCorrect = 0
 
+        val isMockExam = mode == QuizMode.MOCK_EXAM
+
         // Group by competence
         val competenceGroups = questions.groupBy { it.competenceId }
         val competenceScores = mutableListOf<CompetenceScore>()
@@ -34,12 +36,24 @@ object MarinaScoringEngine {
             var compCorrect = 0
 
             for (q in compQuestions) {
-                val pts = q.difficulty.points
-                compMax += pts
                 val userState = answers[q.id]
-                if (userState?.selectedIndex == q.correctAnswerIndex) {
-                    compRaw += pts
-                    compCorrect++
+                val isAnswered = userState?.selectedIndex != null
+
+                if (isMockExam) {
+                    val pts = q.difficulty.points
+                    compMax += pts
+                    if (userState?.selectedIndex == q.correctAnswerIndex) {
+                        compRaw += pts
+                        compCorrect++
+                    }
+                } else {
+                    if (isAnswered) {
+                        compMax += 1
+                        if (userState?.selectedIndex == q.correctAnswerIndex) {
+                            compRaw += 1
+                            compCorrect++
+                        }
+                    }
                 }
             }
 
@@ -74,7 +88,6 @@ object MarinaScoringEngine {
             val funcMax = compScoreList.sumOf { it.maxPointsPossible }
             val funcPct = if (funcMax > 0) (funcRaw.toDouble() / funcMax) * 100.0 else 0.0
 
-            // Official MARINA Policy: Candidate passes ONLY if they obtain >= 70.0% in EVERY competence
             val allCompetencesPassed = compScoreList.all { it.isPassed }
 
             functionScores.add(
@@ -91,7 +104,11 @@ object MarinaScoringEngine {
         }
 
         val overallPct = if (totalMaxPoints > 0) (totalRawPoints.toDouble() / totalMaxPoints) * 100.0 else 0.0
-        val isOverallPassed = competenceScores.isNotEmpty() && competenceScores.all { it.isPassed }
+        val isOverallPassed = if (isMockExam) {
+            competenceScores.isNotEmpty() && competenceScores.all { it.isPassed }
+        } else {
+            overallPct >= PASSING_PERCENTAGE
+        }
 
         return ExamResult(
             examId = UUID.randomUUID().toString(),

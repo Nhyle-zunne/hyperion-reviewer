@@ -140,7 +140,7 @@ fun PracticeConfigScreen(
 
     // Step 4: Question count state
     var questionCount by remember(maxAvailable, isActivated) {
-        mutableIntStateOf(if (!isActivated) minOf(5, maxAvailable) else minOf(25, maxAvailable).coerceAtLeast(1))
+        mutableIntStateOf(if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
     }
     var textFieldValue by remember(questionCount) {
         mutableStateOf(questionCount.toString())

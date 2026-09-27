@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
@@ -56,7 +57,8 @@ fun MaritimeTopBar(
     onHistoryClick: (() -> Unit)? = null,
     onLegalClick: (() -> Unit)? = null,
     bookmarkCount: Int = 0,
-    vaultCount: Int = 0
+    vaultCount: Int = 0,
+    onClearAllClick: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -183,6 +185,16 @@ fun MaritimeTopBar(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+
+                if (onClearAllClick != null) {
+                    IconButton(onClick = onClearAllClick) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteForever,
+                            contentDescription = "Clear All Sessions",
+                            tint = FailRed
+                        )
                     }
                 }
             },

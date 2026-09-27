@@ -13,6 +13,7 @@ import com.example.data.model.Track
 import com.example.data.model.UserQuestionState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 class ReviewerRepository(private val database: HyperionDatabase) {
 
@@ -65,8 +66,8 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         }
     }
 
-    fun observeActiveSession(): Flow<ActiveSessionEntity?> {
-        return activeSessionDao.getActiveSession()
+    fun observeActiveSessionForTrack(track: Track): Flow<ActiveSessionEntity?> {
+        return activeSessionDao.getActiveSessionForTrack(track.name)
     }
 
     suspend fun saveActiveSession(
@@ -82,7 +83,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
     ) {
         val answeredCount = answers.values.count { it.selectedIndex != null }
         val session = ActiveSessionEntity(
-            id = "current_session",
+            id = "session_${track.name}",
             track = track.name,
             mode = mode.name,
             functionId = functionId,
@@ -99,18 +100,57 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         activeSessionDao.saveActiveSession(session)
     }
 
-    suspend fun clearActiveSession() {
-        activeSessionDao.clearActiveSession()
+    suspend fun clearActiveSession(track: Track) {
+        activeSessionDao.clearActiveSessionForTrack(track.name)
+    }
+
+    suspend fun saveIncompleteSession(
+        track: Track,
+        mode: QuizMode,
+        questions: List<Question>,
+        answers: Map<String, UserQuestionState>
+    ) {
+        if (questions.isEmpty()) return
+        val result = MarinaScoringEngine.evaluateExam(track, mode, questions, answers)
+        val answeredCount = answers.values.count { it.selectedIndex != null }
+        val isMock = mode == QuizMode.MOCK_EXAM
+        val summary = if (isMock) {
+            "INCOMPLETE • Answered $answeredCount/${questions.size} • Score: ${result.rawPointsEarned}/${result.maxPointsPossible} (${String.format("%.1f", result.overallPercentage)}%)"
+        } else {
+            "INCOMPLETE • Score: ${result.correctCount}/$answeredCount (${String.format("%.1f", result.overallPercentage)}%)"
+        }
+        val record = ExamRecordEntity(
+            id = "inc_${UUID.randomUUID()}",
+            timestamp = System.currentTimeMillis(),
+            track = track.name,
+            mode = mode.name,
+            rawScore = result.correctCount,
+            maxScore = if (isMock) result.maxPointsPossible else answeredCount,
+            percentage = result.overallPercentage,
+            isPassed = false,
+            totalQuestions = questions.size,
+            correctCount = result.correctCount,
+            detailsSummary = summary,
+            questionIds = questions.map { it.id }.joinToString(","),
+            answersJson = SessionJsonHelper.serializeAnswers(answers),
+            competenceBreakdownJson = SessionJsonHelper.serializeCompetenceScores(result.competenceScores)
+        )
+        examRecordDao.insertRecord(record)
     }
 
     suspend fun saveExamRecord(result: ExamResult, questionIds: List<String>) {
-        val summary = "${result.correctCount}/${result.totalQuestions} (${String.format("%.1f", result.overallPercentage)}%) - ${if (result.isOverallPassed) "PASSED" else "FAILED"}"
+        val isMock = result.mode == QuizMode.MOCK_EXAM
+        val summary = if (isMock) {
+            "COMPLETED • Score: ${result.rawPointsEarned}/${result.maxPointsPossible} (${String.format("%.1f", result.overallPercentage)}%) - ${if (result.isOverallPassed) "PASSED" else "FAILED"}"
+        } else {
+            "COMPLETED • Score: ${result.correctCount}/${result.maxPointsPossible} (${String.format("%.1f", result.overallPercentage)}%)"
+        }
         val record = ExamRecordEntity(
             id = result.examId,
             timestamp = result.timestamp,
             track = result.track.name,
             mode = result.mode.name,
-            rawScore = result.rawPointsEarned,
+            rawScore = result.correctCount,
             maxScore = result.maxPointsPossible,
             percentage = result.overallPercentage,
             isPassed = result.isOverallPassed,
@@ -128,8 +168,24 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         return examRecordDao.getAllExamRecords()
     }
 
+    fun observeExamRecordsForTrack(track: Track): Flow<List<ExamRecordEntity>> {
+        return examRecordDao.getSessionsByTrack(track.name)
+    }
+
     suspend fun getExamRecordById(id: String): ExamRecordEntity? {
         return examRecordDao.getExamRecordById(id)
+    }
+
+    suspend fun deleteExamRecord(id: String) {
+        examRecordDao.deleteSessionById(id)
+    }
+
+    suspend fun deleteExamRecordsByIds(ids: List<String>) {
+        examRecordDao.deleteSessionsByIds(ids)
+    }
+
+    suspend fun clearExamRecordsByTrack(track: Track) {
+        examRecordDao.clearAllSessionsByTrack(track.name)
     }
 
     fun getQuestionsForSession(
