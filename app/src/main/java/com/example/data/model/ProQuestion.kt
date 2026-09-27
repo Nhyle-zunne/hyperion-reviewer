@@ -12,4 +12,19 @@ data class ProQuestion(
     val options: List<String>,
     val correctAnswerIndex: Int,
     val explanation: String
-)
+) {
+    fun toQuestion(): Question {
+        return Question(
+            id = this.id,
+            track = Track.GMDSS_GOC,
+            functionId = "GMDSS",
+            competenceId = this.competence,
+            topic = "GMDSS Part ${this.part}",
+            questionText = this.questionText,
+            options = this.options,
+            correctAnswerIndex = this.correctAnswerIndex,
+            explanation = this.explanation,
+            difficulty = Difficulty.MODERATE
+        )
+    }
+}

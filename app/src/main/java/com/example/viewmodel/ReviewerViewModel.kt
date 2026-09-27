@@ -241,6 +241,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun startConfiguredPractice(
         competenceId: String? = null,
+        selectedPart: Int? = null,
         deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
         questionCount: Int? = null,
         shuffleQuestions: Boolean = false,
@@ -256,10 +257,26 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _isPaletteOpen.value = false
 
         val isPro = isActivated.value
-        var questions = if (competenceId != null) {
-            MaritimeQuestionBank.getQuestionsByCompetence(competenceId, _selectedTrack.value, isProUnlocked = isPro)
+        val context = getApplication<Application>()
+
+        var questions: List<Question> = if (_selectedTrack.value == Track.GMDSS_GOC) {
+            val proQuestions = if (competenceId != null) {
+                if (selectedPart != null) {
+                    ProQuestionRepository.loadPartQuestions(context, competenceId, selectedPart)
+                } else {
+                    ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId)
+                }
+            } else {
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C1") +
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C2")
+            }
+            proQuestions.map { it.toQuestion() }
         } else {
-            MaritimeQuestionBank.getQuestionsByTrack(_selectedTrack.value, isProUnlocked = isPro)
+            if (competenceId != null) {
+                MaritimeQuestionBank.getQuestionsByCompetence(competenceId, _selectedTrack.value, isProUnlocked = isPro)
+            } else {
+                MaritimeQuestionBank.getQuestionsByTrack(_selectedTrack.value, isProUnlocked = isPro)
+            }
         }
 
         // Secondary defense check: Truncate to first 5 questions if unactivated

@@ -18,12 +18,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.example.ui.components.ActivationPromptDialog
 import com.example.ui.components.HyperionDrawerContent
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.ActivationScreen
 import com.example.ui.screens.BookmarksScreen
 import com.example.ui.screens.FlashcardScreen
 import com.example.ui.screens.FreePracticeScreen
+import com.example.ui.screens.GmdssProQuizScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.MockCompetenceScreen
@@ -76,6 +78,8 @@ fun ReviewerApp(viewModel: ReviewerViewModel) {
         }
     }
 
+    ActivationPromptDialog(viewModel = viewModel)
+
     if (currentScreen is Screen.TermsOnboarding) {
         TermsOnboardingScreen(onAcceptTerms = { viewModel.acceptTerms() })
     } else {
@@ -111,6 +115,8 @@ fun ReviewerApp(viewModel: ReviewerViewModel) {
                     is Screen.FreePractice -> FreePracticeScreen(viewModel = viewModel)
                     is Screen.Activation -> ActivationScreen(viewModel = viewModel)
                     is Screen.About -> AboutScreen(viewModel = viewModel)
+                    is Screen.GmdssProCompetenceSelect -> GmdssProCompetenceSelectScreen(viewModel = viewModel)
+                    is Screen.GmdssProQuiz -> GmdssProQuizScreen(viewModel = viewModel)
                 }
             }
         }

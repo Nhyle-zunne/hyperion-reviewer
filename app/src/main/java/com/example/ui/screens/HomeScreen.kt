@@ -241,23 +241,6 @@ fun HomeScreen(
                 )
             }
 
-            if (selectedTrack == Track.GMDSS_GOC) {
-                item {
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    ModeLauncherCard(
-                        title = "GMDSS STCW Reviewer (C1 & C2)",
-                        subtitle = "Competence 1 (10 Parts • 1,911 items) & Competence 2 (2 Parts • 349 items)",
-                        badge = if (isActivated) "12 PARTS PRO" else "PRO LOCKED",
-                        badgeColor = if (isActivated) PassGreen else MaritimeGoldBright,
-                        icon = Icons.Default.CellTower,
-                        accentColor = SeaCyan,
-                        onClick = {
-                            viewModel.openGmdssProCompetencies(context)
-                        }
-                    )
-                }
-            }
-
             item {
                 ModeLauncherCard(
                     title = "Practice Drill Configuration",

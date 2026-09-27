@@ -264,6 +264,29 @@ fun HyperionDrawerContent(
             DrawerSectionHeader("EXAMINATION & DRILL MODES")
 
             NavigationDrawerItem(
+                label = { Text("STCW Reviewer", fontWeight = FontWeight.SemiBold) },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = "STCW Reviewer",
+                        tint = PassGreen
+                    )
+                },
+                selected = currentScreen is Screen.Topics,
+                onClick = {
+                    onCloseDrawer()
+                    viewModel.navigateTo(Screen.Topics)
+                },
+                modifier = Modifier
+                    .padding(NavigationDrawerItemDefaults.ItemPadding)
+                    .testTag("drawer_item_stcw_reviewer"),
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = PassGreen.copy(alpha = 0.15f),
+                    unselectedContainerColor = Color.Transparent
+                )
+            )
+
+            NavigationDrawerItem(
                 label = { Text("Practice Drill Configuration", fontWeight = FontWeight.SemiBold) },
                 icon = {
                     Icon(
@@ -345,44 +368,6 @@ fun HyperionDrawerContent(
                     .testTag("drawer_item_flashcards"),
                 colors = NavigationDrawerItemDefaults.colors(
                     selectedContainerColor = Color(0x22F59E0B),
-                    unselectedContainerColor = Color.Transparent
-                )
-            )
-
-            NavigationDrawerItem(
-                label = { Text("Free Practice Sample", fontWeight = FontWeight.SemiBold) },
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.School,
-                        contentDescription = null,
-                        tint = SeaCyan
-                    )
-                },
-                badge = {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = SeaCyan.copy(alpha = 0.2f)
-                    ) {
-                        Text(
-                            text = "FREE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SeaCyan,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                },
-                selected = currentScreen is Screen.FreePractice,
-                onClick = {
-                    onCloseDrawer()
-                    viewModel.startFreePractice()
-                },
-                modifier = Modifier
-                    .padding(NavigationDrawerItemDefaults.ItemPadding)
-                    .testTag("drawer_item_free_practice"),
-                colors = NavigationDrawerItemDefaults.colors(
-                    selectedContainerColor = SeaCyan.copy(alpha = 0.15f),
                     unselectedContainerColor = Color.Transparent
                 )
             )

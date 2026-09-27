@@ -2,8 +2,15 @@ package com.example.data.model
 
 enum class Track(val title: String, val shortName: String, val mockQuestions: Int, val timeMinutes: Int) {
     DECK_OIC_NW("Deck Operational Level (OIC-NW)", "Deck OIC-NW", 200, 200),
-    GMDSS_GOC("GMDSS Radio Operator (GOC)", "GMDSS (GOC)", 100, 100)
+    GMDSS_GOC("GMDSS Radio Operator (GOC)", "GMDSS (GOC)", 100, 100);
+
+    companion object {
+        val OIC_NW: Track get() = DECK_OIC_NW
+        val GMDSS: Track get() = GMDSS_GOC
+    }
 }
+
+typealias ReviewTrack = Track
 
 enum class Difficulty(val points: Int, val label: String, val bloomLevel: String) {
     EASY(3, "Easy (+3 pts)", "Remembering & Understanding"),

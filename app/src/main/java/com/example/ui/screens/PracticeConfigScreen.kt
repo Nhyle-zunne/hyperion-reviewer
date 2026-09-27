@@ -58,13 +58,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.Track
 import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.data.repository.MaritimeQuestionBank
+import com.example.data.repository.ProQuestionRepository
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGold
@@ -93,6 +96,7 @@ fun PracticeConfigScreen(
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val isActivated by viewModel.isActivated.collectAsState()
+    val context = LocalContext.current
 
     // Back navigation returns to Step 1: Competence Selection
     BackHandler {
@@ -101,14 +105,29 @@ fun PracticeConfigScreen(
 
     val compInfo = competenceId?.let { MaritimeCompetenceRegistry.getCompetenceById(it, selectedTrack) }
 
+    var selectedPart by remember(competenceId) { mutableStateOf<Int?>(null) }
+
     // Dynamic max available questions
-    val maxAvailable = remember(competenceId, selectedTrack, isActivated) {
+    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isActivated, context) {
         if (!isActivated) {
             5
-        } else if (competenceId == null) {
-            MaritimeQuestionBank.getQuestionsByTrack(selectedTrack).size
+        } else if (selectedTrack == Track.GMDSS_GOC) {
+            if (competenceId != null) {
+                if (selectedPart != null) {
+                    ProQuestionRepository.getExpectedQuestionCount(competenceId, selectedPart!!)
+                } else {
+                    ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId).size
+                }
+            } else {
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C1").size +
+                ProQuestionRepository.loadAllCompetenceQuestions(context, "C2").size
+            }
         } else {
-            MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack).size
+            if (competenceId == null) {
+                MaritimeQuestionBank.getQuestionsByTrack(selectedTrack).size
+            } else {
+                MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack).size
+            }
         }
     }
 
@@ -216,6 +235,72 @@ fun PracticeConfigScreen(
                                 color = PureWhite.copy(alpha = 0.7f),
                                 fontSize = 11.sp
                             )
+                        }
+                    }
+                }
+            }
+
+            // GMDSS Part Selector (if GMDSS track and specific competence selected)
+            if (selectedTrack == Track.GMDSS_GOC && competenceId != null) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, SeaCyan.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = SeaCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "SELECT SPECIFIC PART OR ALL PARTS",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SeaCyan,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            val parts = ProQuestionRepository.getPartsForCompetence(competenceId)
+                            androidx.compose.foundation.lazy.LazyRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedPart == null,
+                                        onClick = { selectedPart = null },
+                                        label = { Text("All Parts (${ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId).size})", fontSize = 11.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = SeaCyan,
+                                            selectedLabelColor = Color.Black,
+                                            containerColor = Color(0xFF1E293B),
+                                            labelColor = PureWhite
+                                        )
+                                    )
+                                }
+                                items(parts.size) { index ->
+                                    val pNum = parts[index]
+                                    val count = ProQuestionRepository.getExpectedQuestionCount(competenceId, pNum)
+                                    FilterChip(
+                                        selected = selectedPart == pNum,
+                                        onClick = { selectedPart = pNum },
+                                        label = { Text("Part $pNum ($count)", fontSize = 11.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = SeaCyan,
+                                            selectedLabelColor = Color.Black,
+                                            containerColor = Color(0xFF1E293B),
+                                            labelColor = PureWhite
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -663,6 +748,7 @@ fun PracticeConfigScreen(
                     onClick = {
                         viewModel.startConfiguredPractice(
                             competenceId = competenceId,
+                            selectedPart = selectedPart,
                             deliveryMode = deliveryMode,
                             questionCount = questionCount,
                             shuffleQuestions = randomizeQuestionOrder,

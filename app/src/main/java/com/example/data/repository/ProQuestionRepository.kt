@@ -3,7 +3,6 @@ package com.example.data.repository
 import android.content.Context
 import com.example.data.model.ProQuestion
 import com.example.data.util.LicenseManager
-import org.json.JSONArray
 import java.util.concurrent.ConcurrentHashMap
 
 data class ProCompetenceMeta(
@@ -67,7 +66,7 @@ object ProQuestionRepository {
     }
 
     /**
-     * Loads questions for a specific competence and part.
+     * Loads questions for a specific competence and part from CSV assets.
      * HARD ENFORCEMENT: If LicenseManager.isActivated(context) is false, returns emptyList() immediately.
      */
     fun loadPartQuestions(context: Context, competence: String, part: Int): List<ProQuestion> {
@@ -79,7 +78,7 @@ object ProQuestionRepository {
         val cacheKey = "${normComp}_part$part"
         questionsCache[cacheKey]?.let { return it }
 
-        val assetPath = "questions/pro/${normComp.lowercase()}_part$part.json"
+        val assetPath = "questions/pro/${normComp.lowercase()}_part$part.csv"
         val questions = try {
             val stream = try {
                 context.assets.open(assetPath)
@@ -92,36 +91,77 @@ object ProQuestionRepository {
                     ?: java.io.File("/app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
             } ?: return emptyList()
 
-            val jsonString = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val jsonArray = JSONArray(jsonString)
+            val content = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val rows = parseCsvText(content)
             val list = mutableListOf<ProQuestion>()
-            for (i in 0 until jsonArray.length()) {
-                val obj = jsonArray.getJSONObject(i)
-                val id = obj.optString("id", "$normComp-P$part-${i + 1}")
-                val comp = obj.optString("competence", normComp)
-                val partNum = obj.optInt("part", part)
-                val qText = obj.optString("questionText", "")
-                val optionsArray = obj.optJSONArray("options")
-                val optionsList = mutableListOf<String>()
-                if (optionsArray != null) {
-                    for (j in 0 until optionsArray.length()) {
-                        optionsList.add(optionsArray.optString(j, ""))
+
+            if (rows.size > 10) {
+                var headerIdx = -1
+                for (idx in rows.indices) {
+                    val r0 = rows[idx].getOrNull(0)?.trim() ?: ""
+                    val r1 = rows[idx].getOrNull(1)?.trim() ?: ""
+                    if (r0.equals("Question", ignoreCase = true) || r1.equals("Type", ignoreCase = true)) {
+                        headerIdx = idx
+                        break
                     }
                 }
-                val ansIndex = obj.optInt("correctAnswerIndex", 0)
-                val explanation = obj.optString("explanation", "")
-
-                list.add(
-                    ProQuestion(
-                        id = id,
-                        competence = comp,
-                        part = partNum,
-                        questionText = qText,
-                        options = optionsList,
-                        correctAnswerIndex = ansIndex,
-                        explanation = explanation
-                    )
-                )
+                val start = if (headerIdx != -1) headerIdx + 1 else 1
+                for (i in start until rows.size) {
+                    val row = rows[i]
+                    if (row.size >= 10 && row[0].isNotBlank() && !row[0].equals("Question", ignoreCase = true)) {
+                        val qText = row[0].trim()
+                        val options = row.subList(2, 8).map { it.trim() }.filter { it.isNotEmpty() }
+                        val explanation = row.getOrElse(8) { "" }.trim()
+                        val ansStr = row.getOrElse(9) { "1" }.trim()
+                        val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
+                        val id = "$normComp-P$part-${list.size + 1}"
+                        if (qText.isNotEmpty() && options.isNotEmpty()) {
+                            list.add(
+                                ProQuestion(
+                                    id = id,
+                                    competence = normComp,
+                                    part = part,
+                                    questionText = qText,
+                                    options = options,
+                                    correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
+                                    explanation = explanation
+                                )
+                            )
+                        }
+                    }
+                }
+            } else if (rows.isNotEmpty()) {
+                val row = rows[0]
+                val choiceIndices = mutableListOf<Int>()
+                for (i in row.indices) {
+                    if (row[i].equals("Choice", ignoreCase = true)) {
+                        choiceIndices.add(i)
+                    }
+                }
+                for (cIdx in choiceIndices) {
+                    val start = cIdx - 1
+                    if (start >= 0 && start + 11 < row.size) {
+                        val qText = row[start].trim()
+                        val options = (start + 2 until start + 8).map { row[it].trim() }.filter { it.isNotEmpty() }
+                        val explanation = row[start + 8].trim()
+                        val ansStr = row[start + 9].trim()
+                        val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
+                        val id = "$normComp-P$part-${list.size + 1}"
+                        if (qText.isNotEmpty() && qText != "Question" && options.isNotEmpty()) {
+                            list.add(
+                                ProQuestion(
+                                    id = id,
+                                    competence = normComp,
+                                    part = part,
+                                    questionText = qText,
+                                    options = options,
+                                    correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
+                                    explanation = explanation
+                                )
+                            )
+                        }
+                    }
+                }
             }
             list
         } catch (_: Exception) {
@@ -132,6 +172,57 @@ object ProQuestionRepository {
             questionsCache[cacheKey] = questions
         }
         return questions
+    }
+
+    private fun parseCsvText(text: String): List<List<String>> {
+        val result = mutableListOf<List<String>>()
+        val currentRow = mutableListOf<String>()
+        val currentField = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < text.length && text[i + 1] == '"') {
+                        currentField.append('"')
+                        i++
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    currentField.append(c)
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true
+                } else if (c == ',') {
+                    currentRow.add(currentField.toString())
+                    currentField.setLength(0)
+                } else if (c == '\r') {
+                    if (i + 1 < text.length && text[i + 1] == '\n') {
+                        i++
+                    }
+                    currentRow.add(currentField.toString())
+                    currentField.setLength(0)
+                    result.add(currentRow.toList())
+                    currentRow.clear()
+                } else if (c == '\n') {
+                    currentRow.add(currentField.toString())
+                    currentField.setLength(0)
+                    result.add(currentRow.toList())
+                    currentRow.clear()
+                } else {
+                    currentField.append(c)
+                }
+            }
+            i++
+        }
+        if (currentField.isNotEmpty() || currentRow.isNotEmpty()) {
+            currentRow.add(currentField.toString())
+            result.add(currentRow.toList())
+        }
+        return result
     }
 
     /**
@@ -147,6 +238,10 @@ object ProQuestionRepository {
     /**
      * Clears memory cache (e.g. upon license deactivation or memory trim).
      */
+    fun clearCardCache() {
+        questionsCache.clear()
+    }
+
     fun clearCache() {
         questionsCache.clear()
     }
