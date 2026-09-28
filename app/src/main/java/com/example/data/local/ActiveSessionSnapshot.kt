@@ -23,14 +23,13 @@ data class ActiveSessionSnapshot(
 )
 
 object ActiveSessionSnapshotManager {
-    fun getSnapshotFile(context: Context, trackName: String): File {
-        val sanitized = trackName.lowercase().replace(" ", "_").replace("-", "_")
-        return File(context.filesDir, "active_session_$sanitized.json")
+    fun getSnapshotFile(context: Context, sessionId: String): File {
+        return File(context.filesDir, "session_$sessionId.json")
     }
 
     fun saveSnapshot(context: Context, snapshot: ActiveSessionSnapshot) {
         try {
-            val file = getSnapshotFile(context, snapshot.track)
+            val file = getSnapshotFile(context, snapshot.sessionId)
             val json = JSONObject().apply {
                 put("sessionId", snapshot.sessionId)
                 put("track", snapshot.track)
@@ -76,10 +75,54 @@ object ActiveSessionSnapshotManager {
         } catch (_: Exception) {}
     }
 
-    fun loadSnapshot(context: Context, trackName: String): ActiveSessionSnapshot? {
+    fun loadSnapshotById(context: Context, sessionId: String): ActiveSessionSnapshot? {
         try {
-            val file = getSnapshotFile(context, trackName)
+            val file = getSnapshotFile(context, sessionId)
             if (!file.exists()) return null
+            return parseSnapshotFile(file)
+        } catch (_: Exception) {
+            return null
+        }
+    }
+
+    fun loadSnapshot(context: Context, trackName: String): ActiveSessionSnapshot? {
+        val all = loadAllSnapshots(context)
+        val found = all.firstOrNull { it.track.equals(trackName, ignoreCase = true) || it.sessionId.equals(trackName, ignoreCase = true) }
+        if (found != null && found.mode.contains("MOCK", ignoreCase = true) && found.totalQuestions > 200) {
+            deleteSnapshot(context, found.sessionId)
+            deleteSnapshot(context, trackName)
+            return null
+        }
+        return found
+    }
+
+    fun purgeObsoleteMockSnapshots(context: Context) {
+        try {
+            val dir = context.filesDir
+            val files = dir.listFiles { _, name -> (name.startsWith("session_") || name.startsWith("active_session_")) && name.endsWith(".json") }
+            files?.forEach { file ->
+                val snap = parseSnapshotFile(file)
+                if (snap != null && snap.mode.contains("MOCK", ignoreCase = true) && snap.totalQuestions > 200) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun loadAllSnapshots(context: Context): List<ActiveSessionSnapshot> {
+        val list = mutableListOf<ActiveSessionSnapshot>()
+        try {
+            val dir = context.filesDir
+            val files = dir.listFiles { _, name -> (name.startsWith("session_") || name.startsWith("active_session_")) && name.endsWith(".json") }
+            files?.forEach { file ->
+                parseSnapshotFile(file)?.let { list.add(it) }
+            }
+        } catch (_: Exception) {}
+        return list.sortedByDescending { it.timestamp }
+    }
+
+    private fun parseSnapshotFile(file: File): ActiveSessionSnapshot? {
+        try {
             val content = file.readText()
             if (content.isBlank()) return null
             val json = JSONObject(content)
@@ -180,11 +223,16 @@ object ActiveSessionSnapshotManager {
         }
     }
 
-    fun deleteSnapshot(context: Context, trackName: String) {
+    fun deleteSnapshot(context: Context, sessionId: String) {
         try {
-            val file = getSnapshotFile(context, trackName)
+            val file = getSnapshotFile(context, sessionId)
             if (file.exists()) {
                 file.delete()
+            }
+            // Also check legacy track file name
+            val trackFile = File(context.filesDir, "active_session_$sessionId.json")
+            if (trackFile.exists()) {
+                trackFile.delete()
             }
         } catch (_: Exception) {}
     }

@@ -10,6 +10,8 @@ import com.example.data.local.ActiveSessionSnapshotManager
 import com.example.data.local.ExamRecordEntity
 import com.example.data.local.HyperionDatabase
 import com.example.data.local.MistakeEntity
+import com.example.data.local.MistakeEntry
+import com.example.data.local.MistakesVaultManager
 import com.example.data.local.SessionJsonHelper
 import com.example.data.model.Difficulty
 import com.example.data.model.ExamResult
@@ -64,6 +66,7 @@ sealed class Screen {
     object History : Screen()
     object FreePractice : Screen() // Free Tier Practice Viewer with sample questions
     object Activation : Screen() // Account & Licensing screen
+    object License : Screen() // Dedicated License & Device Verification screen
     object About : Screen() // About Hyperion
 }
 
@@ -75,10 +78,26 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     init {
         LicenseManager.init(application)
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            ActiveSessionSnapshotManager.purgeObsoleteMockSnapshots(application)
+            try {
+                val deckSession = repository.getActiveSessionForTrackOnce(Track.DECK_OIC_NW.name)
+                if (deckSession != null && deckSession.mode.contains("MOCK", ignoreCase = true) && deckSession.totalQuestions > 200) {
+                    repository.clearActiveSession(Track.DECK_OIC_NW)
+                }
+                val gmdssSession = repository.getActiveSessionForTrackOnce(Track.GMDSS_GOC.name)
+                if (gmdssSession != null && gmdssSession.mode.contains("MOCK", ignoreCase = true) && gmdssSession.totalQuestions > 100) {
+                    repository.clearActiveSession(Track.GMDSS_GOC)
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     // Licensing & Activation State (Single reactive state across app)
-    val deviceRequestCode: String = LicenseManager.getOrGenerateRequestCode(application)
+    val deviceRequestCode: String get() = LicenseManager.getOrGenerateRequestCode(getApplication())
+    val permanentHardwareId: String get() = LicenseManager.getPermanentHardwareId(getApplication())
+    val installSessionId: String get() = LicenseManager.getInstallSessionId(getApplication())
+    val installDate: String get() = LicenseManager.getInstallDate(getApplication())
 
     val isActivated: StateFlow<Boolean> = LicenseManager.isProActivatedFlow
 
@@ -116,6 +135,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     // Terms Acceptance State
     private val _hasAcceptedTerms = MutableStateFlow(prefs.getBoolean("has_accepted_terms", false))
     val hasAcceptedTerms: StateFlow<Boolean> = _hasAcceptedTerms.asStateFlow()
+
+    // Persistent Theme State (defaulting to true)
+    private val _isDarkMode = MutableStateFlow(prefs.getBoolean("is_dark_mode", true))
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+
+    fun toggleDarkMode(enabled: Boolean) {
+        _isDarkMode.value = enabled
+        prefs.edit().putBoolean("is_dark_mode", enabled).apply()
+    }
 
     fun acceptTerms() {
         prefs.edit().putBoolean("has_accepted_terms", true).apply()
@@ -172,6 +200,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _completedCompetences = MutableStateFlow<Set<String>>(emptySet())
     val completedCompetences: StateFlow<Set<String>> = _completedCompetences.asStateFlow()
 
+    private val _isExamSubmitted = MutableStateFlow(false)
+    val isExamSubmitted: StateFlow<Boolean> = _isExamSubmitted.asStateFlow()
+
     private val _activeFunctionId = MutableStateFlow<String?>(null)
     val activeFunctionId: StateFlow<String?> = _activeFunctionId.asStateFlow()
 
@@ -204,6 +235,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     val mistakeEntities: StateFlow<List<MistakeEntity>> = repository.observeMistakes()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val _mistakeEntries = MutableStateFlow<List<MistakeEntry>>(MistakesVaultManager.loadEntries(application))
+    val mistakeEntries: StateFlow<List<MistakeEntry>> = _mistakeEntries.asStateFlow()
+
+    fun refreshMistakes() {
+        _mistakeEntries.value = MistakesVaultManager.loadEntries(getApplication())
+    }
 
     private val _snapshotTrigger = MutableSharedFlow<Unit>(replay = 1)
     private val _firstAttemptStatus = MutableStateFlow<Map<String, Boolean>>(emptyMap())
@@ -246,30 +284,43 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         list
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    private val _activeSessionOverride = MutableStateFlow<Map<String, ActiveSessionEntity?>>(emptyMap())
+
     val activeSession: StateFlow<ActiveSessionEntity?> = combine(
         _selectedTrack,
-        _snapshotTrigger.onStart { emit(Unit) }
-    ) { track, _ ->
-        val snapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)
-        if (snapshot != null && !snapshot.isCompleted) {
-            ActiveSessionEntity(
-                id = snapshot.sessionId,
-                track = snapshot.track,
-                mode = snapshot.mode,
-                functionId = null,
-                competenceId = snapshot.competenceOrPart,
-                currentQuestionIndex = snapshot.currentIndex,
-                timeRemainingSeconds = 12000,
-                questionIds = snapshot.questions.joinToString(",") { it.id },
-                answersJson = SessionJsonHelper.serializeAnswers(snapshot.selectedAnswers.mapValues { (qid, sel) ->
-                    UserQuestionState(questionId = qid, selectedIndex = sel.toIntOrNull(), isSubmitted = true)
-                }),
-                totalQuestions = snapshot.totalQuestions,
-                answeredCount = snapshot.selectedAnswers.size,
-                updatedTimestamp = snapshot.timestamp
-            )
+        _snapshotTrigger.onStart { emit(Unit) },
+        _activeSessionOverride
+    ) { track, _, overrides ->
+        if (overrides.containsKey(track.name)) {
+            overrides[track.name]
         } else {
-            null
+            val snapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)
+            if (snapshot != null && !snapshot.isCompleted) {
+                if (snapshot.mode.contains("MOCK", ignoreCase = true) && snapshot.totalQuestions > 200) {
+                    ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), track.name)
+                    discardActiveSession(track.name)
+                    null
+                } else {
+                    ActiveSessionEntity(
+                        id = snapshot.sessionId,
+                        track = snapshot.track,
+                        mode = snapshot.mode,
+                        functionId = null,
+                        competenceId = snapshot.competenceOrPart,
+                        currentQuestionIndex = snapshot.currentIndex,
+                        timeRemainingSeconds = 12000,
+                        questionIds = snapshot.questions.joinToString(",") { it.id },
+                        answersJson = SessionJsonHelper.serializeAnswers(snapshot.selectedAnswers.mapValues { (qid, sel) ->
+                            UserQuestionState(questionId = qid, selectedIndex = sel.toIntOrNull(), isSubmitted = true)
+                        }),
+                        totalQuestions = snapshot.totalQuestions,
+                        answeredCount = snapshot.selectedAnswers.size,
+                        updatedTimestamp = snapshot.timestamp
+                    )
+                }
+            } else {
+                null
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
@@ -286,8 +337,39 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _currentScreen.value = Screen.Home
     }
 
-    fun startFreePractice() {
+    fun startVaultDrill() {
         timerJob?.cancel()
+        _activeQuizMode.value = QuizMode.VAULT_DRILL
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = null
+        _currentQuestionIndex.value = 0
+        _showSubmitDialog.value = false
+        _isPaletteOpen.value = false
+
+        val currentTrack = _selectedTrack.value
+        val vaultEntries = MistakesVaultManager.getEntriesForTrack(getApplication(), currentTrack.name)
+        val questions = vaultEntries.map { it.question }
+
+        if (questions.isEmpty()) return
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _timeRemainingSeconds.value = 0
+        _currentScreen.value = Screen.Quiz
+    }
+
+    fun exitQuiz() {
+        refreshMistakes()
+        if (_activeQuizMode.value == QuizMode.VAULT_DRILL) {
+            _currentScreen.value = Screen.Vault
+        } else if (_activeQuizMode.value == QuizMode.BOOKMARKS_DRILL) {
+            _currentScreen.value = Screen.Bookmarks
+        } else {
+            _currentScreen.value = Screen.Home
+        }
+    }
+
+    fun startFreePractice() {
         _activeQuizMode.value = QuizMode.PRACTICE
         _activeDrillDeliveryMode.value = DrillDeliveryMode.STANDARD
         _activeFunctionId.value = null
@@ -457,6 +539,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         limitQuestions: Int? = null
     ) {
         timerJob?.cancel()
+        _isExamSubmitted.value = false
         _activeQuizMode.value = mode
         _activeFunctionId.value = functionId
         _activeCompetenceId.value = competenceId
@@ -544,6 +627,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _activeCompetenceId.value = session.competenceId
 
         val qIdList = session.questionIds.split(",").filter { it.isNotBlank() }
+        if (mode == QuizMode.MOCK_EXAM && qIdList.size > 200) {
+            discardActiveSession(track.name)
+            startQuizSession(QuizMode.MOCK_EXAM)
+            return
+        }
+        _isExamSubmitted.value = false
         var questions = qIdList.mapNotNull { id -> MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == id } }
         if (questions.isEmpty() && qIdList.isNotEmpty()) {
             val allTrackQ = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true)
@@ -597,6 +686,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val snapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), targetTrack.name)
         if (snapshot != null && !snapshot.isCompleted) {
+            if (snapshot.mode.contains("MOCK", ignoreCase = true) && snapshot.totalQuestions > 200) {
+                ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), targetTrack.name)
+                discardActiveSession(targetTrack.name)
+                startQuizSession(QuizMode.MOCK_EXAM)
+                return
+            }
+            _isExamSubmitted.value = false
             currentActiveSessionId = snapshot.sessionId
             val trackEnum = try { Track.valueOf(snapshot.track) } catch (_: Exception) { targetTrack }
             _selectedTrack.value = trackEnum
@@ -641,24 +737,22 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun discardActiveSession() {
         timerJob?.cancel()
-        ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), _selectedTrack.value.name)
+        val trackName = _selectedTrack.value.name
+        ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), trackName)
+        
+        // Set local UI state activeSession = null immediately on Main dispatcher
+        _activeSessionOverride.value = _activeSessionOverride.value + (trackName to null)
         notifySnapshotChanged()
-        val questions = _activeQuestions.value
-        val answers = _userQuestionStates.value
-        if (questions.isNotEmpty() && answers.values.any { it.selectedIndex != null }) {
-            viewModelScope.launch {
-                repository.saveIncompleteSession(
-                    track = _selectedTrack.value,
-                    mode = _activeQuizMode.value,
-                    questions = questions,
-                    answers = answers
-                )
-                repository.clearActiveSession(_selectedTrack.value)
-            }
-        } else {
-            viewModelScope.launch {
-                repository.clearActiveSession(_selectedTrack.value)
-            }
+        
+        discardActiveSession(trackName)
+    }
+
+    fun discardActiveSession(trackId: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // 1. Delete active session pointer and active session row
+            repository.deleteActiveSessionByTrack(trackId)
+            // 2. If it was pre-inserted into session_logs, purge it
+            repository.deleteIncompleteSessionsByTrack(trackId)
         }
     }
 
@@ -723,6 +817,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun selectOptionForQuestion(questionId: String, optionIndex: Int) {
+        if (_isExamSubmitted.value) return // Permanent submission lock: cannot alter answers after submission
         val currentMap = _userQuestionStates.value.toMutableMap()
         val currentEntry = currentMap[questionId] ?: UserQuestionState(questionId = questionId)
 
@@ -738,6 +833,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 val isCorrect = optionIndex == question.correctAnswerIndex
                 viewModelScope.launch {
                     repository.recordQuestionAttempt(question.id, isCorrect)
+                    if (isCorrect) {
+                        MistakesVaultManager.recordAttempt(getApplication(), question.id, true)
+                    } else {
+                        MistakesVaultManager.recordMistake(getApplication(), question, question.track.name, question.competenceId)
+                    }
+                    refreshMistakes()
                 }
             }
         } else {
@@ -750,6 +851,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun toggleFlagForQuestion(questionId: String) {
+        if (_isExamSubmitted.value) return // Permanent submission lock
         val currentMap = _userQuestionStates.value.toMutableMap()
         val currentEntry = currentMap[questionId] ?: UserQuestionState(questionId = questionId)
         currentMap[questionId] = currentEntry.copy(isFlagged = !currentEntry.isFlagged)
@@ -856,16 +958,25 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _showSubmitDialog.value = false
         _isPaletteOpen.value = false
 
+        if (_activeQuizMode.value == QuizMode.VAULT_DRILL || _activeQuizMode.value == QuizMode.BOOKMARKS_DRILL) {
+            exitQuiz()
+            return
+        }
+
         val questions = _activeQuestions.value
         val answers = _userQuestionStates.value
-        _activeQuestions.value = emptyList()
+        val submittedAnswers = answers.mapValues { (_, state) ->
+            state.copy(isSubmitted = true)
+        }
+        _userQuestionStates.value = submittedAnswers
+        _isExamSubmitted.value = true
 
         // Evaluate with official MARINA scoring engine
         val evaluatedResult = MarinaScoringEngine.evaluateExam(
             track = _selectedTrack.value,
             mode = _activeQuizMode.value,
             questions = questions,
-            answers = answers
+            answers = submittedAnswers
         )
         val result = evaluatedResult.copy(
             examId = resumingRecordId ?: evaluatedResult.examId
@@ -880,8 +991,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 val state = answers[q.id]
                 val isCorrect = state?.selectedIndex == q.correctAnswerIndex
                 repository.recordQuestionAttempt(q.id, isCorrect)
+                if (isCorrect) {
+                    MistakesVaultManager.recordAttempt(getApplication(), q.id, true)
+                } else {
+                    MistakesVaultManager.recordMistake(getApplication(), q, q.track.name, q.competenceId)
+                }
             }
+            refreshMistakes()
             repository.saveExamRecord(result, questions.map { it.id })
+            val currentSnapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), _selectedTrack.value.name)
+            if (currentSnapshot != null) {
+                ActiveSessionSnapshotManager.saveSnapshot(getApplication(), currentSnapshot.copy(isCompleted = true))
+            }
             ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), _selectedTrack.value.name)
             notifySnapshotChanged()
             repository.clearActiveSession(_selectedTrack.value)
@@ -893,21 +1014,36 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun deleteExamRecord(recordId: String) {
         viewModelScope.launch {
             repository.deleteExamRecord(recordId)
-            repository.clearActiveSession(_selectedTrack.value)
+            val trackName = _selectedTrack.value.name
+            repository.deleteActiveSessionByTrack(trackName)
+            _activeSessionOverride.value = _activeSessionOverride.value + (trackName to null)
+            notifySnapshotChanged()
         }
     }
 
     fun deleteExamRecordsByIds(recordIds: List<String>) {
         viewModelScope.launch {
             repository.deleteExamRecordsByIds(recordIds)
-            repository.clearActiveSession(_selectedTrack.value)
+            val trackName = _selectedTrack.value.name
+            repository.deleteActiveSessionByTrack(trackName)
+            _activeSessionOverride.value = _activeSessionOverride.value + (trackName to null)
+            notifySnapshotChanged()
         }
     }
 
     fun clearHistoryForCurrentTrack() {
         viewModelScope.launch {
-            repository.clearExamRecordsByTrack(_selectedTrack.value)
-            repository.clearActiveSession(_selectedTrack.value)
+            val trackName = _selectedTrack.value.name
+            repository.clearAllByTrack(trackName)
+            repository.deleteActiveSessionByTrack(trackName)
+            _activeSessionOverride.value = _activeSessionOverride.value + (trackName to null)
+            notifySnapshotChanged()
+        }
+    }
+
+    fun purgeIncompleteExamRecords() {
+        viewModelScope.launch {
+            repository.purgeIncompleteRecords()
         }
     }
 
@@ -920,6 +1056,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val qIds = record.questionIds.split(",").filter { it.isNotBlank() }
         val questions = qIds.mapNotNull { id -> MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == id } }
         _activeQuestions.value = questions
+        _userQuestionStates.value = userAnswers
+        _isExamSubmitted.value = true
         _selectedTrack.value = track
         _activeQuizMode.value = mode
 
@@ -980,18 +1118,45 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun retakeCurrentExam() {
-        startQuizSession(
-            mode = _activeQuizMode.value,
-            functionId = _activeFunctionId.value,
-            competenceId = _activeCompetenceId.value
-        )
+        val mode = _activeQuizMode.value
+        val compId = _activeCompetenceId.value
+
+        if (mode == QuizMode.MOCK_EXAM) {
+            _lastExamResult.value = null
+            startQuizSession(mode = QuizMode.MOCK_EXAM)
+        } else {
+            // Reset active quiz session state
+            _activeQuestions.value = emptyList()
+            _userQuestionStates.value = emptyMap()
+            _currentQuestionIndex.value = 0
+            _timeRemainingSeconds.value = 0
+
+            when (mode) {
+                QuizMode.PRACTICE -> {
+                    _currentScreen.value = Screen.PracticeConfig(compId)
+                }
+                QuizMode.VAULT_DRILL -> {
+                    _currentScreen.value = Screen.Vault
+                }
+                QuizMode.BOOKMARKS_DRILL -> {
+                    _currentScreen.value = Screen.Bookmarks
+                }
+                else -> {
+                    _currentScreen.value = Screen.Home
+                }
+            }
+        }
     }
 
     fun getTrackCompetences() = MaritimeCompetenceRegistry.getCompetencesForTrack(_selectedTrack.value)
 
     fun getVaultQuestions(): List<Question> {
-        val vaultIds = mistakeEntities.value.map { it.questionId }.toSet()
-        val list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in vaultIds }
+        val currentTrack = _selectedTrack.value
+        val entries = MistakesVaultManager.getEntriesForTrack(getApplication(), currentTrack.name)
+        val list = entries.map { it.question }.filter { q ->
+            val text = q.questionText.trim()
+            !text.equals("Question", ignoreCase = true) && text.isNotBlank()
+        }
         return if (isActivated.value) list else list.take(5)
     }
 

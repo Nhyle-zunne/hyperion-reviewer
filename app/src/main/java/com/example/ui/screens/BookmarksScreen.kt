@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkRemove
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,7 +38,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Question
@@ -59,10 +62,16 @@ fun BookmarksScreen(
         viewModel.navigateTo(Screen.Home)
     }
 
+    val isAppDark by viewModel.isDarkMode.collectAsState()
+    val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = isAppDark && isSystemDark
+
+    val backgroundBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(backgroundBg)
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
@@ -107,6 +116,7 @@ fun BookmarksScreen(
                 items(bookmarkedQuestions) { question ->
                     BookmarkQuestionCard(
                         question = question,
+                        isDark = isDark,
                         onRemoveBookmark = { viewModel.toggleBookmark(question.id) }
                     )
                 }
@@ -117,8 +127,8 @@ fun BookmarksScreen(
                             .fillMaxWidth()
                             .padding(top = 40.dp),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                        colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFF8FAFC)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1))
                     ) {
                         Column(
                             modifier = Modifier
@@ -157,13 +167,44 @@ fun BookmarksScreen(
 @Composable
 private fun BookmarkQuestionCard(
     question: Question,
+    isDark: Boolean,
     onRemoveBookmark: () -> Unit
 ) {
+    val cardBg = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC)
+    val borderStroke = if (isDark) {
+        androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+    } else {
+        androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1))
+    }
+
+    val tagBg = if (isDark) {
+        Color.White.copy(alpha = 0.06f)
+    } else {
+        Color(0xFF0369A1).copy(alpha = 0.1f)
+    }
+
+    val tagTextColor = if (isDark) SeaCyan else Color(0xFF0369A1)
+    val textPrimary = if (isDark) Color.White else Color(0xFF0F172A)
+    val removeBookmarkColor = if (isDark) MaritimeGoldBright else Color(0xFFB00020)
+
+    val ansBg = if (isDark) {
+        Color(0xFF2E7D32).copy(alpha = 0.2f)
+    } else {
+        Color(0xFF16A34A).copy(alpha = 0.12f)
+    }
+    val ansBorder = if (isDark) {
+        androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.35f))
+    } else {
+        androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.35f))
+    }
+    val ansIconColor = if (isDark) Color(0xFF4CAF50) else Color(0xFF15803D)
+    val ansTextColor = if (isDark) Color.White else Color(0xFF15803D)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        border = borderStroke
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(
@@ -173,13 +214,13 @@ private fun BookmarkQuestionCard(
             ) {
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    color = tagBg
                 ) {
                     Text(
                         text = "${question.functionId} • ${question.competenceId} (${question.topic})",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = SeaCyan,
+                        color = tagTextColor,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -191,7 +232,7 @@ private fun BookmarkQuestionCard(
                     Icon(
                         imageVector = Icons.Default.BookmarkRemove,
                         contentDescription = "Remove Bookmark",
-                        tint = MaritimeGoldBright,
+                        tint = removeBookmarkColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -203,17 +244,50 @@ private fun BookmarkQuestionCard(
                 text = question.questionText,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = textPrimary
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = "Correct Answer: ${question.options[question.correctAnswerIndex]}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaritimeGoldBright,
-                fontWeight = FontWeight.Bold
-            )
+            val correctLetter = when (question.correctAnswerIndex) {
+                0 -> "A"
+                1 -> "B"
+                2 -> "C"
+                3 -> "D"
+                else -> ""
+            }
+            val optionText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+            val formattedAnswer = if (correctLetter.isNotEmpty()) "$correctLetter. $optionText" else optionText
+
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = ansBg,
+                border = ansBorder,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Correct",
+                        tint = ansIconColor,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(style = androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, color = ansTextColor)) {
+                                append("Correct Answer: ")
+                            }
+                            append(formattedAnswer)
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = ansTextColor
+                    )
+                }
+            }
         }
     }
 }

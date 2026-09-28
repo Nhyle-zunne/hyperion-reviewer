@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,7 +67,7 @@ import com.example.ui.theme.SeaCyan
 fun DifficultyBadge(difficulty: Difficulty, modifier: Modifier = Modifier) {
     val (bgColor, textColor) = when (difficulty) {
         Difficulty.EASY -> Pair(Color(0xFF0F3E38), Color(0xFF4ADE80))
-        Difficulty.MODERATE -> Pair(Color(0xFF382D12), Color(0xFFFBBF24))
+        Difficulty.MODERATE -> Pair(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.primary)
         Difficulty.DIFFICULT -> Pair(Color(0xFF43161C), Color(0xFFF87171))
     }
 
@@ -87,6 +88,7 @@ fun DifficultyBadge(difficulty: Difficulty, modifier: Modifier = Modifier) {
 
 @Composable
 fun TimerChip(secondsRemaining: Int, modifier: Modifier = Modifier) {
+    val isDark = isSystemInDarkTheme()
     val hours = secondsRemaining / 3600
     val minutes = (secondsRemaining % 3600) / 60
     val seconds = secondsRemaining % 60
@@ -98,13 +100,37 @@ fun TimerChip(secondsRemaining: Int, modifier: Modifier = Modifier) {
 
     val isUrgent = secondsRemaining < 600 // Less than 10 mins
 
+    val chipBg = if (isUrgent) {
+        FailRedContainer
+    } else if (isDark) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        Color(0xFF1E293B)
+    }
+
+    val chipBorder = if (isUrgent) {
+        FailRed
+    } else if (isDark) {
+        MaterialTheme.colorScheme.outline
+    } else {
+        Color(0xFFFBBF24).copy(alpha = 0.5f)
+    }
+
+    val chipAccent = if (isUrgent) {
+        FailRed
+    } else if (isDark) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        Color(0xFFFBBF24)
+    }
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        color = if (isUrgent) FailRedContainer else MaterialTheme.colorScheme.surfaceVariant,
+        color = chipBg,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isUrgent) FailRed else MaterialTheme.colorScheme.outline
+            chipBorder
         )
     ) {
         Row(
@@ -115,14 +141,14 @@ fun TimerChip(secondsRemaining: Int, modifier: Modifier = Modifier) {
                 imageVector = Icons.Default.Timer,
                 contentDescription = "Timer",
                 modifier = Modifier.size(16.dp),
-                tint = if (isUrgent) FailRed else MaritimeGoldBright
+                tint = chipAccent
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = timeFormatted,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (isUrgent) PureWhite else MaritimeGoldBright
+                color = if (isUrgent) PureWhite else chipAccent
             )
         }
     }
@@ -138,36 +164,42 @@ fun OptionCard(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    val borderColor by animateColorAsState(
-        targetValue = when {
-            isCorrect == true -> PassGreen
-            isCorrect == false && isSelected -> FailRed
-            isSelected -> MaritimeGoldBright
-            else -> MaterialTheme.colorScheme.outline
-        },
-        label = "border_color"
-    )
+    val isDark = isSystemInDarkTheme()
 
-    val containerColor by animateColorAsState(
-        targetValue = when {
-            isCorrect == true -> PassGreenContainer.copy(alpha = 0.6f)
-            isCorrect == false && isSelected -> FailRedContainer.copy(alpha = 0.6f)
-            isSelected -> MaritimeGold.copy(alpha = 0.15f)
-            else -> MaterialTheme.colorScheme.surface
-        },
-        label = "container_color"
-    )
+    val targetBorderColor = when {
+        isCorrect == true -> PassGreen
+        isCorrect == false && isSelected -> FailRed
+        isSelected -> if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7)
+        else -> if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFE2E8F0)
+    }
+
+    val targetContainerColor = when {
+        isCorrect == true -> if (isDark) PassGreenContainer.copy(alpha = 0.6f) else Color(0xFFDCFCE7)
+        isCorrect == false && isSelected -> if (isDark) FailRedContainer.copy(alpha = 0.6f) else Color(0xFFFEE2E2)
+        isSelected -> if (isDark) MaterialTheme.colorScheme.primaryContainer else Color(0xFFE0F2FE)
+        else -> if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFF8FAFC)
+    }
+
+    val borderColor by animateColorAsState(targetValue = targetBorderColor, label = "border_color")
+    val containerColor by animateColorAsState(targetValue = targetContainerColor, label = "container_color")
 
     val badgeColor = when {
         isCorrect == true -> PassGreen
         isCorrect == false && isSelected -> FailRed
-        isSelected -> MaritimeGoldBright
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        isSelected -> if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7)
+        else -> if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.3f) else Color(0xFFE2E8F0)
     }
 
     val badgeTextColor = when {
-        isCorrect == true || (isCorrect == false && isSelected) || isSelected -> Color.Black
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        isCorrect == true || (isCorrect == false && isSelected) || isSelected -> PureWhite
+        else -> if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B)
+    }
+
+    val optionTextColor = when {
+        isCorrect == true -> if (isDark) PassGreen else Color(0xFF15803D)
+        isCorrect == false && isSelected -> if (isDark) Color(0xFFFF6B6B) else Color(0xFFDC2626)
+        isSelected -> if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0C4A6E)
+        else -> if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B)
     }
 
     Card(
@@ -175,14 +207,20 @@ fun OptionCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .border(
-                width = if (isSelected || isCorrect != null) 2.dp else 1.dp,
+                width = if (isSelected || isCorrect != null) 1.5.dp else 1.dp,
                 color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(enabled = enabled, onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isDark) {
+                if (isSelected) 3.dp else 1.dp
+            } else {
+                if (isSelected) 2.dp else 0.dp
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -201,7 +239,7 @@ fun OptionCard(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Correct",
-                        tint = Color.Black,
+                        tint = PureWhite,
                         modifier = Modifier.size(20.dp)
                     )
                 } else if (isCorrect == false && isSelected) {
@@ -226,7 +264,8 @@ fun OptionCard(
             Text(
                 text = optionText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isSelected && !isDark) FontWeight.Bold else FontWeight.Normal,
+                color = optionTextColor,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -265,7 +304,7 @@ fun QuestionPaletteDialog(
                         text = "Question Palette",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     IconButton(onClick = onDismiss) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = "Close")
@@ -280,7 +319,7 @@ fun QuestionPaletteDialog(
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     LegendItem(label = "Answered ($answeredCount)", color = SeaCyan)
-                    LegendItem(label = "Flagged ($flaggedCount)", color = MaritimeGoldBright)
+                    LegendItem(label = "Flagged ($flaggedCount)", color = MaterialTheme.colorScheme.primary)
                     LegendItem(label = "Pending ($unansweredCount)", color = MaterialTheme.colorScheme.outline)
                 }
 
@@ -302,13 +341,13 @@ fun QuestionPaletteDialog(
                         val isCurrent = index == currentIndex
 
                         val itemBg = when {
-                            isCurrent -> MaritimeGoldBright
+                            isCurrent -> MaterialTheme.colorScheme.primary
                             isAnswered -> SeaCyan.copy(alpha = 0.35f)
                             else -> MaterialTheme.colorScheme.surfaceVariant
                         }
 
                         val textColor = when {
-                            isCurrent -> Color.Black
+                            isCurrent -> PureWhite
                             isAnswered -> SeaCyan
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
@@ -320,7 +359,7 @@ fun QuestionPaletteDialog(
                                 .background(itemBg)
                                 .border(
                                     width = if (isCurrent) 2.dp else 1.dp,
-                                    color = if (isCurrent) MaritimeGoldBright else if (isFlagged) MaritimeGold else MaterialTheme.colorScheme.outline,
+                                    color = if (isCurrent) MaterialTheme.colorScheme.primary else if (isFlagged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(8.dp)
                                 )
                                 .clickable { onSelectQuestion(index) },
@@ -342,7 +381,7 @@ fun QuestionPaletteDialog(
                                     Icon(
                                         imageVector = Icons.Default.Flag,
                                         contentDescription = "Flagged",
-                                        tint = MaritimeGoldBright,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(10.dp)
                                     )
                                 }

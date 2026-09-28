@@ -60,19 +60,44 @@ fun MaritimeTopBar(
     vaultCount: Int = 0,
     onClearAllClick: (() -> Unit)? = null
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val topBarBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFF0F172A)
+    val titleColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color.White
+    val subtitleColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+    val iconTint = if (isDark) MaterialTheme.colorScheme.primary else Color.White
+    val borderStroke = if (isDark) {
+        androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+    } else {
+        androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+    }
+
     Surface(
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+        color = topBarBg,
+        border = borderStroke
     ) {
         TopAppBar(
             title = {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    letterSpacing = 0.5.sp
-                )
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = subtitleColor,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
             },
             navigationIcon = {
                 if (showBackButton) {
@@ -80,7 +105,7 @@ fun MaritimeTopBar(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaritimeGoldBright
+                            tint = iconTint
                         )
                     }
                 } else if (onMenuClick != null) {
@@ -91,41 +116,18 @@ fun MaritimeTopBar(
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Open navigation drawer",
-                            tint = MaritimeGoldBright
+                            tint = iconTint
                         )
                     }
                 }
             },
             actions = {
-                if (showBackButton && onMenuClick != null) {
-                    IconButton(
-                        onClick = onMenuClick,
-                        modifier = Modifier.testTag("topbar_menu_action_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Navigation Menu",
-                            tint = MaritimeGoldBright
-                        )
-                    }
-                }
-
-                if (onLegalClick != null) {
-                    IconButton(onClick = onLegalClick) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Legal & Terms",
-                            tint = MaritimeGoldBright
-                        )
-                    }
-                }
-
                 if (onSearchClick != null) {
                     IconButton(onClick = onSearchClick) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
                         )
                     }
                 }
@@ -135,7 +137,7 @@ fun MaritimeTopBar(
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = "Session History",
-                            tint = MaritimeGoldBright
+                            tint = iconTint
                         )
                     }
                 }
@@ -144,45 +146,21 @@ fun MaritimeTopBar(
                     IconButton(onClick = onBookmarksClick) {
                         if (bookmarkCount > 0) {
                             BadgedBox(badge = {
-                                Badge(containerColor = MaritimeGoldBright, contentColor = Color.Black) {
+                                Badge(containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7), contentColor = Color.White) {
                                     Text("$bookmarkCount")
                                 }
                             }) {
                                 Icon(
                                     imageVector = Icons.Default.Bookmark,
                                     contentDescription = "Bookmarks",
-                                    tint = MaritimeGoldBright
+                                    tint = iconTint
                                 )
                             }
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Bookmark,
                                 contentDescription = "Bookmarks",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                if (onVaultClick != null) {
-                    IconButton(onClick = onVaultClick) {
-                        if (vaultCount > 0) {
-                            BadgedBox(badge = {
-                                Badge(containerColor = FailRed, contentColor = Color.White) {
-                                    Text("$vaultCount")
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Error Vault",
-                                    tint = FailRed
-                                )
-                            }
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = "Error Vault",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
                             )
                         }
                     }
@@ -199,8 +177,8 @@ fun MaritimeTopBar(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                titleContentColor = MaterialTheme.colorScheme.onSurface
+                containerColor = topBarBg,
+                titleContentColor = titleColor
             )
         )
     }

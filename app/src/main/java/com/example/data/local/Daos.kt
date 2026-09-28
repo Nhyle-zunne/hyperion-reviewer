@@ -53,6 +53,9 @@ interface ActiveSessionDao {
     @Query("DELETE FROM active_session WHERE track = :trackName")
     suspend fun clearActiveSessionForTrack(trackName: String)
 
+    @Query("DELETE FROM active_session WHERE track = :trackId")
+    suspend fun deleteActiveSessionByTrack(trackId: String)
+
     @Query("DELETE FROM active_session")
     suspend fun clearAllActiveSessions()
 }
@@ -74,11 +77,20 @@ interface ExamRecordDao {
     @Query("DELETE FROM exam_records WHERE id = :id")
     suspend fun deleteSessionById(id: String)
 
+    @Query("DELETE FROM exam_records WHERE track = :track")
+    suspend fun clearAllByTrack(track: String)
+
+    @Query("DELETE FROM exam_records WHERE track = :trackId AND (id LIKE 'inc_%' OR detailsSummary LIKE 'INCOMPLETE%')")
+    suspend fun deleteIncompleteSessionsByTrack(trackId: String)
+
     @Query("DELETE FROM exam_records WHERE id IN (:ids)")
     suspend fun deleteSessionsByIds(ids: List<String>)
 
     @Query("DELETE FROM exam_records WHERE track LIKE :track COLLATE NOCASE")
     suspend fun clearAllSessionsByTrack(track: String)
+
+    @Query("DELETE FROM exam_records WHERE id LIKE 'inc_%' OR detailsSummary LIKE 'INCOMPLETE%'")
+    suspend fun purgeIncompleteRecords()
 
     @Query("DELETE FROM exam_records")
     suspend fun clearHistory()

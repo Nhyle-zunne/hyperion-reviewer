@@ -221,7 +221,7 @@ fun FreePracticeScreen(
                         1.dp,
                         when (question.difficulty) {
                             Difficulty.EASY -> PassGreen
-                            Difficulty.MODERATE -> MaritimeGoldBright
+                            Difficulty.MODERATE -> MaterialTheme.colorScheme.primary
                             Difficulty.DIFFICULT -> FailRed
                         }
                     )
@@ -237,7 +237,7 @@ fun FreePracticeScreen(
                         fontWeight = FontWeight.Bold,
                         color = when (question.difficulty) {
                             Difficulty.EASY -> PassGreen
-                            Difficulty.MODERATE -> MaritimeGoldBright
+                            Difficulty.MODERATE -> MaterialTheme.colorScheme.primary
                             Difficulty.DIFFICULT -> FailRed
                         }
                     )
@@ -247,7 +247,7 @@ fun FreePracticeScreen(
             Text(
                 text = "TOPIC: ${question.topic.uppercase()}",
                 style = MaterialTheme.typography.labelSmall,
-                color = SeaCyan,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.5.sp
             )
@@ -333,7 +333,7 @@ fun FreePracticeScreen(
                             text = "Competency Standard Reference & Rationale:",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright
+                            color = MaterialTheme.colorScheme.primary
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -353,15 +353,15 @@ fun FreePracticeScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                    border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.5f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.WorkspacePremium,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -369,24 +369,27 @@ fun FreePracticeScreen(
                                 text = "Unlock All 1,000+ Questions in Hyperion Pro",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = "Get Intensive Recycling Drill mode, full 200/100-question timed Mock Board Exams, and the complete competence bank.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PureWhite.copy(alpha = 0.8f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.sp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
                             onClick = { viewModel.navigateTo(Screen.Activation) },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = PureWhite
+                            ),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Activate Pro License (Offline Key)", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text("Activate Pro License (Offline Key)", color = PureWhite, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

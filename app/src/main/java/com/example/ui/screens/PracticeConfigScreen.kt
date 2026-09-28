@@ -190,8 +190,8 @@ fun PracticeConfigScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                    border = BorderStroke(1.5.dp, MaritimeGoldBright),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Column(
@@ -199,13 +199,13 @@ fun PracticeConfigScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MaritimeGold.copy(alpha = 0.2f)
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
                                 text = "STEP 2 OF 2 • PRACTICE DRILL CONFIGURATION",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
@@ -216,7 +216,7 @@ fun PracticeConfigScreen(
                             text = greetingTitle,
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                             fontWeight = FontWeight.Bold,
-                            color = PureWhite
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -224,7 +224,7 @@ fun PracticeConfigScreen(
                         Text(
                             text = greetingSubtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = SeaCyan
+                            color = MaterialTheme.colorScheme.primary
                         )
 
                         compInfo?.description?.let { desc ->
@@ -232,7 +232,7 @@ fun PracticeConfigScreen(
                             Text(
                                 text = desc,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PureWhite.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
                             )
                         }
@@ -246,7 +246,7 @@ fun PracticeConfigScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, SeaCyan.copy(alpha = 0.6f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -254,7 +254,7 @@ fun PracticeConfigScreen(
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = null,
-                                    tint = SeaCyan,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -262,7 +262,7 @@ fun PracticeConfigScreen(
                                     text = "SELECT SPECIFIC PART OR ALL PARTS",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = SeaCyan,
+                                    color = MaterialTheme.colorScheme.primary,
                                     letterSpacing = 0.5.sp
                                 )
                             }
@@ -278,10 +278,10 @@ fun PracticeConfigScreen(
                                         onClick = { selectedPart = null },
                                         label = { Text("All Parts (${ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId).size})", fontSize = 11.sp) },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = SeaCyan,
-                                            selectedLabelColor = Color.Black,
-                                            containerColor = Color(0xFF1E293B),
-                                            labelColor = PureWhite
+                                            selectedContainerColor = Color(0xFF0F172A),
+                                            selectedLabelColor = PureWhite,
+                                            containerColor = Color(0xFFE2E8F0),
+                                            labelColor = Color(0xFF334155)
                                         )
                                     )
                                 }
@@ -293,10 +293,10 @@ fun PracticeConfigScreen(
                                         onClick = { selectedPart = pNum },
                                         label = { Text("Part $pNum ($count)", fontSize = 11.sp) },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = SeaCyan,
-                                            selectedLabelColor = Color.Black,
-                                            containerColor = Color(0xFF1E293B),
-                                            labelColor = PureWhite
+                                            selectedContainerColor = Color(0xFF0F172A),
+                                            selectedLabelColor = PureWhite,
+                                            containerColor = Color(0xFFE2E8F0),
+                                            labelColor = Color(0xFF334155)
                                         )
                                     )
                                 }
@@ -319,7 +319,7 @@ fun PracticeConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Psychology,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -327,7 +327,7 @@ fun PracticeConfigScreen(
                                 text = "1. DRILL DELIVERY FORMAT",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright,
+                                color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
                         }
@@ -342,12 +342,12 @@ fun PracticeConfigScreen(
                                 .clip(RoundedCornerShape(10.dp))
                                 .border(
                                     width = if (isStandard) 2.dp else 1.dp,
-                                    color = if (isStandard) MaritimeGoldBright else MaterialTheme.colorScheme.outline,
+                                    color = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 .clickable { deliveryMode = DrillDeliveryMode.STANDARD }
                                 .testTag("drill_mode_standard"),
-                            color = if (isStandard) MaritimeGoldBright.copy(alpha = 0.12f) else Color.Transparent
+                            color = if (isStandard) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
@@ -356,7 +356,7 @@ fun PracticeConfigScreen(
                                 Icon(
                                     imageVector = if (isStandard) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
-                                    tint = if (isStandard) MaritimeGoldBright else MaterialTheme.colorScheme.outline,
+                                    tint = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -366,18 +366,18 @@ fun PracticeConfigScreen(
                                             text = "Standard Drill",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isStandard) MaritimeGoldBright else PureWhite
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
-                                            color = SeaCyan.copy(alpha = 0.2f)
+                                            color = MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
                                                 text = "FIXED ITEMS",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = SeaCyan,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
@@ -386,7 +386,7 @@ fun PracticeConfigScreen(
                                     Text(
                                         text = "Progress through each question once with immediate rationale. Concludes with a session summary.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = PureWhite.copy(alpha = 0.7f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -403,12 +403,12 @@ fun PracticeConfigScreen(
                                 .clip(RoundedCornerShape(10.dp))
                                 .border(
                                     width = if (isIntensive) 2.dp else 1.dp,
-                                    color = if (isIntensive) Color(0xFFF59E0B) else MaterialTheme.colorScheme.outline,
+                                    color = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 .clickable { deliveryMode = DrillDeliveryMode.INTENSIVE }
                                 .testTag("drill_mode_intensive"),
-                            color = if (isIntensive) Color(0x22F59E0B) else Color.Transparent
+                            color = if (isIntensive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
@@ -417,7 +417,7 @@ fun PracticeConfigScreen(
                                 Icon(
                                     imageVector = if (isIntensive) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
-                                    tint = if (isIntensive) Color(0xFFF59E0B) else MaterialTheme.colorScheme.outline,
+                                    tint = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -427,18 +427,18 @@ fun PracticeConfigScreen(
                                             text = "Intensive Mode",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isIntensive) Color(0xFFF59E0B) else PureWhite
+                                            color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
-                                            color = Color(0x33F59E0B)
+                                            color = MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
                                                 text = "RECYCLING QUEUE",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFF59E0B),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
@@ -447,7 +447,7 @@ fun PracticeConfigScreen(
                                     Text(
                                         text = "Missed questions display rationale and recycle to the end of the queue. The drill only finishes when all questions are mastered.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = PureWhite.copy(alpha = 0.7f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
                                     )
                                 }
@@ -470,7 +470,7 @@ fun PracticeConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = null,
-                                tint = SeaCyan,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -478,7 +478,7 @@ fun PracticeConfigScreen(
                                 text = "2. RANDOMIZATION & SEQUENCING",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = SeaCyan,
+                                color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
                         }
@@ -500,18 +500,18 @@ fun PracticeConfigScreen(
                                         text = "Randomize Question Order",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = PureWhite
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = if (randomizeQuestionOrder) Color(0x33F59E0B) else SeaCyan.copy(alpha = 0.2f)
+                                        color = MaterialTheme.colorScheme.primaryContainer
                                     ) {
                                         Text(
                                             text = if (randomizeQuestionOrder) "SHUFFLED" else "SEQUENTIAL",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (randomizeQuestionOrder) MaritimeGoldBright else SeaCyan,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             fontSize = 9.sp,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
@@ -524,7 +524,7 @@ fun PracticeConfigScreen(
                                         "Questions appear in strict original database order (#1, #2, #3...)."
                                     },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PureWhite.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
                             }
@@ -534,9 +534,9 @@ fun PracticeConfigScreen(
                                 onCheckedChange = { randomizeQuestionOrder = it },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = PureWhite,
-                                    checkedTrackColor = SeaCyan,
+                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
                                     uncheckedThumbColor = PureWhite,
-                                    uncheckedTrackColor = Color(0xFF334155)
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.testTag("switch_randomize_question_order")
                             )
@@ -559,18 +559,18 @@ fun PracticeConfigScreen(
                                         text = "Shuffle Choices (A/B/C/D)",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = PureWhite
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = if (shuffleChoices) PassGreen.copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f)
+                                        color = if (shuffleChoices) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
                                     ) {
                                         Text(
                                             text = if (shuffleChoices) "RANDOMIZED" else "FIXED",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (shuffleChoices) PassGreen else Color.LightGray,
+                                            color = if (shuffleChoices) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 9.sp,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
@@ -579,7 +579,7 @@ fun PracticeConfigScreen(
                                 Text(
                                     text = "Permutes option letters to prevent letter memorization while preserving correct answer keys.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PureWhite.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
                             }
@@ -591,7 +591,7 @@ fun PracticeConfigScreen(
                                     checkedThumbColor = PureWhite,
                                     checkedTrackColor = PassGreen,
                                     uncheckedThumbColor = PureWhite,
-                                    uncheckedTrackColor = Color(0xFF334155)
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.testTag("switch_shuffle_choices")
                             )
@@ -613,7 +613,7 @@ fun PracticeConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -621,7 +621,7 @@ fun PracticeConfigScreen(
                                 text = "3. QUESTION COUNT (1 TO $maxAvailable AVAILABLE)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright,
+                                color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
                         }
@@ -641,10 +641,10 @@ fun PracticeConfigScreen(
                                     onClick = { updateCount(preset) },
                                     label = { Text("$preset", fontSize = 12.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaritimeGoldBright,
-                                        selectedLabelColor = Color.Black,
-                                        containerColor = Color(0xFF1E293B),
-                                        labelColor = PureWhite
+                                        selectedContainerColor = Color(0xFF0F172A),
+                                        selectedLabelColor = PureWhite,
+                                        containerColor = Color(0xFFE2E8F0),
+                                        labelColor = Color(0xFF334155)
                                     )
                                 )
                             }
@@ -655,10 +655,10 @@ fun PracticeConfigScreen(
                                 onClick = { updateCount(maxAvailable) },
                                 label = { Text("All ($maxAvailable)", fontSize = 12.sp) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaritimeGoldBright,
-                                    selectedLabelColor = Color.Black,
-                                    containerColor = Color(0xFF1E293B),
-                                    labelColor = PureWhite
+                                    selectedContainerColor = Color(0xFF0F172A),
+                                    selectedLabelColor = PureWhite,
+                                    containerColor = Color(0xFFE2E8F0),
+                                    labelColor = Color(0xFF334155)
                                 )
                             )
                         }
@@ -678,9 +678,9 @@ fun PracticeConfigScreen(
                                     },
                                     valueRange = 1f..maxAvailable.toFloat().coerceAtLeast(1f),
                                     colors = SliderDefaults.colors(
-                                        thumbColor = MaritimeGoldBright,
-                                        activeTrackColor = MaritimeGoldBright,
-                                        inactiveTrackColor = Color(0xFF334155)
+                                        thumbColor = MaterialTheme.colorScheme.primary,
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outline
                                     ),
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -693,12 +693,12 @@ fun PracticeConfigScreen(
                                     Text(
                                         text = "1 item",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = PureWhite.copy(alpha = 0.5f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = "$maxAvailable items",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = PureWhite.copy(alpha = 0.5f)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -725,10 +725,10 @@ fun PracticeConfigScreen(
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaritimeGoldBright,
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                    focusedTextColor = PureWhite,
-                                    unfocusedTextColor = PureWhite
+                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
                                 )
                             )
                         }
@@ -760,8 +760,8 @@ fun PracticeConfigScreen(
                         .height(54.dp)
                         .testTag("launch_practice_drill_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (deliveryMode == DrillDeliveryMode.INTENSIVE) Color(0xFFF59E0B) else MaritimeGoldBright,
-                        contentColor = Color.Black
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {

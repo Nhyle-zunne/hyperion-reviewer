@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,10 +55,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.OffsetMapping
 import com.example.data.util.LicenseManager
+import com.example.ui.components.DeviceVerificationCard
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGoldBright
@@ -75,12 +82,16 @@ fun ActivationScreen(
     val context = LocalContext.current
     val isActivatedState by viewModel.isActivated.collectAsState()
     val isActivated = LicenseManager.isActivated(context) || isActivatedState
-    val clipboardManager = LocalClipboardManager.current
+    val isDark = isSystemInDarkTheme()
 
-    val requestCode = viewModel.deviceRequestCode
+    val screenBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)
+    val cardSurface = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
+    val cardBorder = if (isDark) BorderStroke(1.dp, Color(0xFF334155)) else BorderStroke(1.dp, Color(0xFFCBD5E1))
+    val primaryTextColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
+    val secondaryTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+
     var keyInput by remember { mutableStateOf("") }
     var activationError by remember { mutableStateOf<String?>(null) }
-    var copiedFeedback by remember { mutableStateOf(false) }
 
     BackHandler {
         viewModel.navigateTo(Screen.Home)
@@ -89,7 +100,7 @@ fun ActivationScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(screenBg)
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
@@ -113,9 +124,10 @@ fun ActivationScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color(0xFF0A2E20)
+                        containerColor = cardSurface
                     ),
-                    border = BorderStroke(1.5.dp, PassGreen)
+                    border = BorderStroke(1.5.dp, PassGreen),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
@@ -159,116 +171,36 @@ fun ActivationScreen(
                         Text(
                             text = "Your license is permanently activated for this device. Full question repository, Intensive Mode recycling drill, and official timed mock exams are completely unlocked offline.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PureWhite.copy(alpha = 0.85f),
+                            color = secondaryTextColor,
                             lineHeight = 18.sp
                         )
                     }
                 }
-            } else {
-                // Device Request Code Card with Copy ID Button
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Key,
-                                contentDescription = null,
-                                tint = SeaCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "DEVICE REQUEST CODE",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = SeaCyan,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
+            }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+            // Standalone Device Verification & Activation Card
+            DeviceVerificationCard(
+                permanentHardwareId = viewModel.permanentHardwareId,
+                installSessionId = viewModel.installSessionId,
+                installDate = viewModel.installDate,
+                requestCode = viewModel.deviceRequestCode
+            )
 
-                        Text(
-                            text = "Provide this unique hardware identifier to obtain your offline SHA-256 license key:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = PureWhite.copy(alpha = 0.75f),
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Code Display Box with Copy ID Button
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp),
-                            color = Color(0xFF0F1E36),
-                            border = BorderStroke(1.dp, SeaCyan.copy(alpha = 0.5f))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = requestCode,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 2.sp
-                                    ),
-                                    color = MaritimeGoldBright,
-                                    modifier = Modifier.testTag("device_request_code_text")
-                                )
-
-                                Button(
-                                    onClick = {
-                                        clipboardManager.setText(AnnotatedString(requestCode))
-                                        copiedFeedback = true
-                                        Toast.makeText(context, "Request Code copied to clipboard", Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = SeaCyan,
-                                        contentColor = Color.Black
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.testTag("copy_request_code_button")
-                                ) {
-                                    Icon(
-                                        imageVector = if (copiedFeedback) Icons.Default.Check else Icons.Default.ContentCopy,
-                                        contentDescription = "Copy ID",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (copiedFeedback) "Copied!" else "Copy ID",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
+            if (!isActivated) {
                 // Key Input & Activation Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    colors = CardDefaults.cardColors(containerColor = cardSurface),
+                    border = cardBorder,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.VpnKey,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -276,7 +208,7 @@ fun ActivationScreen(
                                 text = "OFFLINE LICENSE ACTIVATION",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright,
+                                color = primaryTextColor,
                                 letterSpacing = 0.5.sp
                             )
                         }
@@ -286,7 +218,7 @@ fun ActivationScreen(
                         Text(
                             text = "Enter your activation key to permanently activate Hyperion Pro:",
                             style = MaterialTheme.typography.bodySmall,
-                            color = PureWhite.copy(alpha = 0.75f),
+                            color = secondaryTextColor,
                             fontSize = 12.sp
                         )
 
@@ -294,22 +226,28 @@ fun ActivationScreen(
 
                         OutlinedTextField(
                             value = keyInput,
-                            onValueChange = {
-                                keyInput = it
+                            onValueChange = { input ->
+                                val sanitized = input.filter { it.isLetterOrDigit() }.uppercase().take(16)
+                                keyInput = sanitized
                                 activationError = null
                             },
+                            visualTransformation = LicenseKeyVisualTransformation(),
                             label = { Text("Activation Key (e.g. ACTV-XXXX-XXXX-XXXX)") },
                             placeholder = { Text("ACTV-XXXX-XXXX-XXXX") },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                keyboardType = KeyboardType.Ascii,
+                                imeAction = ImeAction.Done
+                            ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("license_key_input_field"),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaritimeGoldBright,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                focusedTextColor = PureWhite,
-                                unfocusedTextColor = PureWhite
+                                focusedBorderColor = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                                unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
                             )
                         )
 
@@ -339,7 +277,8 @@ fun ActivationScreen(
 
                         Button(
                             onClick = {
-                                val success = viewModel.activateLicense(keyInput)
+                                val formattedKey = keyInput.chunked(4).joinToString("-")
+                                val success = viewModel.activateLicense(formattedKey) || viewModel.activateLicense(keyInput)
                                 if (success) {
                                     activationError = null
                                     Toast.makeText(context, "Hyperion Pro activated successfully!", Toast.LENGTH_SHORT).show()
@@ -353,18 +292,20 @@ fun ActivationScreen(
                                 .testTag("activate_license_button"),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaritimeGoldBright,
-                                contentColor = Color.Black
+                                contentColor = Color(0xFF0F172A)
                             ),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.WorkspacePremium,
                                 contentDescription = null,
+                                tint = Color(0xFF0F172A),
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = "Activate Pro",
+                                color = Color(0xFF0F172A),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -377,8 +318,8 @@ fun ActivationScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+                colors = CardDefaults.cardColors(containerColor = cardSurface),
+                border = cardBorder
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
@@ -402,7 +343,7 @@ fun ActivationScreen(
                         Text(
                             text = "Hyperion uses on-device SHA-256 validation. No internet connection or tracking server is contacted. Activation persists securely on this device across launches.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = secondaryTextColor,
                             fontSize = 11.sp,
                             lineHeight = 16.sp
                         )
@@ -427,3 +368,32 @@ fun ActivationScreen(
         }
     }
 }
+
+class LicenseKeyVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        val out = StringBuilder()
+        for (i in raw.indices) {
+            out.append(raw[i])
+            if ((i + 1) % 4 == 0 && i + 1 < 16 && i != raw.lastIndex) {
+                out.append("-")
+            }
+        }
+
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset <= 0) return 0
+                val hyphens = (offset - 1) / 4
+                return offset + hyphens
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                val hyphens = offset / 5
+                return (offset - hyphens).coerceIn(0, raw.length)
+            }
+        }
+
+        return TransformedText(AnnotatedString(out.toString()), offsetMapping)
+    }
+}
+

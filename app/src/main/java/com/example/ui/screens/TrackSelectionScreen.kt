@@ -58,6 +58,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ActiveSessionEntity
+import com.example.data.local.isCompleted
+import com.example.data.local.answeredQuestions
 import com.example.data.model.Track
 import com.example.data.util.LicenseManager
 import com.example.ui.components.HyperionLogo
@@ -93,15 +95,7 @@ fun TrackSelectionScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        NauticalNavyDark,
-                        Color(0xFF071426),
-                        MaterialTheme.colorScheme.background
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -130,14 +124,14 @@ fun TrackSelectionScreen(
                             Icon(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Open navigation drawer",
-                                tint = MaritimeGoldBright
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
 
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = Color(0x33F59E0B),
-                            border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.5f)),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             modifier = Modifier.clickable { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
                         ) {
                             Row(
@@ -147,7 +141,7 @@ fun TrackSelectionScreen(
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "Legal & Terms",
-                                    tint = MaritimeGoldBright,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -155,7 +149,7 @@ fun TrackSelectionScreen(
                                     text = "Legal & Terms",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaritimeGoldBright,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = 10.sp
                                 )
                             }
@@ -204,12 +198,12 @@ fun TrackSelectionScreen(
                         text = "Select Licensure Examination Track",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PureWhite
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
                         text = "Choose your merchant marine assessment to access specific mock exams, drills, and flashcards.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.75f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
@@ -218,12 +212,14 @@ fun TrackSelectionScreen(
 
             // Resume active session card if any exists
             activeSession?.let { session ->
-                item {
-                    ActiveSessionBanner(
-                        session = session,
-                        onResume = { viewModel.resumeActiveSession(session) },
-                        onDiscard = { viewModel.discardActiveSession() }
-                    )
+                if (!session.isCompleted && session.answeredQuestions < session.totalQuestions) {
+                    item {
+                        ActiveSessionBanner(
+                            session = session,
+                            onResume = { viewModel.resumeActiveSession(session) },
+                            onDiscard = { viewModel.discardActiveSession() }
+                        )
+                    }
                 }
             }
 
@@ -240,7 +236,7 @@ fun TrackSelectionScreen(
                         "Function 2: Cargo Handling & Stowage (C10, C11)",
                         "Function 3: Ship Operation & Safety (C12, C13, C17)"
                     ),
-                    accentColor = MaritimeGoldBright,
+                    accentColor = MaterialTheme.colorScheme.primary,
                     testTag = "track_deck_oic_nw_button",
                     onClick = {
                         viewModel.selectTrackAndOpenDashboard(Track.DECK_OIC_NW)
@@ -280,7 +276,7 @@ fun TrackSelectionScreen(
                             .weight(1f)
                             .testTag("track_selection_search_button"),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = PureWhite
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
@@ -288,7 +284,7 @@ fun TrackSelectionScreen(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
-                            tint = MaritimeGoldBright
+                            tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Search Bank", fontSize = 13.sp)
@@ -300,7 +296,7 @@ fun TrackSelectionScreen(
                             .weight(1f)
                             .testTag("track_selection_history_button"),
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = PureWhite
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
                     ) {
@@ -373,9 +369,9 @@ private fun TrackCard(
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.5.dp, accentColor.copy(alpha = 0.6f)),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF0F1E36)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
@@ -422,12 +418,12 @@ private fun TrackCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = PureWhite
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.75f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -444,8 +440,8 @@ private fun TrackCard(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
-                color = Color(0xFF0A1322),
-                border = BorderStroke(0.5.dp, Color(0xFF1E293B))
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
@@ -464,14 +460,14 @@ private fun TrackCard(
                         ) {
                             Text(
                                 text = "• ",
-                                color = SeaCyan,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
                             Text(
                                 text = detail,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PureWhite.copy(alpha = 0.7f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
                         }
@@ -486,19 +482,21 @@ private fun TrackCard(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = accentColor,
-                    contentColor = Color.Black
+                    contentColor = Color(0xFF0F172A)
                 ),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text(
                     text = "Launch Track Dashboard",
                     fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A),
                     fontSize = 14.sp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
+                    tint = Color(0xFF0F172A),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -519,8 +517,8 @@ private fun ActiveSessionBanner(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.5.dp, MaritimeGoldBright),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             modifier = Modifier.padding(14.dp)
@@ -529,7 +527,7 @@ private fun ActiveSessionBanner(
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = null,
-                    tint = MaritimeGoldBright,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -537,14 +535,14 @@ private fun ActiveSessionBanner(
                     text = "Unfinished Session In Progress",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Track: $trackLabel • Mode: ${session.mode} • Progress: $answered / $total items",
                 style = MaterialTheme.typography.bodySmall,
-                color = PureWhite
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(10.dp))
             Row(
@@ -562,11 +560,11 @@ private fun ActiveSessionBanner(
                 Button(
                     onClick = onResume,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaritimeGoldBright,
-                        contentColor = Color.Black
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
                     )
                 ) {
-                    Text("Resume Session", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Resume Session", color = PureWhite, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }

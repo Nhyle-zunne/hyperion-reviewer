@@ -15,12 +15,14 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -38,10 +40,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.local.MistakeEntity
+import com.example.data.local.MistakeEntry
 import com.example.data.model.Question
 import com.example.data.model.QuizMode
 import com.example.data.repository.MaritimeQuestionBank
@@ -60,8 +64,10 @@ fun VaultScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
-    val mistakes by viewModel.mistakeEntities.collectAsState()
-    val mistakeMap = mistakes.associateBy { it.questionId }
+    val mistakeEntries by viewModel.mistakeEntries.collectAsState()
+    val currentTrack by viewModel.selectedTrack.collectAsState()
+    val trackMistakeEntries = mistakeEntries.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+    val mistakeMap = trackMistakeEntries.associateBy { it.questionId }
     val vaultQuestions = viewModel.getVaultQuestions()
 
     BackHandler {
@@ -109,7 +115,7 @@ fun VaultScreen(
                                 text = "Spaced Repetition & Error Elimination",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = PureWhite
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
@@ -126,7 +132,7 @@ fun VaultScreen(
                 item {
                     Button(
                         onClick = {
-                            viewModel.startQuizSession(mode = QuizMode.VAULT_DRILL)
+                            viewModel.startVaultDrill()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = FailRed),
@@ -148,7 +154,7 @@ fun VaultScreen(
 
                 items(vaultQuestions) { question ->
                     val mistakeInfo = mistakeMap[question.id]
-                    VaultQuestionItem(question = question, mistake = mistakeInfo)
+                    VaultQuestionItem(question = question, mistakeEntry = mistakeInfo)
                 }
             } else {
                 item {
@@ -195,9 +201,8 @@ fun VaultScreen(
 }
 
 @Composable
-private fun VaultQuestionItem(question: Question, mistake: MistakeEntity?) {
-    val timesFailed = mistake?.timesFailed ?: 1
-    val consecutiveCorrect = mistake?.consecutiveCorrect ?: 0
+private fun VaultQuestionItem(question: Question, mistakeEntry: MistakeEntry?) {
+    val consecutiveCorrect = mistakeEntry?.consecutiveCorrect ?: 0
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -213,27 +218,35 @@ private fun VaultQuestionItem(question: Question, mistake: MistakeEntity?) {
             ) {
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Text(
                         text = "${question.functionId} • ${question.competenceId} (${question.topic})",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (consecutiveCorrect == 1) PassGreen.copy(alpha = 0.2f) else FailRed.copy(alpha = 0.2f)
+                    shape = RoundedCornerShape(100.dp),
+                    color = if (consecutiveCorrect > 0) Color(0xFF2E7D32) else Color(0xFFB00020),
+                    modifier = Modifier.wrapContentSize()
                 ) {
                     Text(
-                        text = "Mastery: $consecutiveCorrect/2 Correct",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "Streak: $consecutiveCorrect/2",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                         fontWeight = FontWeight.Bold,
-                        color = if (consecutiveCorrect == 1) PassGreen else FailRed,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        color = Color.White,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
@@ -249,10 +262,54 @@ private fun VaultQuestionItem(question: Question, mistake: MistakeEntity?) {
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            val correctLetter = when (question.correctAnswerIndex) {
+                0 -> "A"
+                1 -> "B"
+                2 -> "C"
+                3 -> "D"
+                else -> ""
+            }
+            val optionText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+            val formattedAnswer = if (correctLetter.isNotEmpty()) "$correctLetter. $optionText" else optionText
+
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Correct",
+                        tint = Color(0xFF2E7D32),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(style = androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append("Correct Answer: ")
+                            }
+                            append(formattedAnswer)
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                text = "Times Missed: $timesFailed | Answer correctly 1 more time to clear from vault.",
+                text = "Streak: $consecutiveCorrect/2 | Answer correctly ${2 - consecutiveCorrect} more time(s) to graduate from vault.",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
             )
         }
     }

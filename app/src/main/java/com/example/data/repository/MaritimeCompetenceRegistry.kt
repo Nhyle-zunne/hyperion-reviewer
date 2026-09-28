@@ -9,121 +9,121 @@ object MaritimeCompetenceRegistry {
         CompetenceInfo(
             competenceId = "C1",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C1",
             title = "Plan and conduct a passage and determine position",
-            officialTOSItems = 35,
+            officialTOSItems = 833,
             description = "Terrestrial & celestial navigation, voyage planning, chart work, gyro & magnetic compass errors, tides & currents."
         ),
         CompetenceInfo(
             competenceId = "C2",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C2",
             title = "Maintain a safe navigational watch",
-            officialTOSItems = 20,
+            officialTOSItems = 570,
             description = "COLREGs 1972 (Rules 1-38), STCW Watchkeeping Section A-VIII/2, bridge procedures, lookout duties."
         ),
         CompetenceInfo(
             competenceId = "C3",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C3",
-            title = "Use of Radar and ARPA to maintain safety of navigation",
-            officialTOSItems = 15,
+            title = "Use of Radar and ARPA for the safety of navigation",
+            officialTOSItems = 442,
             description = "Radar plotting, CPA/TCPA calculation, true vs relative motion, ARPA trial manoeuvres, clutter suppression."
         ),
         CompetenceInfo(
             competenceId = "C4",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C4",
-            title = "Use of ECDIS to maintain safety of navigation",
-            officialTOSItems = 10,
+            title = "Use of ECDIS for the safety of navigation",
+            officialTOSItems = 307,
             description = "Electronic navigational charts (ENC), safety contours, display categories, sensors integration, over-reliance prevention."
         ),
         CompetenceInfo(
             competenceId = "C5",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C5",
             title = "Respond to emergencies",
-            officialTOSItems = 10,
+            officialTOSItems = 358,
             description = "Man overboard maneuvers (Williamson, Scharnow), search & rescue (IAMSAR), collision, grounding, damage control."
         ),
         CompetenceInfo(
             competenceId = "C7",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C7",
             title = "Use the IMO SMCP and use English in written and oral form",
-            officialTOSItems = 20,
-            description = "IMO Standard Marine Communication Phrases, message markers, VHF communications, navigational warnings."
+            officialTOSItems = 533,
+            description = "Transmit and receive information by visual signalling / Morse & Flags."
         ),
         CompetenceInfo(
             competenceId = "C9",
             functionId = "F1",
-            functionName = "Function 1: Navigation at Operational Level",
+            functionName = "NAVIGATION AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C9",
-            title = "Manoeuver the ship",
-            officialTOSItems = 15,
+            title = "Manoeuvre the ship",
+            officialTOSItems = 507,
             description = "Ship handling, pivot point, turning circles, squat and shallow water effects, bank suction, anchoring."
         ),
         CompetenceInfo(
             competenceId = "C10",
             functionId = "F2",
-            functionName = "Function 2: Cargo Handling & Stowage",
+            functionName = "CARGO HANDLING AND STOWAGE AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C10",
-            title = "Monitor loading, stowage, securing, and care during voyage and unloading",
-            officialTOSItems = 15,
+            title = "Monitor the loading, stowage, securing, care during the voyage and the unloading of cargoes",
+            officialTOSItems = 610,
             description = "IMDG Code hazard classes, cargo securing manual (CSM), bulk grain regulations, dangerous goods segregation."
         ),
         CompetenceInfo(
             competenceId = "C11",
             functionId = "F2",
-            functionName = "Function 2: Cargo Handling & Stowage",
+            functionName = "CARGO HANDLING AND STOWAGE AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C11",
-            title = "Inspect and report defect and damage to cargo spaces, hatch covers, ballast tanks",
-            officialTOSItems = 15,
+            title = "Inspect and report defects and damage to cargo spaces, hatch covers and ballast tanks",
+            officialTOSItems = 421,
             description = "Ultrasonic hatch testing, corrosion detection, Enhanced Survey Programme (ESP), structural deformation."
         ),
         CompetenceInfo(
             competenceId = "C12",
             functionId = "F3",
-            functionName = "Function 3: Controlling Ship Operations & Care for Persons",
+            functionName = "CONTROLLING OF OPERATION OF THE SHIP AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C12",
             title = "Ensure compliance with pollution-prevention requirements",
-            officialTOSItems = 15,
+            officialTOSItems = 351,
             description = "MARPOL Annexes I to VI (Oily water separator 15ppm, sewage, garbage special areas, SOx/NOx ECA emissions)."
         ),
         CompetenceInfo(
             competenceId = "C13",
             functionId = "F3",
-            functionName = "Function 3: Controlling Ship Operations & Care for Persons",
+            functionName = "CONTROLLING OF OPERATION OF THE SHIP AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C13",
             title = "Maintain seaworthiness of the ship",
-            officialTOSItems = 15,
+            officialTOSItems = 888,
             description = "Ship stability, transverse metacentric height (GM), free surface effect, load lines, damage stability."
         ),
         CompetenceInfo(
             competenceId = "C17",
             functionId = "F3",
-            functionName = "Function 3: Controlling Ship Operations & Care for Persons",
+            functionName = "CONTROLLING OF OPERATION OF THE SHIP AT THE OPERATIONAL LEVEL",
             track = Track.DECK_OIC_NW,
             code = "C17",
             title = "Monitor compliance with legislative requirements",
-            officialTOSItems = 15,
+            officialTOSItems = 628,
             description = "Maritime Labour Convention (MLC 2006) rest hours, STCW compliance, Port State Control inspections, ISM Code."
         )
     )
@@ -169,11 +169,52 @@ object MaritimeCompetenceRegistry {
 
     fun getFunctionTitle(functionId: String): String {
         return when (functionId) {
-            "F1" -> "Function 1: Navigation at Operational Level"
-            "F2" -> "Function 2: Cargo Handling & Stowage"
-            "F3" -> "Function 3: Controlling Ship Operations & Care for Persons"
+            "F1" -> "NAVIGATION AT THE OPERATIONAL LEVEL"
+            "F2" -> "CARGO HANDLING AND STOWAGE AT THE OPERATIONAL LEVEL"
+            "F3" -> "CONTROLLING OF OPERATION OF THE SHIP AT THE OPERATIONAL LEVEL"
             "GMDSS" -> "GMDSS General Operator Certificate (GOC)"
             else -> functionId
+        }
+    }
+
+    val OFFICIAL_DECK_PERMIT_DISTRIBUTION = mapOf(
+        "C1" to 35,
+        "C2" to 20,
+        "C3" to 15,
+        "C4" to 10,
+        "C5" to 10,
+        "C7" to 20,
+        "C9" to 15,
+        "C10" to 15,
+        "C11" to 15,
+        "C12" to 15,
+        "C13" to 15,
+        "C17" to 15
+    )
+
+    val OFFICIAL_GMDSS_PERMIT_DISTRIBUTION = mapOf(
+        "C1" to 85,
+        "C2" to 15
+    )
+
+    fun getPermitItemCount(competenceId: String, track: Track): Int {
+        return if (track == Track.DECK_OIC_NW) {
+            OFFICIAL_DECK_PERMIT_DISTRIBUTION[competenceId] ?: 15
+        } else {
+            OFFICIAL_GMDSS_PERMIT_DISTRIBUTION[competenceId] ?: 50
+        }
+    }
+
+    fun getPermitItemsForFunction(functionId: String, track: Track): Int {
+        return if (track == Track.DECK_OIC_NW) {
+            when (functionId) {
+                "F1" -> 125 // 35+20+15+10+10+20+15
+                "F2" -> 30  // 15+15
+                "F3" -> 45  // 15+15+15
+                else -> 0
+            }
+        } else {
+            100
         }
     }
 }

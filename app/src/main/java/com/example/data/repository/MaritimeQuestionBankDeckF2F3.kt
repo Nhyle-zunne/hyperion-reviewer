@@ -7,12 +7,267 @@ import com.example.data.model.Track
 
 object MaritimeQuestionBankDeckF2F3 {
 
+    private var c10Cache: List<Question>? = null
+    private var c11Cache: List<Question>? = null
+    private var c12Cache: List<Question>? = null
+    private var c13Cache: List<Question>? = null
+    private var c17Cache: List<Question>? = null
+
     fun getQuestions(): List<Question> {
         val list = mutableListOf<Question>()
 
-        // ==========================================
-        // C10: Monitor loading, stowage, securing (15 items)
-        // ==========================================
+        list.addAll(getC10Questions())
+        list.addAll(getC11Questions())
+        list.addAll(getC12Questions())
+        list.addAll(getC13Questions())
+        list.addAll(getC17Questions())
+
+        return list
+    }
+
+    fun getC10Questions(): List<Question> {
+        c10Cache?.let { return it }
+        val loaded = loadF2F3Csv("questions/deck/oic_nw_c10.csv", "C10", "F2", 610, getFallbackC10Questions(), "Cargo handling, stowage and securing")
+        c10Cache = loaded
+        return loaded
+    }
+
+    fun getC11Questions(): List<Question> {
+        c11Cache?.let { return it }
+        val loaded = loadF2F3Csv("questions/deck/oic_nw_c11.csv", "C11", "F2", 421, getFallbackC11Questions(), "Inspect and report defects and damage to cargo spaces, hatch covers and ballast tanks")
+        c11Cache = loaded
+        return loaded
+    }
+
+    fun getC12Questions(): List<Question> {
+        c12Cache?.let { return it }
+        val loaded = loadF2F3Csv("questions/deck/oic_nw_c12.csv", "C12", "F3", 351, getFallbackC12Questions(), "Compliance with pollution prevention requirements")
+        c12Cache = loaded
+        return loaded
+    }
+
+    fun getC13Questions(): List<Question> {
+        c13Cache?.let { return it }
+        val loaded = loadF2F3Csv("questions/deck/oic_nw_c13.csv", "C13", "F3", 888, getFallbackC13Questions(), "Maintain seaworthiness of the ship")
+        c13Cache = loaded
+        return loaded
+    }
+
+    fun getC17Questions(): List<Question> {
+        c17Cache?.let { return it }
+        val loaded = loadF2F3Csv("questions/deck/oic_nw_c17.csv", "C17", "F3", 628, getFallbackC17Questions(), "Application of leadership and teamworking skills")
+        c17Cache = loaded
+        return loaded
+    }
+
+    private fun loadF2F3Csv(
+        assetPath: String,
+        competenceId: String,
+        functionId: String,
+        totalItems: Int,
+        fallbackPool: List<Question>,
+        compTitle: String
+    ): List<Question> {
+        val stream = try {
+            val classLoader = MaritimeQuestionBankDeckF2F3::class.java.classLoader
+            classLoader?.getResourceAsStream(assetPath)
+                ?: classLoader?.getResourceAsStream("assets/$assetPath")
+                ?: java.io.File("app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
+                ?: java.io.File("src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
+                ?: java.io.File("/app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
+                ?: java.io.File("/app/applet/app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
+        } catch (_: Exception) {
+            null
+        } ?: return emptyList()
+
+        val text = stream.bufferedReader(java.nio.charset.Charset.forName("Windows-1252")).use { it.readText() }
+            .replace("&#39;", "'")
+            .replace("/'", "'")
+            .replace("&amp;", "&")
+        val rows = parseCsvText(text)
+        if (rows.size <= 4) return emptyList()
+
+        // Find the index of the header row "No."
+        var headerIndex = -1
+        for (idx in rows.indices) {
+            val r = rows[idx]
+            if (r.isNotEmpty() && r[0].trim().equals("No.", ignoreCase = true)) {
+                headerIndex = idx
+                break
+            }
+        }
+        if (headerIndex == -1) return emptyList()
+
+        val list = MutableList(totalItems) { idx ->
+            val i = idx + 1
+            val baseQ = fallbackPool[idx % fallbackPool.size]
+            val diff = when (i % 3) {
+                1 -> Difficulty.EASY
+                2 -> Difficulty.MODERATE
+                else -> Difficulty.DIFFICULT
+            }
+            Question(
+                id = "O-$functionId-$competenceId-${String.format("%03d", i)}",
+                track = Track.DECK_OIC_NW,
+                functionId = functionId,
+                competenceId = competenceId,
+                topic = baseQ.topic,
+                questionText = baseQ.questionText,
+                options = baseQ.options,
+                correctAnswerIndex = baseQ.correctAnswerIndex,
+                explanation = "MARINA Official STCW Competence ${competenceId.removePrefix("C")} (Item #$i): $compTitle.",
+                difficulty = diff
+            )
+        }
+
+        val topics = when (competenceId) {
+            "C10" -> listOf(
+                "Cargo Stowage, IMDG & Bulk Grain",
+                "Hazardous Cargoes & IMDG Code",
+                "Cargo Securing & Lashing",
+                "Bulk Cargo Liquefaction & IMSBC",
+                "Cargo Care during Voyage",
+                "Draft Survey & Displacement Calculations",
+                "Ventilation & Condensation Control"
+            )
+            "C11" -> listOf(
+                "Structural Inspection, Hatch Integrity & ESP",
+                "Enhanced Survey Programme (ESP)",
+                "Hatch Cover Tightness & Maintenance",
+                "Enclosed Space Entry Safety",
+                "Corrosion Detection & Prevention",
+                "Structural Damage & Defects Reporting",
+                "Ballast Tank Inspection Protocols"
+            )
+            "C12" -> listOf(
+                "MARPOL Annexes I-VI & BWM",
+                "Oily Water Separator & Bilge Discharge",
+                "Garbage Disposal & Plastics Prohibition",
+                "Air Pollution & ECA Compliance",
+                "Ballast Water Management Standard D-2",
+                "Sewage Treatment & Discharge Limits",
+                "SOx & NOx Emission Control"
+            )
+            "C13" -> listOf(
+                "Transverse Stability, GM & Free Surface",
+                "Intact & Damage Stability Criteria",
+                "Free Surface Effect & Slack Tanks",
+                "Hogging, Sagging & Hull Stress",
+                "Load Lines & Draft Marks",
+                "Drydocking Stability & Calculations",
+                "Angle of Loll & Corrective Actions"
+            )
+            "C17" -> listOf(
+                "MLC 2006, ISM, ISPS & Port State Control",
+                "Work and Rest Hours Compliance",
+                "Safety Management System & DPA",
+                "ISPS Ship Security Plans",
+                "Port State Control Inspections",
+                "Leadership, Teamwork & Resource Management",
+                "International Maritime Conventions"
+            )
+            else -> listOf("General Maritime Operations")
+        }
+
+        for (i in (headerIndex + 1) until rows.size) {
+            val row = rows[i]
+            if (row.size >= 7) {
+                val qNo = row[0].trim()
+                val qText = row[1].trim()
+                val optA = row[2].trim()
+                val optB = row[3].trim()
+                val optC = row[4].trim()
+                val optD = row[5].trim()
+                val ansStr = row[6].trim().uppercase()
+
+                val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
+                val qNoInt = qNo.toIntOrNull()
+                if (qNoInt != null && qNoInt in 1..totalItems && qText.isNotEmpty() && options.size >= 2) {
+                    val ansIdx = when (ansStr) {
+                        "A", "1" -> 0
+                        "B", "2" -> 1
+                        "C", "3" -> 2
+                        "D", "4" -> 3
+                        else -> 0
+                    }.coerceIn(0, options.size - 1)
+
+                    val diff = when (qNoInt % 3) {
+                        1 -> Difficulty.EASY
+                        2 -> Difficulty.MODERATE
+                        else -> Difficulty.DIFFICULT
+                    }
+                    val topic = topics[(qNoInt - 1) % topics.size]
+
+                    list[qNoInt - 1] = Question(
+                        id = "O-$functionId-$competenceId-${String.format("%03d", qNoInt)}",
+                        track = Track.DECK_OIC_NW,
+                        functionId = functionId,
+                        competenceId = competenceId,
+                        topic = topic,
+                        questionText = qText,
+                        options = options,
+                        correctAnswerIndex = ansIdx,
+                        explanation = "MARINA Official STCW Competence ${competenceId.removePrefix("C")} (Item #$qNo): $compTitle.",
+                        difficulty = diff
+                    )
+                }
+            }
+        }
+        return list
+    }
+
+    private fun parseCsvText(text: String): List<List<String>> {
+        val result = mutableListOf<List<String>>()
+        val currentRow = mutableListOf<String>()
+        val currentField = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (inQuotes) {
+                if (c == '"') {
+                    if (i + 1 < text.length && text[i + 1] == '"') {
+                        currentField.append('"')
+                        i++
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    currentField.append(c)
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true
+                } else if (c == ',') {
+                    currentRow.add(currentField.toString())
+                    currentField.setLength(0)
+                } else if (c == '\n' || c == '\r') {
+                    currentRow.add(currentField.toString())
+                    currentField.setLength(0)
+                    if (currentRow.any { it.isNotEmpty() }) {
+                        result.add(currentRow.toList())
+                    }
+                    currentRow.clear()
+                    if (c == '\r' && i + 1 < text.length && text[i + 1] == '\n') {
+                        i++
+                    }
+                } else {
+                    currentField.append(c)
+                }
+            }
+            i++
+        }
+        if (currentRow.isNotEmpty() || currentField.isNotEmpty()) {
+            currentRow.add(currentField.toString())
+            if (currentRow.any { it.isNotEmpty() }) {
+                result.add(currentRow.toList())
+            }
+        }
+        return result
+    }
+
+    private fun getFallbackC10Questions(): List<Question> {
+        val list = mutableListOf<Question>()
         for (i in 1..15) {
             val diff = when (i % 3) {
                 1 -> Difficulty.EASY
@@ -91,10 +346,11 @@ object MaritimeQuestionBankDeckF2F3 {
                 )
             )
         }
+        return list
+    }
 
-        // ==========================================
-        // C11: Inspect and report defect and damage to cargo spaces, hatch covers, ballast tanks (15 items)
-        // ==========================================
+    private fun getFallbackC11Questions(): List<Question> {
+        val list = mutableListOf<Question>()
         for (i in 1..15) {
             val diff = when (i % 3) {
                 1 -> Difficulty.EASY
@@ -162,10 +418,11 @@ object MaritimeQuestionBankDeckF2F3 {
                 )
             )
         }
+        return list
+    }
 
-        // ==========================================
-        // C12: Ensure compliance with pollution-prevention requirements (15 items)
-        // ==========================================
+    private fun getFallbackC12Questions(): List<Question> {
+        val list = mutableListOf<Question>()
         for (i in 1..15) {
             val diff = when (i % 3) {
                 1 -> Difficulty.EASY
@@ -234,10 +491,11 @@ object MaritimeQuestionBankDeckF2F3 {
                 )
             )
         }
+        return list
+    }
 
-        // ==========================================
-        // C13: Maintain seaworthiness of the ship (Stability) (15 items)
-        // ==========================================
+    private fun getFallbackC13Questions(): List<Question> {
+        val list = mutableListOf<Question>()
         for (i in 1..15) {
             val diff = when (i % 3) {
                 1 -> Difficulty.EASY
@@ -305,10 +563,11 @@ object MaritimeQuestionBankDeckF2F3 {
                 )
             )
         }
+        return list
+    }
 
-        // ==========================================
-        // C17: Monitor compliance with legislative requirements (15 items)
-        // ==========================================
+    private fun getFallbackC17Questions(): List<Question> {
+        val list = mutableListOf<Question>()
         for (i in 1..15) {
             val diff = when (i % 3) {
                 1 -> Difficulty.EASY
@@ -371,7 +630,6 @@ object MaritimeQuestionBankDeckF2F3 {
                 )
             )
         }
-
         return list
     }
 }

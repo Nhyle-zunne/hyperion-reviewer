@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.OutlinedFlag
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -137,7 +138,7 @@ private fun IntensiveDrillScreen(
                     Icon(
                         imageVector = Icons.Default.EmojiEvents,
                         contentDescription = null,
-                        tint = MaritimeGoldBright,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(56.dp)
                     )
 
@@ -145,7 +146,7 @@ private fun IntensiveDrillScreen(
                         text = "Intensive Drill Completed!",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = PureWhite,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center
                     )
 
@@ -166,7 +167,7 @@ private fun IntensiveDrillScreen(
                     Text(
                         text = "Every question in this intensive session has been successfully answered and cleared through spaced repetition reinforcement.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp
                     )
@@ -175,11 +176,14 @@ private fun IntensiveDrillScreen(
 
                     Button(
                         onClick = { viewModel.resetIntensiveDrill() },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = PureWhite
+                        ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Return to Dashboard", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("Return to Dashboard", color = PureWhite, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -206,9 +210,12 @@ private fun IntensiveDrillScreen(
                 )
                 Button(
                     onClick = { viewModel.navigateTo(Screen.Home) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
+                    )
                 ) {
-                    Text("Return to Dashboard", color = Color.Black)
+                    Text("Return to Dashboard", color = PureWhite)
                 }
             }
         }
@@ -245,7 +252,7 @@ private fun IntensiveDrillScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color(0xFFF59E0B)
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -260,13 +267,13 @@ private fun IntensiveDrillScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = Color(0x33F59E0B)
+                                color = MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
                                     text = "RECYCLING",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFF59E0B),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontSize = 9.sp,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
@@ -275,7 +282,7 @@ private fun IntensiveDrillScreen(
                         Text(
                             text = "${currentQuestion.functionId} • ${currentQuestion.competenceId}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFF59E0B)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -284,7 +291,7 @@ private fun IntensiveDrillScreen(
                     Icon(
                         imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                         contentDescription = "Bookmark",
-                        tint = if (isBookmarked) MaritimeGoldBright else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -292,8 +299,8 @@ private fun IntensiveDrillScreen(
 
         // Live Statistics Header: "Cleared: X / Total • In Queue: Y"
         Surface(
-            color = Color(0xFF0F1E36),
-            border = BorderStroke(0.5.dp, Color(0xFFF59E0B).copy(alpha = 0.4f))
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                 Row(
@@ -311,7 +318,7 @@ private fun IntensiveDrillScreen(
                         text = "In Queue: ${intensiveQueue.size}",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFFF59E0B)
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -481,7 +488,7 @@ private fun IntensiveDrillScreen(
                             text = "Competency Standard Reference & Rationale:",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright
+                            color = MaterialTheme.colorScheme.primary
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -545,10 +552,10 @@ private fun IntensiveDrillScreen(
                     },
                     enabled = isSubmitted,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isAnswerCorrect) PassGreen else Color(0xFFF59E0B),
-                        contentColor = Color.Black,
-                        disabledContainerColor = Color(0xFF334155),
-                        disabledContentColor = Color.Gray
+                        containerColor = if (isAnswerCorrect) PassGreen else MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite,
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier
@@ -559,6 +566,7 @@ private fun IntensiveDrillScreen(
                     Text(
                         text = buttonText,
                         fontWeight = FontWeight.Bold,
+                        color = PureWhite,
                         fontSize = 14.sp
                     )
                     if (isSubmitted) {
@@ -566,6 +574,7 @@ private fun IntensiveDrillScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
+                            tint = PureWhite,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -638,9 +647,12 @@ private fun StandardDrillScreen(
                 )
                 Button(
                     onClick = { viewModel.navigateTo(Screen.Home) },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
+                    )
                 ) {
-                    Text("Return to Dashboard", color = Color.Black)
+                    Text("Return to Dashboard", color = PureWhite)
                 }
             }
         }
@@ -678,7 +690,7 @@ private fun StandardDrillScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = MaritimeGoldBright
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -692,7 +704,7 @@ private fun StandardDrillScreen(
                         Text(
                             text = "${question.functionId} • ${question.competenceId}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaritimeGoldBright
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -705,7 +717,7 @@ private fun StandardDrillScreen(
                         Icon(
                             imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
                             contentDescription = "Flag Question",
-                            tint = if (isFlagged) MaritimeGoldBright else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isFlagged) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
@@ -713,7 +725,7 @@ private fun StandardDrillScreen(
                         Icon(
                             imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                             contentDescription = "Bookmark",
-                            tint = if (isBookmarked) MaritimeGoldBright else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -726,7 +738,7 @@ private fun StandardDrillScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp),
-            color = MaritimeGoldBright,
+            color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant
         )
 
@@ -760,14 +772,14 @@ private fun StandardDrillScreen(
                     shape = RoundedCornerShape(20.dp),
                     color = when (question.difficulty) {
                         Difficulty.EASY -> Color(0xFF0F3E38)
-                        Difficulty.MODERATE -> Color(0xFF382D12)
+                        Difficulty.MODERATE -> MaterialTheme.colorScheme.primaryContainer
                         Difficulty.DIFFICULT -> Color(0xFF43161C)
                     },
                     border = BorderStroke(
                         1.dp,
                         when (question.difficulty) {
                             Difficulty.EASY -> PassGreen
-                            Difficulty.MODERATE -> MaritimeGoldBright
+                            Difficulty.MODERATE -> MaterialTheme.colorScheme.primary
                             Difficulty.DIFFICULT -> FailRed
                         }
                     )
@@ -783,7 +795,7 @@ private fun StandardDrillScreen(
                         fontWeight = FontWeight.Bold,
                         color = when (question.difficulty) {
                             Difficulty.EASY -> PassGreen
-                            Difficulty.MODERATE -> MaritimeGoldBright
+                            Difficulty.MODERATE -> MaterialTheme.colorScheme.primary
                             Difficulty.DIFFICULT -> FailRed
                         }
                     )
@@ -793,7 +805,7 @@ private fun StandardDrillScreen(
             Text(
                 text = "TOPIC: ${question.topic.uppercase()}",
                 style = MaterialTheme.typography.labelSmall,
-                color = SeaCyan,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold,
                 letterSpacing = 0.5.sp
             )
@@ -845,7 +857,7 @@ private fun StandardDrillScreen(
             ) {
                 val isAnswerCorrect = currentState?.selectedIndex == question.correctAnswerIndex
                 val statusColor = if (isAnswerCorrect) PassGreen else FailRed
-                val statusText = if (isAnswerCorrect) "CORRECT (+${question.difficulty.points} pts)" else "INCORRECT (0 pts)"
+                val statusText = if (isAnswerCorrect) "• CORRECT (+1 pt)" else "• INCORRECT (0 pts)"
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -870,31 +882,24 @@ private fun StandardDrillScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Competency Standard Reference & Rationale:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = question.explanation,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 20.sp
-                        )
-
                         if (!isAnswerCorrect) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "⚠️ Added to Mistakes Notebook. Answer correctly twice to clear.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FailRed
-                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Warning",
+                                    tint = Color(0xFFFFB300),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Added to Mistakes Notebook. Review correctly once to clear.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -933,7 +938,7 @@ private fun StandardDrillScreen(
                     Icon(
                         imageVector = Icons.Default.GridView,
                         contentDescription = "Question Palette",
-                        tint = MaritimeGoldBright
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -945,12 +950,15 @@ private fun StandardDrillScreen(
                             viewModel.submitExam()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
+                    ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = if (!isLastQuestion) "Next" else "Finish Drill",
-                        color = Color.Black,
+                        color = PureWhite,
                         fontWeight = FontWeight.Bold
                     )
                     if (!isLastQuestion) {
@@ -958,7 +966,7 @@ private fun StandardDrillScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Next Question",
-                            tint = Color.Black,
+                            tint = PureWhite,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -1011,5 +1019,54 @@ private fun StandardDrillScreen(
                 }
             }
         )
+    }
+}
+
+private fun getFormattedExplanation(question: com.example.data.model.Question): String {
+    val raw = question.explanation.trim()
+    var cleaned = raw
+        .replace(Regex("(?i)Competency Standard Reference & Rationale:?"), "")
+        .replace(Regex("(?i)MARINA Official STCW Competence \\w+ \\(Item #\\d+\\):?"), "")
+        .trim()
+
+    val sentenceCount = if (cleaned.isBlank()) 0 else cleaned.split(Regex("[.!?]\\s+")).size
+
+    if (cleaned.isNotBlank() && sentenceCount >= 4) {
+        return cleaned
+    }
+
+    val correctLetter = when (question.correctAnswerIndex) {
+        0 -> "A"
+        1 -> "B"
+        2 -> "C"
+        3 -> "D"
+        else -> "A"
+    }
+    val correctText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+    val concept = when {
+        question.id.contains("C1") -> "passage planning and precise terrestrial/celestial navigation"
+        question.id.contains("C2") -> "safe navigational watchkeeping under COLREGs and STCW guidelines"
+        question.id.contains("C3") -> "radar plotting, ARPA target tracking, and collision avoidance procedures"
+        question.id.contains("C4") -> "ECDIS system configuration, safety contour management, and chart display standards"
+        question.id.contains("C5") -> "bridge emergency response, life-saving maneuvers, and search and rescue coordinates"
+        question.id.contains("C7") -> "official maritime communication protocols and IMO Standard Marine Communication Phrases"
+        question.id.contains("C9") -> "vessel maneuvering, hydrodynamic interactions, and anchor handling procedures"
+        question.id.contains("C10") -> "cargo loading, stability verification, securing, and damage prevention protocols"
+        question.id.contains("C11") -> "structural defect inspections, ballast tank safety, and hatch cover integrity"
+        question.id.contains("C12") -> "MARPOL compliance, pollution prevention systems, and environmental watchkeeping"
+        question.id.contains("C13") -> "ship stability calculations, intact buoyancy, and vessel seaworthiness standards"
+        question.id.contains("C17") -> "legislative compliance, MLC guidelines, Port State Control, and STCW legal mandates"
+        else -> "standard operational procedures and maritime safety standards"
+    }
+
+    val s1 = "The correct answer is Option $correctLetter: \"$correctText\", which represents the industry standard for $concept."
+    val s2 = "Under STCW and SOLAS international frameworks, adhering to this specific procedure is vital to maintain bridge safety, environmental protection, and overall vessel integrity."
+    val s3 = "Choosing any other option deviates from established maritime guidelines and introduces critical watchkeeping hazards or structural failures during open-sea transit."
+    val s4 = "As a rule of thumb for the exam, associate this question directly with official STCW requirements to ensure compliance and avoid operational penalties."
+
+    return if (cleaned.isNotBlank()) {
+        "$cleaned\n\n$s1 $s2 $s3 $s4"
+    } else {
+        "$s1 $s2 $s3 $s4"
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OutlinedFlag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -55,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.Question
 import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.ui.components.TimerChip
@@ -74,12 +76,23 @@ fun MockCompetenceScreen(
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val timeRemaining by viewModel.timeRemainingSeconds.collectAsState()
     val userStates by viewModel.userQuestionStates.collectAsState()
+    val isExamSubmitted by viewModel.isExamSubmitted.collectAsState()
+    val completedCompetences by viewModel.completedCompetences.collectAsState()
 
-    var showExitDialog by remember { mutableStateOf(false) }
+    val isCompetenceFinished = (competenceId in completedCompetences) || isExamSubmitted
 
-    // Back button prompts confirmation
-    BackHandler {
-        showExitDialog = true
+    var showCompetenceLockedDialog by remember { mutableStateOf(false) }
+    var showSubmitConfirmationDialog by remember { mutableStateOf(false) }
+    var showEarlySubmitConfirmationDialog by remember { mutableStateOf(false) }
+
+    // Intercept system back press when competence is active: strictly cannot exit mid-competence!
+    BackHandler(enabled = !isCompetenceFinished) {
+        showCompetenceLockedDialog = true
+    }
+
+    // When competence is finished/submitted, navigating back returns to MockHub
+    BackHandler(enabled = isCompetenceFinished) {
+        viewModel.navigateTo(Screen.MockHub)
     }
 
     val compInfo = MaritimeCompetenceRegistry.getCompetenceById(competenceId, selectedTrack)
@@ -90,15 +103,22 @@ fun MockCompetenceScreen(
     val totalQuestions = compQuestions.size
     val progress = if (totalQuestions > 0) answeredCount.toFloat() / totalQuestions.toFloat() else 0f
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val headerBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFF0F172A)
+    val headerTitleColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
+    val headerSubColor = if (isDark) MaritimeGoldBright else Color(0xFF38BDF8)
+    val headerIconColor = if (isDark) MaritimeGoldBright else Color(0xFFFFFFFF)
+    val headerBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFF1E293B))
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (isDark) MaterialTheme.colorScheme.background else Color(0xFFF1F5F9))
     ) {
         // Top Bar: Back to Hub + Title + Timer
         Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+            color = headerBg,
+            border = headerBorder
         ) {
             Row(
                 modifier = Modifier
@@ -107,12 +127,25 @@ fun MockCompetenceScreen(
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { showExitDialog = true }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaritimeGoldBright
-                    )
+                if (isCompetenceFinished) {
+                    IconButton(onClick = { viewModel.navigateTo(Screen.MockHub) }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = headerIconColor
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = { showCompetenceLockedDialog = true },
+                        enabled = false
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Competence Locked",
+                            tint = if (isDark) headerIconColor.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.85f)
+                        )
+                    }
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -120,13 +153,18 @@ fun MockCompetenceScreen(
                         text = "${compInfo?.code ?: competenceId}: ${compInfo?.title ?: "Competence Drills"}",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = headerTitleColor,
                         maxLines = 1
                     )
                     Text(
-                        text = "$answeredCount / $totalQuestions Answered" + if (flaggedCount > 0) " • $flaggedCount Flagged" else "",
+                        text = if (isExamSubmitted) {
+                            "$answeredCount / $totalQuestions Answered • Review Mode"
+                        } else {
+                            "$answeredCount / $totalQuestions Answered" + if (flaggedCount > 0) " • $flaggedCount Flagged" else ""
+                        },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaritimeGoldBright
+                        color = headerSubColor,
+                        fontWeight = if (!isDark) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
 
@@ -158,8 +196,9 @@ fun MockCompetenceScreen(
             item {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF),
+                    shadowElevation = if (isDark) 0.dp else 2.dp,
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -169,7 +208,7 @@ fun MockCompetenceScreen(
                         Text(
                             text = "Continuous Scroll View: Answer, flag, and review all $totalQuestions questions freely. When finished, tap 'Submit Competence' below.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569)
                         )
                     }
                 }
@@ -186,11 +225,16 @@ fun MockCompetenceScreen(
                     question = question,
                     selectedIndex = selectedIndex,
                     isFlagged = isFlagged,
+                    isExamSubmitted = isExamSubmitted,
                     onSelectOption = { optIdx ->
-                        viewModel.selectOptionForQuestion(question.id, optIdx)
+                        if (!isExamSubmitted) {
+                            viewModel.selectOptionForQuestion(question.id, optIdx)
+                        }
                     },
                     onToggleFlag = {
-                        viewModel.toggleFlagForQuestion(question.id)
+                        if (!isExamSubmitted) {
+                            viewModel.toggleFlagForQuestion(question.id)
+                        }
                     }
                 )
             }
@@ -202,9 +246,15 @@ fun MockCompetenceScreen(
         }
 
         // Bottom Navigation Bar with Bottom-Right Competence Action: "Submit Competence"
+        val bottomBarBg = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+        val bottomBarBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFFCBD5E1))
+        val submitBtnBg = if (isDark) PassGreen else Color(0xFF0284C7)
+        val submitTextColor = if (isDark) Color.Black else PureWhite
+        val allAnswered = answeredCount >= totalQuestions && totalQuestions > 0
+
         Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+            color = bottomBarBg,
+            border = bottomBarBorder
         ) {
             Row(
                 modifier = Modifier
@@ -214,7 +264,7 @@ fun MockCompetenceScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = "$answeredCount of $totalQuestions Answered",
                         style = MaterialTheme.typography.titleSmall,
@@ -228,58 +278,196 @@ fun MockCompetenceScreen(
                     )
                 }
 
-                Button(
-                    onClick = {
-                        viewModel.markCompetenceCompleted(competenceId)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = PassGreen),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Done,
-                        contentDescription = null,
-                        tint = Color.Black,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Submit Competence",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                Spacer(modifier = Modifier.width(8.dp))
+
+                if (isExamSubmitted || isCompetenceFinished) {
+                    Button(
+                        onClick = { viewModel.navigateTo(Screen.MockHub) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                            contentColor = PureWhite
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            tint = PureWhite,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Return to Hub",
+                            color = PureWhite,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!allAnswered) {
+                            OutlinedButton(
+                                onClick = { showEarlySubmitConfirmationDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = "Finish & Submit",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                if (allAnswered) {
+                                    showSubmitConfirmationDialog = true
+                                }
+                            },
+                            enabled = allAnswered,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isDark) PassGreen else Color(0xFF16A34A),
+                                contentColor = if (isDark) Color.Black else PureWhite,
+                                disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE2E8F0),
+                                disabledContentColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Done,
+                                contentDescription = null,
+                                tint = if (allAnswered) (if (isDark) Color.Black else PureWhite) else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Submit Competence",
+                                color = if (allAnswered) (if (isDark) Color.Black else PureWhite) else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (showExitDialog) {
+    // Non-dismissible Competence Locked Dialog
+    if (showCompetenceLockedDialog) {
         AlertDialog(
-            onDismissRequest = { showExitDialog = false },
+            onDismissRequest = { /* Non-dismissible */ },
+            properties = DialogProperties(
+                dismissOnBackPress = false,
+                dismissOnClickOutside = false
+            ),
             title = {
-                Text("Exit Session?", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Competence Locked",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             },
             text = {
                 Text(
-                    "Exit Session? Your progress and answers will be saved so you can resume later.",
+                    text = "You must complete all items in this competence before returning to the exam hub. Exiting mid-competence is not permitted.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showCompetenceLockedDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("Understood", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Submit Competence Confirmation Dialog (When all items are answered)
+    if (showSubmitConfirmationDialog) {
+        AlertDialog(
+            onDismissRequest = { showSubmitConfirmationDialog = false },
+            title = {
+                Text(
+                    text = "Submit Competence?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "All $totalQuestions items in this competence have been answered. Once submitted, this competence will be marked as Completed and locked from retaking in this session. Return to exam hub?",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        showExitDialog = false
-                        viewModel.navigateTo(Screen.MockHub)
+                        showSubmitConfirmationDialog = false
+                        viewModel.markCompetenceCompleted(competenceId)
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) PassGreen else Color(0xFF16A34A),
+                        contentColor = if (isDark) Color.Black else PureWhite
+                    )
                 ) {
-                    Text("Exit to Hub", color = PureWhite)
+                    Text("Submit & Return to Hub", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showExitDialog = false }) {
-                    Text("Continue")
+                OutlinedButton(onClick = { showSubmitConfirmationDialog = false }) {
+                    Text("Review Answers")
+                }
+            }
+        )
+    }
+
+    // Finish & Submit Early Confirmation Dialog (With unanswered items)
+    if (showEarlySubmitConfirmationDialog) {
+        val remaining = (totalQuestions - answeredCount).coerceAtLeast(0)
+        AlertDialog(
+            onDismissRequest = { showEarlySubmitConfirmationDialog = false },
+            title = {
+                Text(
+                    text = "Finish & Submit Competence Early?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "You have answered $answeredCount of $totalQuestions items ($remaining items remaining). Submitting now will finalize your answers and lock this competence from being retaken in this session.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showEarlySubmitConfirmationDialog = false
+                        viewModel.markCompetenceCompleted(competenceId)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("Submit Anyway", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showEarlySubmitConfirmationDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )
@@ -301,48 +489,103 @@ private fun MockQuestionItemCard(
     question: Question,
     selectedIndex: Int?,
     isFlagged: Boolean,
+    isExamSubmitted: Boolean,
     onSelectOption: (Int) -> Unit,
     onToggleFlag: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val cardBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFFFFFFF)
+    val isCorrect = selectedIndex == question.correctAnswerIndex
+    val cardBorder = if (isDark) {
+        BorderStroke(
             width = if (isFlagged) 1.5.dp else if (selectedIndex != null) 1.dp else 0.75.dp,
             color = if (isFlagged) MaritimeGoldBright else if (selectedIndex != null) SeaCyan.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline
         )
+    } else {
+        BorderStroke(
+            width = if (isFlagged) 1.5.dp else 1.dp,
+            color = if (isFlagged) Color(0xFFD97706) else if (selectedIndex != null) Color(0xFF0284C7) else Color(0xFFCBD5E1)
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
+        border = cardBorder
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row: Item Number badge and Flag Icon (NO POINT VALUES OR DIFFICULTY CHIPS)
+            // Header Row: Item Number badge and status / Flag Icon
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                val numBadgeBg = if (isDark) {
+                    if (selectedIndex != null) SeaCyan.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                } else {
+                    Color(0xFFE0F2FE)
+                }
+                val numBadgeColor = if (isDark) {
+                    if (selectedIndex != null) SeaCyan else MaterialTheme.colorScheme.onSurface
+                } else {
+                    Color(0xFF0369A1)
+                }
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (selectedIndex != null) SeaCyan.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(1.dp, if (selectedIndex != null) SeaCyan else MaterialTheme.colorScheme.outline)
+                    color = numBadgeBg,
+                    border = BorderStroke(1.dp, if (selectedIndex != null) (if (isDark) SeaCyan else Color(0xFF0284C7)) else (if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFBAE6FD)))
                 ) {
                     Text(
                         text = "#$itemNumber of $totalItems",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (selectedIndex != null) SeaCyan else MaterialTheme.colorScheme.onSurface
+                        color = numBadgeColor
                     )
                 }
 
-                IconButton(
-                    onClick = onToggleFlag,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
-                        contentDescription = "Flag Item",
-                        tint = if (isFlagged) MaritimeGoldBright else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (isExamSubmitted) {
+                    val statusText = when {
+                        selectedIndex == null -> "UNANSWERED"
+                        isCorrect -> "CORRECT"
+                        else -> "INCORRECT"
+                    }
+                    val statusBg = when {
+                        selectedIndex == null -> Color(0xFF64748B).copy(alpha = 0.15f)
+                        isCorrect -> PassGreen.copy(alpha = 0.2f)
+                        else -> Color(0xFFDC2626).copy(alpha = 0.2f)
+                    }
+                    val statusColor = when {
+                        selectedIndex == null -> Color(0xFF64748B)
+                        isCorrect -> if (isDark) PassGreen else Color(0xFF15803D)
+                        else -> if (isDark) Color(0xFFFF6B6B) else Color(0xFFDC2626)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = statusBg,
+                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = statusText,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = statusColor
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = onToggleFlag,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
+                            contentDescription = "Flag Item",
+                            tint = if (isFlagged) MaritimeGoldBright else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
+                        )
+                    }
                 }
             }
 
@@ -351,10 +594,12 @@ private fun MockQuestionItemCard(
             // Question Text
             Text(
                 text = question.questionText,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                lineHeight = 22.sp
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 15.sp,
+                    fontWeight = if (isDark) FontWeight.Medium else FontWeight.SemiBold,
+                    lineHeight = 22.sp
+                ),
+                color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0F172A)
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -364,19 +609,53 @@ private fun MockQuestionItemCard(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 question.options.forEachIndexed { optIndex, optionText ->
                     val isSelected = selectedIndex == optIndex
+                    val isThisCorrect = optIndex == question.correctAnswerIndex
                     val letter = optionLetters.getOrElse(optIndex) { "${optIndex + 1}" }
+
+                    val optBg = when {
+                        isExamSubmitted && isThisCorrect -> if (isDark) PassGreen.copy(alpha = 0.2f) else Color(0xFFDCFCE7)
+                        isExamSubmitted && isSelected && !isThisCorrect -> if (isDark) Color(0xFFDC2626).copy(alpha = 0.2f) else Color(0xFFFEE2E2)
+                        isDark -> if (isSelected) SeaCyan.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        else -> if (isSelected) Color(0xFFE0F2FE) else Color(0xFFF8FAFC)
+                    }
+                    val optBorder = when {
+                        isExamSubmitted && isThisCorrect -> BorderStroke(1.5.dp, if (isDark) PassGreen else Color(0xFF16A34A))
+                        isExamSubmitted && isSelected && !isThisCorrect -> BorderStroke(1.5.dp, Color(0xFFDC2626))
+                        isDark -> BorderStroke(if (isSelected) 1.5.dp else 0.75.dp, if (isSelected) SeaCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                        else -> BorderStroke(if (isSelected) 1.5.dp else 1.dp, if (isSelected) Color(0xFF0284C7) else Color(0xFFE2E8F0))
+                    }
+                    val letterBg = when {
+                        isExamSubmitted && isThisCorrect -> if (isDark) PassGreen else Color(0xFF16A34A)
+                        isExamSubmitted && isSelected && !isThisCorrect -> Color(0xFFDC2626)
+                        isSelected -> if (isDark) SeaCyan else Color(0xFF0284C7)
+                        isDark -> MaterialTheme.colorScheme.surfaceVariant
+                        else -> Color(0xFFE2E8F0)
+                    }
+                    val letterTextColor = when {
+                        isExamSubmitted && (isThisCorrect || isSelected) -> PureWhite
+                        isSelected -> if (isDark) Color.Black else PureWhite
+                        isDark -> MaterialTheme.colorScheme.onSurface
+                        else -> Color(0xFF1E293B)
+                    }
+                    val optionTextColor = when {
+                        isExamSubmitted && isThisCorrect -> if (isDark) PassGreen else Color(0xFF15803D)
+                        isExamSubmitted && isSelected && !isThisCorrect -> if (isDark) Color(0xFFFF6B6B) else Color(0xFFDC2626)
+                        isSelected -> if (isDark) Color.White else Color(0xFF0C4A6E)
+                        isDark -> MaterialTheme.colorScheme.onSurface
+                        else -> Color(0xFF1E293B)
+                    }
 
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable { onSelectOption(optIndex) },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) SeaCyan.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        border = BorderStroke(
-                            width = if (isSelected) 1.5.dp else 0.75.dp,
-                            color = if (isSelected) SeaCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                        )
+                            .clip(RoundedCornerShape(12.dp))
+                            .then(
+                                if (!isExamSubmitted) Modifier.clickable { onSelectOption(optIndex) }
+                                else Modifier
+                            ),
+                        shape = RoundedCornerShape(12.dp),
+                        color = optBg,
+                        border = optBorder
                     ) {
                         Row(
                             modifier = Modifier
@@ -386,16 +665,16 @@ private fun MockQuestionItemCard(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelected) SeaCyan else MaterialTheme.colorScheme.surfaceVariant),
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(letterBg),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = letter,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
-                                    color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface
+                                    color = letterTextColor
                                 )
                             }
 
@@ -404,20 +683,54 @@ private fun MockQuestionItemCard(
                             Text(
                                 text = optionText,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected && !isDark) FontWeight.Bold else FontWeight.Normal,
+                                color = optionTextColor,
                                 modifier = Modifier.weight(1f),
                                 lineHeight = 18.sp
                             )
 
                             RadioButton(
                                 selected = isSelected,
-                                onClick = { onSelectOption(optIndex) },
+                                onClick = if (!isExamSubmitted) { { onSelectOption(optIndex) } } else null,
+                                enabled = !isExamSubmitted,
                                 colors = RadioButtonDefaults.colors(
-                                    selectedColor = SeaCyan,
-                                    unselectedColor = MaterialTheme.colorScheme.outline
+                                    selectedColor = if (isDark) SeaCyan else Color(0xFF0284C7),
+                                    unselectedColor = if (isDark) MaterialTheme.colorScheme.outline else Color(0xFF94A3B8)
                                 )
                             )
                         }
+                    }
+                }
+            }
+
+            // If submitted: Display Competency Standard Reference & Answer Rationale
+            if (isExamSubmitted) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f) else Color(0xFFF1F5F9),
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline.copy(alpha = 0.5f) else Color(0xFFCBD5E1)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "OFFICIAL ANSWER RATIONALE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDark) MaritimeGoldBright else Color(0xFF0369A1),
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = question.explanation.ifBlank {
+                                val correctLetter = optionLetters.getOrElse(question.correctAnswerIndex) { "A" }
+                                val correctText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+                                "The correct answer is Option $correctLetter: \"$correctText\" according to official MARINA STCW examination standards."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF1E293B),
+                            lineHeight = 18.sp
+                        )
                     }
                 }
             }

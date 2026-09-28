@@ -9,7 +9,7 @@ class ExampleUnitTest {
   @Test
   fun testDeckQuestionCountsStrict() {
     val deckQuestions = MaritimeQuestionBank.getQuestionsByTrack(Track.DECK_OIC_NW)
-    assertEquals(200, deckQuestions.size)
+    assertEquals(2268, deckQuestions.size)
 
     val c1 = deckQuestions.filter { it.competenceId == "C1" }.size
     val c2 = deckQuestions.filter { it.competenceId == "C2" }.size
@@ -20,14 +20,14 @@ class ExampleUnitTest {
     val c9 = deckQuestions.filter { it.competenceId == "C9" }.size
     val f1 = deckQuestions.filter { it.functionId == "F1" }.size
 
-    assertEquals(35, c1)
-    assertEquals(20, c2)
-    assertEquals(15, c3)
-    assertEquals(10, c4)
+    assertEquals(831, c1)
+    assertEquals(568, c2)
+    assertEquals(442, c3)
+    assertEquals(307, c4)
     assertEquals(10, c5)
     assertEquals(20, c7)
     assertEquals(15, c9)
-    assertEquals(125, f1)
+    assertEquals(2193, f1)
 
     val c10 = deckQuestions.filter { it.competenceId == "C10" }.size
     val c11 = deckQuestions.filter { it.competenceId == "C11" }.size
@@ -119,9 +119,9 @@ class ExampleUnitTest {
 
     // Activated calls return full datasets
     val activatedDeck = MaritimeQuestionBank.getQuestionsByTrack(Track.DECK_OIC_NW, isProUnlocked = true)
-    assertEquals(200, activatedDeck.size)
+    assertEquals(2268, activatedDeck.size)
 
     val activatedMock = MaritimeQuestionBank.getMockExamDataset(Track.DECK_OIC_NW, isProUnlocked = true)
-    assertEquals(200, activatedMock.size)
+    assertEquals(2268, activatedMock.size)
   }
 }

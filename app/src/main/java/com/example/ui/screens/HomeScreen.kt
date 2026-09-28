@@ -59,6 +59,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -72,9 +73,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ActiveSessionEntity
+import com.example.data.local.isCompleted
+import com.example.data.local.answeredQuestions
 import com.example.data.local.ExamRecordEntity
 import com.example.data.model.QuizMode
 import com.example.data.model.Track
+import com.example.data.repository.MaritimeQuestionBank
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGold
@@ -85,9 +89,6 @@ import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SeaCyan
 import com.example.viewmodel.ReviewerViewModel
 import com.example.viewmodel.Screen
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun HomeScreen(
@@ -96,12 +97,13 @@ fun HomeScreen(
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
-    val mistakes by viewModel.mistakeEntities.collectAsState()
+    val mistakeEntries by viewModel.mistakeEntries.collectAsState()
     val examRecords by viewModel.examRecords.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val isActivated by viewModel.isActivated.collectAsState()
 
-    val totalMistakes = mistakes.size
+    val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
+    val totalMistakes = trackMistakes.size
     val totalBookmarks = bookmarkedIds.size
 
     val trackExams = examRecords.filter { it.track == selectedTrack.name }
@@ -123,7 +125,7 @@ fun HomeScreen(
     ) {
         MaritimeTopBar(
             title = "HYPERION",
-            showBackButton = false,
+            showBackButton = true,
             onBackClick = { viewModel.navigateTo(Screen.TrackSelection) },
             onMenuClick = { viewModel.openDrawer() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) },
@@ -158,12 +160,14 @@ fun HomeScreen(
 
             // Resume Active Session Card (if unfinished session exists)
             activeSession?.let { session ->
-                item {
-                    ResumeActiveSessionCard(
-                        session = session,
-                        onResume = { viewModel.resumeSession(session.track, session.id) },
-                        onDiscard = { viewModel.discardActiveSession() }
-                    )
+                if (!session.isCompleted && session.answeredQuestions < session.totalQuestions) {
+                    item {
+                        ResumeActiveSessionCard(
+                            session = session,
+                            onResume = { viewModel.resumeSession(session.track, session.id) },
+                            onDiscard = { viewModel.discardActiveSession() }
+                        )
+                    }
                 }
             }
 
@@ -172,7 +176,7 @@ fun HomeScreen(
                     text = "EXAMINATION MODES",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright,
+                    color = MaterialTheme.colorScheme.tertiary,
                     letterSpacing = 1.sp
                 )
             }
@@ -183,8 +187,9 @@ fun HomeScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                        border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.6f))
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -195,7 +200,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(12.dp))
@@ -204,22 +209,25 @@ fun HomeScreen(
                                     text = "Free Tier Active",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaritimeGoldBright
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = "Try sample questions in Free Practice, or enter your offline key to unlock Hyperion Pro.",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PureWhite.copy(alpha = 0.8f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
                                 onClick = { viewModel.navigateTo(Screen.Activation) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaritimeGoldBright,
+                                    contentColor = Color(0xFF0F172A)
+                                ),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Activate", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Activate", color = Color(0xFF0F172A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -231,7 +239,7 @@ fun HomeScreen(
                     title = "Practice Drill Configuration",
                     subtitle = "Two-step setup: select competence, then configure sequential/randomized ordering & item count",
                     badge = if (isActivated) "CUSTOMIZABLE" else "PRO LOCKED",
-                    badgeColor = if (isActivated) SeaCyan else MaritimeGoldBright,
+                    badgeColor = if (isActivated) SeaCyan else MaterialTheme.colorScheme.primary,
                     icon = Icons.Default.Tune,
                     accentColor = SeaCyan,
                     onClick = {
@@ -247,9 +255,9 @@ fun HomeScreen(
                     title = "Official Timed Mock Exam",
                     subtitle = if (selectedTrack == Track.DECK_OIC_NW) "200 Items • 200 Minutes • 70% Cutoff" else "100 Items • 100 Minutes • 70% Cutoff",
                     badge = if (isActivated) "STCW TOS MOCK" else "PRO LOCKED",
-                    badgeColor = MaritimeGoldBright,
+                    badgeColor = MaterialTheme.colorScheme.primary,
                     icon = Icons.Default.Timer,
-                    accentColor = MaritimeGoldBright,
+                    accentColor = MaterialTheme.colorScheme.primary,
                     onClick = {
                         viewModel.requireActivationOr {
                             viewModel.startQuizSession(
@@ -265,9 +273,9 @@ fun HomeScreen(
                     title = "Flashcard Revision Mode",
                     subtitle = "Active recall study • Tap to flip cards • Rationale & Bloom's taxonomy breakdown",
                     badge = "ACTIVE RECALL",
-                    badgeColor = Color(0xFFF59E0B),
+                    badgeColor = MaterialTheme.colorScheme.primary,
                     icon = Icons.Default.Style,
-                    accentColor = MaritimeGoldBright,
+                    accentColor = MaterialTheme.colorScheme.primary,
                     onClick = {
                         viewModel.navigateTo(Screen.Flashcards)
                     }
@@ -302,42 +310,9 @@ fun HomeScreen(
                 )
             }
 
-            item {
+             item {
                 // MARINA Strict Passing Policy Card
                 MarinaPolicyCard()
-            }
-
-            if (trackExams.isNotEmpty()) {
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "RECENT EXAM ATTEMPTS",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright,
-                            letterSpacing = 1.sp
-                        )
-                        TextButton(onClick = { viewModel.navigateTo(Screen.History) }) {
-                            Text(
-                                "View All Logs",
-                                color = SeaCyan,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                items(trackExams.take(3)) { exam ->
-                    RecentExamCard(
-                        exam = exam,
-                        onClick = { viewModel.loadPastExamResult(exam) }
-                    )
-                }
             }
 
             item {
@@ -384,19 +359,11 @@ private fun HeroBanner(track: Track) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeGold.copy(alpha = 0.5f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0xFF0F1E36),
-                            Color(0xFF162D4F)
-                        )
-                    )
-                )
                 .padding(18.dp)
         ) {
             Column {
@@ -407,14 +374,14 @@ private fun HeroBanner(track: Track) {
                 ) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = MaritimeGoldBright.copy(alpha = 0.2f)
+                        color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
                             text = "STCW '78 AS AMENDED",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
 
@@ -438,7 +405,7 @@ private fun HeroBanner(track: Track) {
                     text = track.title,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
-                    color = PureWhite
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -464,68 +431,96 @@ private fun StatsGrid(
     mistakeCount: Int,
     bookmarkCount: Int
 ) {
-    Row(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        StatTile(
-            title = "Mocks Taken",
-            value = "$examsCount",
-            color = SeaCyan,
-            modifier = Modifier.weight(1f)
-        )
-        StatTile(
-            title = "Avg. Score",
-            value = if (examsCount > 0) String.format("%.0f%%", avgScore) else "--",
-            color = if (avgScore >= 70.0) PassGreen else MaritimeGoldBright,
-            modifier = Modifier.weight(1f)
-        )
-        StatTile(
-            title = "Error Vault",
-            value = "$mistakeCount",
-            color = if (mistakeCount > 0) FailRed else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
-        )
-        StatTile(
-            title = "Bookmarks",
-            value = "$bookmarkCount",
-            color = MaritimeGoldBright,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            StatColumn(
+                title = "Mocks Taken",
+                value = "$examsCount",
+                color = SeaCyan,
+                modifier = Modifier.weight(1f)
+            )
+
+            VerticalDivider(
+                modifier = Modifier
+                    .height(32.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+
+            StatColumn(
+                title = "Avg. Score",
+                value = if (examsCount > 0) String.format("%.0f%%", avgScore) else "--",
+                color = if (avgScore >= 70.0) PassGreen else Color(0xFFB45309),
+                modifier = Modifier.weight(1f)
+            )
+
+            VerticalDivider(
+                modifier = Modifier
+                    .height(32.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+
+            StatColumn(
+                title = "Error Vault",
+                value = "$mistakeCount",
+                color = if (mistakeCount > 0) FailRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+
+            VerticalDivider(
+                modifier = Modifier
+                    .height(32.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+
+            StatColumn(
+                title = "Bookmarks",
+                value = "$bookmarkCount",
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
 @Composable
-private fun StatTile(
+private fun StatColumn(
     title: String,
     value: String,
     color: Color,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    Column(
         modifier = modifier,
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = color
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 10.sp
-            )
-        }
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = color
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp
+        )
     }
 }
 
@@ -618,7 +613,7 @@ private fun MarinaPolicyCard() {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaritimeGold.copy(alpha = 0.3f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -627,7 +622,7 @@ private fun MarinaPolicyCard() {
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = "MARINA Policy",
-                tint = MaritimeGoldBright,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(22.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -636,7 +631,7 @@ private fun MarinaPolicyCard() {
                     text = "MARINA Evaluation & Weighted Scoring",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -645,64 +640,6 @@ private fun MarinaPolicyCard() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RecentExamCard(
-    exam: ExamRecordEntity,
-    onClick: () -> Unit = {}
-) {
-    val dateStr = SimpleDateFormat("MMM dd, yyyy • HH:mm", Locale.getDefault()).format(Date(exam.timestamp))
-    val statusColor = if (exam.isPassed) PassGreen else FailRed
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "${exam.track.replace('_', ' ')} Mock",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = dateStr,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = String.format("%.1f%%", exam.percentage),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor
-                    )
-                    Text(
-                        text = if (exam.isPassed) "PASSED" else "FAILED",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor
-                    )
-                }
             }
         }
     }
@@ -724,7 +661,7 @@ private fun ResumeActiveSessionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.5.dp, MaritimeGoldBright)
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -736,7 +673,7 @@ private fun ResumeActiveSessionCard(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = MaritimeGoldBright,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -744,21 +681,21 @@ private fun ResumeActiveSessionCard(
                         text = "RESUME ACTIVE SESSION",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 0.5.sp
                     )
                 }
 
                 Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = MaritimeGoldBright.copy(alpha = 0.15f)
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Text(
                         text = "$trackName $modeStr",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
             }
@@ -780,7 +717,7 @@ private fun ResumeActiveSessionCard(
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp)),
-                color = MaritimeGoldBright,
+                color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
 
@@ -806,18 +743,20 @@ private fun ResumeActiveSessionCard(
                     modifier = Modifier.weight(1.2f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaritimeGoldBright,
-                        contentColor = NauticalNavyDark
+                        contentColor = Color(0xFF0F172A)
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Resume",
+                        tint = Color(0xFF0F172A),
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Resume Exam",
+                        color = Color(0xFF0F172A),
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )

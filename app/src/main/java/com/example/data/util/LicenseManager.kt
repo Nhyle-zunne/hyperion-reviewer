@@ -11,12 +11,93 @@ object LicenseManager {
     const val PREFS_NAME = "hyperion_license_prefs"
     const val KEY_INSTALLATION_TOKEN = "installation_hardware_token"
     const val KEY_REQUEST_CODE = "device_request_code"
+    const val KEY_INSTALL_SESSION_ID = "install_session_id"
+    const val KEY_INSTALL_DATE = "install_session_date"
 
     private val _isProActivatedFlow = MutableStateFlow(false)
     val isProActivatedFlow: StateFlow<Boolean> = _isProActivatedFlow.asStateFlow()
 
     fun init(context: Context) {
         _isProActivatedFlow.value = isActivated(context)
+    }
+
+    /**
+     * Permanent Hardware ID derived directly from Settings.Secure.ANDROID_ID.
+     * Format: DEV- + first 8 characters uppercase (e.g., DEV-A8F2-771C).
+     * Tagged as (Hardware Bound). Does NOT depend on SharedPreferences,
+     * so it persists across uninstalls and app clears on the same physical device.
+     */
+    fun getPermanentHardwareId(context: Context): String {
+        val rawAndroidId = try {
+            val id = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+            if (!id.isNullOrBlank()) {
+                id.filter { it.isLetterOrDigit() }
+            } else {
+                "A8F2771C"
+            }
+        } catch (_: Exception) {
+            "A8F2771C"
+        }
+        val padded = rawAndroidId.padEnd(8, '0').take(8).uppercase()
+        return "DEV-${padded.substring(0, 4)}-${padded.substring(4, 8)}"
+    }
+
+    /**
+     * Install Session ID: Retrieved from app-instance storage (SharedPreferences).
+     * If null, generates a 4-to-6 character UUID token (e.g. INST-9024) and records
+     * the install timestamp.
+     */
+    fun getInstallSessionId(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val existing = prefs.getString(KEY_INSTALL_SESSION_ID, null)
+        if (!existing.isNullOrEmpty()) {
+            return existing
+        }
+        val token = "INST-" + java.util.UUID.randomUUID().toString().replace("-", "").take(4).uppercase()
+        prefs.edit().putString(KEY_INSTALL_SESSION_ID, token).apply()
+        // Ensure install date is initialized at the same time
+        getInstallDate(context)
+        return token
+    }
+
+    /**
+     * Install timestamp recorded when the session was created.
+     */
+    fun getInstallDate(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val existing = prefs.getString(KEY_INSTALL_DATE, null)
+        if (!existing.isNullOrEmpty()) {
+            return existing
+        }
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
+        prefs.edit().putString(KEY_INSTALL_DATE, date).apply()
+        return date
+    }
+
+    /**
+     * Master Request Code:
+     * Alphanumeric code combining hardware and session tokens:
+     * HYP- + hardware prefix + - + session prefix + checksum (e.g., HYP-A8F2-9024-B105).
+     */
+    fun getMasterRequestCode(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val stored = prefs.getString(KEY_REQUEST_CODE, null)
+        if (stored != null && stored.startsWith("HYP-") && stored.count { it == '-' } >= 2) {
+            return stored
+        }
+
+        val hwId = getPermanentHardwareId(context)
+        val sessId = getInstallSessionId(context)
+        val hwPrefix = hwId.removePrefix("DEV-").replace("-", "").take(4)
+        val sessPrefix = sessId.removePrefix("INST-").replace("-", "").take(4)
+
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hash = digest.digest(("$hwPrefix:$sessPrefix:HYP_2026").toByteArray(Charsets.UTF_8))
+        val checksum = hash.joinToString("") { "%02X".format(it) }.take(4)
+
+        val code = "HYP-$hwPrefix-$sessPrefix-$checksum"
+        prefs.edit().putString(KEY_REQUEST_CODE, code).apply()
+        return code
     }
 
     // Obfuscated salt fragments: XOR masked with 0x5A to prevent detection via simple string search in decompilers
@@ -107,21 +188,10 @@ object LicenseManager {
 
     /**
      * Returns the installation-bound Request Code, generating it if necessary.
-     * Checks SharedPreferences for an existing valid "HYP-XXXX-XXXX" code.
-     * If it does not exist, generates it from the installation token and saves it permanently.
+     * Uses the Master Request Code format combining hardware and session tokens.
      */
     fun getOrGenerateRequestCode(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val stored = prefs.getString(KEY_REQUEST_CODE, null)
-        val validFormat = Regex("^HYP-[0-9A-F]{4}-[0-9A-F]{4}$")
-        if (stored != null && validFormat.matches(stored)) {
-            return stored
-        }
-
-        val token = getOrGenerateInstallationToken(context)
-        val newCode = generateRequestCode(token)
-        prefs.edit().putString(KEY_REQUEST_CODE, newCode).apply()
-        return newCode
+        return getMasterRequestCode(context)
     }
 
     /**

@@ -34,6 +34,12 @@ data class ActiveSessionEntity(
     val updatedTimestamp: Long = System.currentTimeMillis()
 )
 
+val ActiveSessionEntity.answeredQuestions: Int
+    get() = answeredCount
+
+val ActiveSessionEntity.isCompleted: Boolean
+    get() = false
+
 @Entity(tableName = "exam_records")
 data class ExamRecordEntity(
     @PrimaryKey val id: String,

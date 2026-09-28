@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.graphics.Paint
+import android.graphics.Path as AndroidPath
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,9 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,7 +31,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -45,9 +49,14 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Custom vector-based nautical logo component in pure Jetpack Compose.
- * Motif: A stylized mariner's compass rose integrated with a golden sextant arc
- * and modern geometric helm wheel, accented with navy blue and gold trim.
+ * Official HYPERION Medallion Seal Emblem.
+ * Faithfully renders the official embossed gold maritime medal:
+ * - Outer metallic gold circular band with engraved "HYPERION", "By HyperionNavTech", "W", and "E"
+ * - Deep nautical navy inner dial with concentric gold navigation rings
+ * - Radiant 8-pointed golden compass star at 12 o'clock
+ * - Mariner anchor passing through diagonally with stock and ring at top-right
+ * - Center open navigation book with sextant (left page) and compass rose (right page)
+ * - Anchor flukes cradling the book with "S" mark on the crown
  */
 @Composable
 fun HyperionEmblem(
@@ -62,167 +71,384 @@ fun HyperionEmblem(
             .background(
                 Brush.radialGradient(
                     colors = listOf(
-                        Color(0xFF1E3A8A),
-                        NauticalNavyDark,
-                        Color(0xFF030712)
+                        Color(0xFFEAB308),
+                        Color(0xFFD4AF37),
+                        Color(0xFF92400E)
                     )
                 )
             )
-            .border(2.dp, MaritimeGoldBright, CircleShape),
+            .border(2.dp, Color(0xFFFDE047), CircleShape),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(modifier = Modifier.size(size * 0.9f)) {
+        Canvas(modifier = Modifier.size(size)) {
             val center = Offset(this.size.width / 2f, this.size.height / 2f)
             val radius = this.size.width / 2f
 
-            // 1. Draw outer helm wheel rim
+            // 1. Outer Gold Bevel Rim
             drawCircle(
-                color = MaritimeGold.copy(alpha = 0.4f),
-                radius = radius * 0.92f,
-                center = center,
-                style = Stroke(width = 2.dp.toPx())
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFFFEF08A), Color(0xFFD4AF37), Color(0xFF78350F)),
+                    center = center,
+                    radius = radius
+                ),
+                radius = radius,
+                center = center
             )
 
-            // 2. Draw Helm wheel spoke handles (8 handles around circumference)
-            val spokeCount = 8
-            for (i in 0 until spokeCount) {
-                val angle = (i * (360f / spokeCount)) * (Math.PI.toFloat() / 180f)
-                val spokeStart = Offset(
-                    center.x + (radius * 0.72f) * cos(angle),
-                    center.y + (radius * 0.72f) * sin(angle)
-                )
-                val spokeEnd = Offset(
-                    center.x + (radius * 0.98f) * cos(angle),
-                    center.y + (radius * 0.98f) * sin(angle)
-                )
-                drawLine(
-                    color = MaritimeGoldBright,
-                    start = spokeStart,
-                    end = spokeEnd,
-                    strokeWidth = 2.5.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                // Spoke knob
-                drawCircle(
-                    color = MaritimeGoldBright,
-                    radius = 2.dp.toPx(),
-                    center = spokeEnd
-                )
-            }
+            // Outer Thin Groove
+            drawCircle(
+                color = Color(0xFF78350F),
+                radius = radius * 0.98f,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
 
-            // 3. Draw Sextant graduated index arc (subtle arc in lower quadrant)
-            drawArc(
-                color = SeaCyan.copy(alpha = 0.7f),
-                startAngle = 110f,
-                sweepAngle = 140f,
-                useCenter = false,
-                topLeft = Offset(center.x - radius * 0.65f, center.y - radius * 0.65f),
-                size = Size(radius * 1.3f, radius * 1.3f),
+            // Inner Boundary Ring of Gold Band
+            val innerRingRadius = radius * 0.72f
+            drawCircle(
+                color = Color(0xFF78350F),
+                radius = innerRingRadius,
+                center = center,
                 style = Stroke(width = 1.5.dp.toPx())
             )
 
-            // Graduated tic marks on sextant arc
-            for (deg in 120..240 step 15) {
-                val rad = deg * (Math.PI.toFloat() / 180f)
-                val inner = Offset(
-                    center.x + (radius * 0.61f) * cos(rad),
-                    center.y + (radius * 0.61f) * sin(rad)
-                )
-                val outer = Offset(
-                    center.x + (radius * 0.69f) * cos(rad),
-                    center.y + (radius * 0.69f) * sin(rad)
-                )
-                drawLine(
-                    color = MaritimeGoldBright,
-                    start = inner,
-                    end = outer,
-                    strokeWidth = 1.dp.toPx()
-                )
-            }
-
-            // 4. Stylized 8-Point Compass Rose
-            // Secondary points (NE, SE, SW, NW)
-            for (angle in listOf(45f, 135f, 225f, 315f)) {
-                rotate(angle, pivot = center) {
-                    drawCompassPoint(
-                        center = center,
-                        length = radius * 0.52f,
-                        width = radius * 0.16f,
-                        primaryColor = SeaCyan.copy(alpha = 0.85f),
-                        secondaryColor = SeaCyan.copy(alpha = 0.4f)
-                    )
-                }
-            }
-
-            // Primary cardinal points (N, E, S, W) - larger, prominent gold
-            for (angle in listOf(0f, 90f, 180f, 270f)) {
-                rotate(angle, pivot = center) {
-                    val isNorth = angle == 0f
-                    drawCompassPoint(
-                        center = center,
-                        length = radius * 0.75f,
-                        width = radius * 0.22f,
-                        primaryColor = if (isNorth) MaritimeGoldBright else MaritimeGold,
-                        secondaryColor = if (isNorth) Color(0xFFB45309) else Color(0xFF78350F)
-                    )
-                }
-            }
-
-            // 5. Central Hub with Golden Sextant Pivot & Compass Bezel
+            // 2. Inner Deep Maritime Navy Dial
             drawCircle(
-                color = NauticalNavyDark,
-                radius = radius * 0.22f,
+                brush = Brush.radialGradient(
+                    colors = listOf(Color(0xFF0F1E36), Color(0xFF070F20), Color(0xFF030712)),
+                    center = center,
+                    radius = innerRingRadius
+                ),
+                radius = innerRingRadius,
                 center = center
             )
+
+            // Concentric Gold Navigation Ring inside Dial
             drawCircle(
-                color = MaritimeGoldBright,
-                radius = radius * 0.22f,
+                color = Color(0xFFD4AF37).copy(alpha = 0.5f),
+                radius = innerRingRadius * 0.92f,
                 center = center,
+                style = Stroke(width = 0.75.dp.toPx())
+            )
+
+            // 3. Arched Text on the Gold Ring: "HYPERION", "By HyperionNavTech", "W", "E"
+            drawIntoCanvas { canvas ->
+                val native = canvas.nativeCanvas
+                val textRadius = radius * 0.84f
+
+                // Top Arc for "HYPERION"
+                val topPath = AndroidPath().apply {
+                    addArc(
+                        center.x - textRadius,
+                        center.y - textRadius,
+                        center.x + textRadius,
+                        center.y + textRadius,
+                        195f,
+                        150f
+                    )
+                }
+
+                val titlePaint = Paint().apply {
+                    color = Color(0xFF0A0F1D).toArgb()
+                    textSize = (radius * 0.22f).coerceAtLeast(10f)
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                native.drawTextOnPath("HYPERION", topPath, 0f, 0f, titlePaint)
+
+                // Bottom Arc for "By HyperionNavTech"
+                val bottomPath = AndroidPath().apply {
+                    addArc(
+                        center.x - textRadius,
+                        center.y - textRadius,
+                        center.x + textRadius,
+                        center.y + textRadius,
+                        15f,
+                        150f
+                    )
+                }
+
+                val subPaint = Paint().apply {
+                    color = Color(0xFF0A0F1D).toArgb()
+                    textSize = (radius * 0.12f).coerceAtLeast(7f)
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                native.drawTextOnPath("By HyperionNavTech", bottomPath, 0f, (radius * 0.08f), subPaint)
+
+                // West "W" and East "E"
+                val cardinalPaint = Paint().apply {
+                    color = Color(0xFF0A0F1D).toArgb()
+                    textSize = (radius * 0.16f).coerceAtLeast(8f)
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                native.drawText("W", center.x - radius * 0.85f, center.y + (cardinalPaint.textSize / 3f), cardinalPaint)
+                native.drawText("E", center.x + radius * 0.85f, center.y + (cardinalPaint.textSize / 3f), cardinalPaint)
+            }
+
+            // 4. Horizontal Compass Pointer Needles (from book pointing to W and E)
+            val pointerLen = innerRingRadius * 0.88f
+            val pointerWidth = innerRingRadius * 0.12f
+            // Left pointer
+            val westPointer = Path().apply {
+                moveTo(center.x - pointerLen, center.y)
+                lineTo(center.x - innerRingRadius * 0.45f, center.y - pointerWidth)
+                lineTo(center.x - innerRingRadius * 0.45f, center.y + pointerWidth)
+                close()
+            }
+            drawPath(westPointer, Color(0xFFD4AF37))
+            drawPath(westPointer, Color(0xFF92400E), style = Stroke(0.5.dp.toPx()))
+
+            // Right pointer
+            val eastPointer = Path().apply {
+                moveTo(center.x + pointerLen, center.y)
+                lineTo(center.x + innerRingRadius * 0.45f, center.y - pointerWidth)
+                lineTo(center.x + innerRingRadius * 0.45f, center.y + pointerWidth)
+                close()
+            }
+            drawPath(eastPointer, Color(0xFFD4AF37))
+            drawPath(eastPointer, Color(0xFF92400E), style = Stroke(0.5.dp.toPx()))
+
+            // 5. Anchor Diagonal Stock, Shackle, and Shank (behind book at top-right)
+            val anchorShackleCenter = Offset(center.x + innerRingRadius * 0.46f, center.y - innerRingRadius * 0.48f)
+            drawCircle(
+                color = Color(0xFFFDE047),
+                radius = innerRingRadius * 0.12f,
+                center = anchorShackleCenter,
                 style = Stroke(width = 2.dp.toPx())
             )
-            drawCircle(
-                color = MaritimeGoldBright,
-                radius = radius * 0.10f,
-                center = center
+            // Stock crossbar
+            drawLine(
+                color = Color(0xFFD4AF37),
+                start = Offset(anchorShackleCenter.x - innerRingRadius * 0.18f, anchorShackleCenter.y - innerRingRadius * 0.08f),
+                end = Offset(anchorShackleCenter.x + innerRingRadius * 0.14f, anchorShackleCenter.y + innerRingRadius * 0.18f),
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round
             )
+            // Shank running down into center
+            drawLine(
+                color = Color(0xFFF59E0B),
+                start = anchorShackleCenter,
+                end = Offset(center.x + innerRingRadius * 0.1f, center.y - innerRingRadius * 0.1f),
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            // 6. Radiant 8-Point Compass Star at 12 o'clock
+            val starCenter = Offset(center.x, center.y - innerRingRadius * 0.48f)
+            val starRadius = innerRingRadius * 0.38f
+
+            // North ray (longest)
+            drawStarRay(starCenter, 0f, starRadius, starRadius * 0.28f, Color(0xFFFEF08A), Color(0xFFB45309))
+            // South ray
+            drawStarRay(starCenter, 180f, starRadius * 0.7f, starRadius * 0.24f, Color(0xFFF59E0B), Color(0xFFD97706))
+            // East & West rays
+            drawStarRay(starCenter, 90f, starRadius * 0.65f, starRadius * 0.24f, Color(0xFFFDE047), Color(0xFFB45309))
+            drawStarRay(starCenter, 270f, starRadius * 0.65f, starRadius * 0.24f, Color(0xFFB45309), Color(0xFFFEF08A))
+            // 4 Diagonals
+            for (ang in listOf(45f, 135f, 225f, 315f)) {
+                drawStarRay(starCenter, ang, starRadius * 0.45f, starRadius * 0.18f, Color(0xFFFBBF24), Color(0xFF78350F))
+            }
+
+            // 7. Center Open Navigation Book
+            val bookWidth = innerRingRadius * 0.90f
+            val bookHeight = innerRingRadius * 0.48f
+            val bookTop = center.y - innerRingRadius * 0.16f
+
+            // Book pages background
+            val bookPath = Path().apply {
+                moveTo(center.x, bookTop)
+                // Left page curve
+                cubicTo(
+                    center.x - bookWidth * 0.25f, bookTop - bookHeight * 0.1f,
+                    center.x - bookWidth * 0.45f, bookTop - bookHeight * 0.05f,
+                    center.x - bookWidth * 0.5f, bookTop + bookHeight * 0.05f
+                )
+                lineTo(center.x - bookWidth * 0.5f, bookTop + bookHeight)
+                cubicTo(
+                    center.x - bookWidth * 0.45f, bookTop + bookHeight * 0.9f,
+                    center.x - bookWidth * 0.25f, bookTop + bookHeight * 0.9f,
+                    center.x, bookTop + bookHeight
+                )
+                // Right page curve
+                cubicTo(
+                    center.x + bookWidth * 0.25f, bookTop + bookHeight * 0.9f,
+                    center.x + bookWidth * 0.45f, bookTop + bookHeight * 0.9f,
+                    center.x + bookWidth * 0.5f, bookTop + bookHeight
+                )
+                lineTo(center.x + bookWidth * 0.5f, bookTop + bookHeight * 0.05f)
+                cubicTo(
+                    center.x + bookWidth * 0.45f, bookTop - bookHeight * 0.05f,
+                    center.x + bookWidth * 0.25f, bookTop - bookHeight * 0.1f,
+                    center.x, bookTop
+                )
+                close()
+            }
+            drawPath(
+                path = bookPath,
+                brush = Brush.horizontalGradient(
+                    colors = listOf(Color(0xFFFEF9C3), Color(0xFFFDE68A), Color(0xFFFEF9C3))
+                )
+            )
+            drawPath(bookPath, Color(0xFF78350F), style = Stroke(1.dp.toPx()))
+
+            // Book central spine division
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(center.x, bookTop),
+                end = Offset(center.x, bookTop + bookHeight),
+                strokeWidth = 1.5.dp.toPx()
+            )
+
+            // Left Page: Illustrated Sextant
+            val sextantCenter = Offset(center.x - bookWidth * 0.25f, bookTop + bookHeight * 0.5f)
+            val sextantR = bookHeight * 0.28f
+            drawArc(
+                color = Color(0xFF78350F),
+                startAngle = 120f,
+                sweepAngle = 60f,
+                useCenter = false,
+                topLeft = Offset(sextantCenter.x - sextantR, sextantCenter.y - sextantR),
+                size = Size(sextantR * 2, sextantR * 2),
+                style = Stroke(1.dp.toPx())
+            )
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(sextantCenter.x, sextantCenter.y - sextantR * 0.8f),
+                end = Offset(sextantCenter.x - sextantR * 0.5f, sextantCenter.y + sextantR * 0.7f),
+                strokeWidth = 0.8.dp.toPx()
+            )
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(sextantCenter.x, sextantCenter.y - sextantR * 0.8f),
+                end = Offset(sextantCenter.x + sextantR * 0.5f, sextantCenter.y + sextantR * 0.7f),
+                strokeWidth = 0.8.dp.toPx()
+            )
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(sextantCenter.x, sextantCenter.y - sextantR * 0.8f),
+                end = Offset(sextantCenter.x, sextantCenter.y + sextantR * 0.8f),
+                strokeWidth = 1.2.dp.toPx()
+            )
+
+            // Right Page: Navigational Compass Rose
+            val compassCenter = Offset(center.x + bookWidth * 0.25f, bookTop + bookHeight * 0.5f)
+            val compassR = bookHeight * 0.32f
+            drawCircle(
+                color = Color(0xFF78350F),
+                radius = compassR,
+                center = compassCenter,
+                style = Stroke(0.8.dp.toPx())
+            )
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(compassCenter.x, compassCenter.y - compassR),
+                end = Offset(compassCenter.x, compassCenter.y + compassR),
+                strokeWidth = 0.75.dp.toPx()
+            )
+            drawLine(
+                color = Color(0xFF78350F),
+                start = Offset(compassCenter.x - compassR, compassCenter.y),
+                end = Offset(compassCenter.x + compassR, compassCenter.y),
+                strokeWidth = 0.75.dp.toPx()
+            )
+
+            // 8. Anchor Crown & Flukes cradling the book at the bottom
+            val crownY = center.y + innerRingRadius * 0.58f
+            // Fluke curve
+            val flukePath = Path().apply {
+                moveTo(center.x - innerRingRadius * 0.62f, center.y + innerRingRadius * 0.16f)
+                cubicTo(
+                    center.x - innerRingRadius * 0.55f, crownY + innerRingRadius * 0.22f,
+                    center.x + innerRingRadius * 0.55f, crownY + innerRingRadius * 0.22f,
+                    center.x + innerRingRadius * 0.62f, center.y + innerRingRadius * 0.16f
+                )
+            }
+            drawPath(flukePath, Color(0xFFF59E0B), style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(flukePath, Color(0xFFFEF08A), style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round))
+
+            // Fluke Arrowheads
+            val leftArrow = Path().apply {
+                moveTo(center.x - innerRingRadius * 0.66f, center.y + innerRingRadius * 0.13f)
+                lineTo(center.x - innerRingRadius * 0.56f, center.y + innerRingRadius * 0.10f)
+                lineTo(center.x - innerRingRadius * 0.60f, center.y + innerRingRadius * 0.22f)
+                close()
+            }
+            drawPath(leftArrow, Color(0xFFFDE047))
+            drawPath(leftArrow, Color(0xFF92400E), style = Stroke(0.5.dp.toPx()))
+
+            val rightArrow = Path().apply {
+                moveTo(center.x + innerRingRadius * 0.66f, center.y + innerRingRadius * 0.13f)
+                lineTo(center.x + innerRingRadius * 0.56f, center.y + innerRingRadius * 0.10f)
+                lineTo(center.x + innerRingRadius * 0.60f, center.y + innerRingRadius * 0.22f)
+                close()
+            }
+            drawPath(rightArrow, Color(0xFFFDE047))
+            drawPath(rightArrow, Color(0xFF92400E), style = Stroke(0.5.dp.toPx()))
+
+            // Anchor Crown Point at bottom
+            val crownPoint = Path().apply {
+                moveTo(center.x, crownY + innerRingRadius * 0.24f)
+                lineTo(center.x - innerRingRadius * 0.08f, crownY + innerRingRadius * 0.10f)
+                lineTo(center.x + innerRingRadius * 0.08f, crownY + innerRingRadius * 0.10f)
+                close()
+            }
+            drawPath(crownPoint, Color(0xFFF59E0B))
+
+            // "S" letter on the Anchor Crown
+            drawIntoCanvas { canvas ->
+                val sPaint = Paint().apply {
+                    color = Color(0xFF0A0F1D).toArgb()
+                    textSize = (innerRingRadius * 0.18f).coerceAtLeast(8f)
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                }
+                canvas.nativeCanvas.drawText("S", center.x, crownY + innerRingRadius * 0.06f, sPaint)
+            }
         }
     }
 }
 
-private fun DrawScope.drawCompassPoint(
+private fun DrawScope.drawStarRay(
     center: Offset,
+    angleDeg: Float,
     length: Float,
     width: Float,
-    primaryColor: Color,
-    secondaryColor: Color
+    highlightColor: Color,
+    shadowColor: Color
 ) {
-    // Left half (light / highlighted)
-    val leftPath = Path().apply {
-        moveTo(center.x, center.y)
-        lineTo(center.x, center.y - length)
-        lineTo(center.x - width / 2f, center.y)
-        close()
-    }
-    drawPath(leftPath, color = primaryColor)
+    rotate(angleDeg, pivot = center) {
+        val leftRay = Path().apply {
+            moveTo(center.x, center.y)
+            lineTo(center.x, center.y - length)
+            lineTo(center.x - width / 2f, center.y)
+            close()
+        }
+        drawPath(leftRay, highlightColor)
 
-    // Right half (shadowed facet)
-    val rightPath = Path().apply {
-        moveTo(center.x, center.y)
-        lineTo(center.x, center.y - length)
-        lineTo(center.x + width / 2f, center.y)
-        close()
+        val rightRay = Path().apply {
+            moveTo(center.x, center.y)
+            lineTo(center.x, center.y - length)
+            lineTo(center.x + width / 2f, center.y)
+            close()
+        }
+        drawPath(rightRay, shadowColor)
     }
-    drawPath(rightPath, color = secondaryColor)
 }
 
 /**
  * Full Hyperion Nautical Logo with Typography.
- * Bold, modern serif/sans-serif title "HYPERION" with subtitle "MARINA Licensure Reviewer".
+ * Displays the official medallion emblem paired with authentic "HYPERION By HyperionNavTech" branding.
  */
 @Composable
 fun HyperionLogo(
     modifier: Modifier = Modifier,
-    emblemSize: Dp = 64.dp,
+    emblemSize: Dp = 80.dp,
     showSubtitle: Boolean = true,
     isCenterAligned: Boolean = true
 ) {
@@ -233,7 +459,7 @@ fun HyperionLogo(
             verticalArrangement = Arrangement.Center
         ) {
             HyperionEmblem(size = emblemSize)
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "HYPERION",
                 style = MaterialTheme.typography.headlineMedium.copy(
@@ -241,9 +467,19 @@ fun HyperionLogo(
                     letterSpacing = 4.sp,
                     fontFamily = FontFamily.Serif
                 ),
-                color = MaritimeGoldBright
+                color = MaterialTheme.colorScheme.primary
             )
             if (showSubtitle) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "By HyperionNavTech",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        fontFamily = FontFamily.Serif
+                    ),
+                    color = MaritimeGoldBright
+                )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "MARITIME LICENSURE REVIEWER",
@@ -251,14 +487,14 @@ fun HyperionLogo(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 2.sp
                     ),
-                    color = PureWhite.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "Aligned with MARINA & STCW Competency Standards",
                     style = MaterialTheme.typography.labelSmall.copy(
                         letterSpacing = 0.5.sp
                     ),
-                    color = SeaCyan.copy(alpha = 0.85f)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                 )
             }
         }
@@ -277,15 +513,23 @@ fun HyperionLogo(
                         letterSpacing = 3.sp,
                         fontFamily = FontFamily.Serif
                     ),
-                    color = MaritimeGoldBright
+                    color = MaterialTheme.colorScheme.primary
                 )
                 if (showSubtitle) {
+                    Text(
+                        text = "By HyperionNavTech",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif
+                        ),
+                        color = MaritimeGoldBright
+                    )
                     Text(
                         text = "Maritime Licensure Reviewer",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontWeight = FontWeight.Medium
                         ),
-                        color = PureWhite.copy(alpha = 0.85f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

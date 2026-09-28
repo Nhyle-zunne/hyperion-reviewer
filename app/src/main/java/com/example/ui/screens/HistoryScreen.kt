@@ -77,6 +77,10 @@ fun HistoryScreen(
     val examRecords by viewModel.examRecords.collectAsState()
     val selectedTrack by viewModel.selectedTrack.collectAsState()
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.purgeIncompleteExamRecords()
+    }
+
     val filteredRecords = remember(examRecords, selectedTrack) {
         examRecords.filter { it.track == selectedTrack.name }
     }

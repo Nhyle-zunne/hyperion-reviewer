@@ -87,8 +87,8 @@ fun AboutScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                border = BorderStroke(1.5.dp, MaritimeGoldBright)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -105,14 +105,14 @@ fun AboutScreen(
                             letterSpacing = 4.sp,
                             fontFamily = FontFamily.Serif
                         ),
-                        color = MaritimeGoldBright
+                        color = MaterialTheme.colorScheme.primary
                     )
 
                     Text(
                         text = "Maritime Licensure Reviewer",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = PureWhite
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -136,7 +136,7 @@ fun AboutScreen(
                     Text(
                         text = "Version 2.4.0 • Build 2026.09 (Release)",
                         style = MaterialTheme.typography.labelSmall,
-                        color = PureWhite.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -153,7 +153,7 @@ fun AboutScreen(
                         text = "ARCHITECTURE & PEDAGOGICAL DESIGN",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        color = MaterialTheme.colorScheme.tertiary,
                         letterSpacing = 0.5.sp
                     )
 
@@ -213,7 +213,7 @@ fun AboutScreen(
                     Text(
                         text = "Hyperion is an independently authored review platform. It is NOT affiliated with, sponsored by, or endorsed by the Maritime Industry Authority (MARINA), International Maritime Organization (IMO), PRC, or CHED. Statutory competence designations (F1, F2, F3, C1..C11, OIC-NW, GOC) are cited strictly for curriculum organization.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp,
                         fontSize = 12.sp
                     )
@@ -228,19 +228,21 @@ fun AboutScreen(
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaritimeGoldBright,
-                    contentColor = Color.Black
+                    contentColor = Color(0xFF0F172A)
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Description,
                     contentDescription = null,
+                    tint = Color(0xFF0F172A),
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "View Full Legal Terms & Academic Disclaimer",
                     style = MaterialTheme.typography.titleSmall,
+                    color = Color(0xFF0F172A),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -260,7 +262,7 @@ private fun AboutFeatureItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaritimeGoldBright,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .padding(top = 2.dp)
                 .size(18.dp)
@@ -271,13 +273,13 @@ private fun AboutFeatureItem(
                 text = title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = PureWhite
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = PureWhite.copy(alpha = 0.75f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 lineHeight = 16.sp
             )

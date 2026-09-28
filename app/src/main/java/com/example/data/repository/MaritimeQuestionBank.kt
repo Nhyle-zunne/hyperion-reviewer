@@ -6,9 +6,19 @@ import com.example.data.model.Track
 object MaritimeQuestionBank {
 
     val ALL_QUESTIONS: List<Question> by lazy {
-        MaritimeQuestionBankDeckF1.getQuestions() +
-        MaritimeQuestionBankDeckF2F3.getQuestions() +
-        MaritimeQuestionBankGmdss.getQuestions()
+        val lists = (MaritimeQuestionBankDeckF1.getQuestions() +
+                MaritimeQuestionBankDeckF2F3.getQuestions() +
+                MaritimeQuestionBankGmdss.getQuestions())
+        lists.filter { q ->
+            val text = q.questionText.trim()
+            val isHeader = text.equals("Question", ignoreCase = true) || text.isBlank()
+            val isDummyOptions = q.options.size == 4 &&
+                    q.options[0].trim() == "A" &&
+                    q.options[1].trim() == "B" &&
+                    q.options[2].trim() == "C" &&
+                    q.options[3].trim() == "D"
+            !isHeader && !isDummyOptions
+        }
     }
 
     fun getQuestionsByTrack(track: Track, isProUnlocked: Boolean = true): List<Question> {
@@ -28,11 +38,24 @@ object MaritimeQuestionBank {
 
     /**
      * Dedicated query for full mock examination.
+     * Enforces the official MARINA permit distribution (Deck: exactly 200 items, GMDSS: 100 items).
      * If unactivated, returns an empty list to prevent unauthorized access.
      */
     fun getMockExamDataset(track: Track, isProUnlocked: Boolean): List<Question> {
         if (!isProUnlocked) return emptyList()
-        return getQuestionsByTrack(track, isProUnlocked = true)
+        val allTrackQuestions = getQuestionsByTrack(track, isProUnlocked = true)
+        val distribution = if (track == Track.DECK_OIC_NW) {
+            MaritimeCompetenceRegistry.OFFICIAL_DECK_PERMIT_DISTRIBUTION
+        } else {
+            MaritimeCompetenceRegistry.OFFICIAL_GMDSS_PERMIT_DISTRIBUTION
+        }
+
+        val sampled = mutableListOf<Question>()
+        for ((compId, quota) in distribution) {
+            val compQuestions = allTrackQuestions.filter { it.competenceId == compId }.shuffled()
+            sampled.addAll(compQuestions.take(quota))
+        }
+        return sampled
     }
 
     fun searchQuestions(query: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {

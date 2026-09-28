@@ -115,7 +115,7 @@ fun TermsOnboardingScreen(
                         text = "HYPERION",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaritimeGoldBright,
+                        color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 2.sp
                     )
                 }
@@ -126,7 +126,7 @@ fun TermsOnboardingScreen(
                     text = "Terms of Service & Academic Disclaimer",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = PureWhite
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
@@ -139,8 +139,8 @@ fun TermsOnboardingScreen(
 
         // Compliance Highlights Banner
         Surface(
-            color = Color(0xFF0F1E36),
-            border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.3f))
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Row(
                 modifier = Modifier
@@ -151,14 +151,14 @@ fun TermsOnboardingScreen(
                 Icon(
                     imageVector = Icons.Default.Shield,
                     contentDescription = null,
-                    tint = MaritimeGoldBright,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Independent study reviewer • Not affiliated with MARINA or IMO • Synthetic practice questions only",
                     style = MaterialTheme.typography.labelSmall,
-                    color = PureWhite.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp
                 )
             }
@@ -181,7 +181,7 @@ fun TermsOnboardingScreen(
                     text = LegalAgreementText.TITLE,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright,
+                    color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -202,13 +202,14 @@ fun TermsOnboardingScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = LegalAgreementText.FULL_AGREEMENT_TEXT,
                             style = MaterialTheme.typography.bodySmall,
-                            color = PureWhite.copy(alpha = 0.9f),
+                            color = MaterialTheme.colorScheme.onSurface,
                             lineHeight = 20.sp,
                             fontSize = 12.sp
                         )
@@ -324,7 +325,7 @@ fun TermsOnboardingScreen(
                     Text(
                         text = "I have read, understood, and accept the Terms & Conditions and Academic Disclaimer",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (hasScrolledToBottom) PureWhite else PureWhite.copy(alpha = 0.45f),
+                        color = if (hasScrolledToBottom) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         fontWeight = if (isAccepted) FontWeight.Bold else FontWeight.Normal,
                         lineHeight = 18.sp
                     )
@@ -342,20 +343,22 @@ fun TermsOnboardingScreen(
                         .testTag("continue_to_hyperion_button"),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaritimeGoldBright,
-                        contentColor = Color.Black,
-                        disabledContainerColor = Color(0xFF262626),
-                        disabledContentColor = Color.Gray
+                        contentColor = Color(0xFF0F172A),
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shield,
                         contentDescription = null,
+                        tint = if (hasScrolledToBottom && isAccepted) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Continue to Hyperion",
+                        color = if (hasScrolledToBottom && isAccepted) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -402,8 +405,9 @@ fun TermsAndDisclaimerScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                border = BorderStroke(1.5.dp, MaritimeGoldBright)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -414,13 +418,13 @@ fun TermsAndDisclaimerScreen(
                                 text = "HYPERION",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright,
+                                color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 2.sp
                             )
                             Text(
                                 text = "Maritime Licensure Reviewer",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = PureWhite.copy(alpha = 0.85f)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -445,7 +449,7 @@ fun TermsAndDisclaimerScreen(
                     Text(
                         text = "This document sets forth the formal terms of service, academic disclaimer, non-affiliation declaration, and data privacy policy for users of Hyperion.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
                     )
@@ -457,14 +461,15 @@ fun TermsAndDisclaimerScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "KEY COMPLIANCE PRINCIPLES",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        color = MaterialTheme.colorScheme.tertiary,
                         letterSpacing = 1.sp
                     )
 
@@ -499,14 +504,15 @@ fun TermsAndDisclaimerScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = LegalAgreementText.TITLE,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright
+                        color = MaterialTheme.colorScheme.tertiary
                     )
 
                     Text(
@@ -520,7 +526,7 @@ fun TermsAndDisclaimerScreen(
                     Text(
                         text = LegalAgreementText.FULL_AGREEMENT_TEXT,
                         style = MaterialTheme.typography.bodySmall,
-                        color = PureWhite.copy(alpha = 0.9f),
+                        color = MaterialTheme.colorScheme.onSurface,
                         lineHeight = 21.sp,
                         fontSize = 12.sp
                     )
@@ -535,12 +541,13 @@ fun TermsAndDisclaimerScreen(
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaritimeGoldBright,
-                    contentColor = Color.Black
+                    contentColor = Color(0xFF0F172A)
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
                     text = "Return to Application",
+                    color = Color(0xFF0F172A),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
@@ -561,7 +568,7 @@ private fun ComplianceBulletItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = SeaCyan,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier
                 .padding(top = 2.dp)
                 .size(16.dp)
@@ -572,12 +579,12 @@ private fun ComplianceBulletItem(
                 text = title,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = PureWhite
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = PureWhite.copy(alpha = 0.75f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 11.sp
             )
         }

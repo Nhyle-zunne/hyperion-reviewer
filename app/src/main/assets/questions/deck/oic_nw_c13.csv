@@ -1,0 +1,104 @@
+OIC-NW - Competence C13 - Combined Reviewer,,,,,,
+PIETRO (base): 122   |   Ciriaco (unique): 691   |   TEKNIK (unique): 75   |   Total: 888,,,,,,
+,,,,,,
+No.,Question,A,B,C,D,Correct Answer
+1,What is a situation on board a vessel that may cause a virtual rise in the center of gravity?,Consuming fuel from a pressed up tank,Consuming fuel from a nearly empty tank,Consuming fuel from a half filled tank,Consuming fuel from a slack tank,A
+2,"In rough weather, the free surface effect resulting from slack tanks in a vessel will cause a virtual:",Rise of G,lncrease in GM,Reduction of free surface effect,Rise of K,A
+3,What is the vertical plates fitted transversely to the bottom shell of a steel vessel?,Floors,Roofs,Ceiling,Walls,A
+4,What condition is to be attained when additional weight is added on board in an already loaded vessel?,Reduce reserve buoyancy,Reduced buoyancy forces,Reduced righting moment,Reduced metacentric height,A
+5,Which statement describe the transverse metacenter?,The point to which G may rise and still permit the vessel to posses positive stability.,The transverse shift of the center of bouyancy as a vessel rolls.,The sum of the center of bouyancy and the center of gravity.,The distance between the actual center of gravity and the maximum center of gravity that will still allow positive stability.,A
+6,Where do signs of racking stresses generally appear on the vessel?,At the junction of the frames with the beams and floors,"On the garboard strake, at each side of the keel",At the thrust bearing of the main shaft,At the bow and stem shell frames and plating,A
+7,The collision bulkhead is located at the forward end and it is extend up to what part?,Uppermost continuous deck.,The highest point at the forecastle deck.,First deck above then load water line.,Lower end of the superstructure.,A
+8,Vessel has been damaged and is partially flooded. What is the first step to be taken to save the vessel?,Establish flooding boundaries and prevent further spread of flood water,Calculate the free surface effects and lost buoyancy to determine stability,Plug the holes in the outer shell to prevent spread of flood water,Pump out water inside the vessel to maintain original displacement,A
+9,What is usually the effect on G when the ship is damage?,lt is unchanged if no loss of cargo or liquid on tanks.,lt first rises the center of gravity and lower the center of gravity of the vessel.,lt lower the center of gravity of the vessel.,lt rises the center of gravity of the vessel.,A
+10,"Your vessel lenght is 72 meters and breadth of 10.5 meters is floating in salt water at a draft of 2.4 meters. If your vessel block coefficient of fineness is 0.71, what will be your vessel displacement in tonnes?",1320.43 tonnes,1288.22 tonnes,2493.18 tonnes,2555.49 tonnes,A
+11,"If the vertical center of gravity (VCG) of your ship rises, what will happen to the rigthing arm(GZ) for the various angles of inclination?",It will decrease.,lt will remain unchanged,lt will increase,lt will change by the amount of GG'x cosine of the angle of inclination.,A
+12,Double bottom constructions are found on which type of vessel?,On large vessel.,On barge,On very small vessel,On tanker vessel,A
+13,Which statement is not correct regarding the use of double bottom tank?,Additional space for loading cargo.,Can be use for carrying ballast.,Can be use for for carrying fresh water,Can be use for storing fuel.,A
+14,What are the vertical flat plates running transversely that connect the vertical keel to the margin plates?,Floors,Stringers,intercoastal,Girder,A
+15,What is the principal danger of a slack liquid in a tank on board a vessel?,Shifting liquid will result in loss of stability,Shifting liquid will result in loss of rigthing moment,Shifting liquid will damage the compartment,Shifting liquid will result in loss of uprighting moment,A
+16,Which of the following is not exempted when calculating gross tonnage?,Passenger cabin,Chart room,Steering gear room,Emergency generator room,A
+17,What is the device that force the watertight door against the frame,Dogs,Clamps,Hydraulic grip,Craw bar,A
+18,"Vessel has been in collision and after assessing the damage, you begin down flooding. This will cause the KB to do which of the following?",Rise,Fall,Shift,Remains,A
+19,What is the depth from waterline to the vessel bottom?,Draft,Underkeel clearance,Freeboard,Air draft,A
+20,What is the foremost main transverse watertight bulkhead?,Collision bulkhead,Class bulkhead,Corrugated bulkhead,Transverse bulkhead,A
+21,What is the transverse curvature of the deck?,Camber,Bulwark,Sheer,Deadrise,A
+22,What is the abbreviation refers to the horizontal distance between the forward most and the after most point on a vessel waterline?,LWL,LCF,LLL,LOA,A
+23,What is the general term applied to any deck opening leading to the cargo hold?,Cargo Hatch,Cargo manifold,Cargo hold manhole,Cargo hold vent,A
+24,How will you know that your vessel is in tender condition?,The ship period of roll is slowly due to her small metacentric height,The ship period of roll is small due to her small metacentric height.,The ship period of roll is stiff due to her small metacentric height.,The ship have an unusually low center of gravity.,A
+25,What is the point where large ship trim about?,LCF,LCG,LCB,L/2,A
+26,What will be the effect on your vessel KG if you deballast the double bottom tank?,KG will increase,KG will decrease,KG increases at light draft and decrease at deep draft.,KG will not be affected,A
+27,Which statement is true concerning the loss of bouyancy method?,The method is suitable for computer programming.,The original KN values can be used for calculating GZ.,The damage compartment is consider non-existing.,The damage compartment is still considered intact.,A
+28,What is the fixed longitudinal plates fitted at the turn of the bilge so that their drag dampen roll amplitudes?,Bilge keel,Bilge blocks,Bilge strikes,Bilge plating,A
+29,What is the collective term for transverse bulkhead required for subdivision of the hull into watertight compartment?,Watertight bulkhead,Division partition,Compartment subdivision,Bulkwark,A
+30,Which statement is correct regarding the purpose of the bilge keel of the vessel?,To reduces the rolling of the vessel.,lt improves vessel stability,lt adds strenght to the bilges,To protect slamming against the pier.,A
+31,What is the rise of the deck from the side of the vessel to the center line?,Camber,Dead rise,Rise of floor,Flare,A
+32,What data is used in obtaining the figure by dividing the total volume of the ship in cubic feet after omission of exempted spaces by one hundred?,Gross tonnage of the ship.,Bale cubic tonnage of the ship.,Displacement tonnage of the ship,Net tonnage of the ship.,A
+33,The vessel's GM is small but positive prior to getting underway. Which of the following is true in stability condition?,The vessel will possess a long rolling period,The vessel will be stiff.,The vessel will possess a short rolling period,The vessel will possess high initial stability,A
+34,What is the area of curved plating between the bottom shell and side shell?,Bilge Plating,Bilges Radius,Bilge Strake,Bilge Keel,A
+35,Intact buoyancy is defines as?,An intact space below the surface of a flooded area.,An intact space when flooded will not cause the vessel to sink.,The space where all the vertical upward forces of buoyancy are considered to be concentrated.,The volume of all intact spaces above the waterline.,A
+36,What is the true measure of a vessel's stability at all angles of inclination?,Righting moment,Shifting moments,lnternal heeling moments,Heeling moment,A
+37,What is the term used when there is a change in the thickness of the section of a plating materials in ship's construction?,Discontinuities,Terminations,Separations,Limits,A
+38,What will happen if the weight of a floating object is greater than the weight of equal volume of water displaced by the object?,The object will sink,The object will capsize.,The object will float.,The object will tilt.,A
+39,A collision bulkhead must be fitted to all vessel of what size?,Over 16 meters measure in length,Over 30 meters measure in length,Over 12 meters measure in lenght.,Over 24 meters measure in length,A
+40,What is the main structural member or backbone of a ship running longitudinal along centerline of bottom?,Keel,Bilge,Shell Plating,Hull,A
+41,Which statement is correct regarding vessel in tender condition?,The weight of cargo is concentrated height and the double bottoms are empty.,The weight of cargo is concentrated low and the double bottom are full.,The weight of cargo is distributed vertically and the double bottom are full.,The weight of cargo is concentrated low and the double bottoms are empty.,A
+42,Rigthing arm is a measure use to evaluate vessel's stabilty. It is the horizontal distance between center of gravity and the center of bouyancy. What will happen if the center of bouyancy has shifted further outboard than the center of bouyancy?,The righting arm is positive creating a positive stabilty.,The rigthing arm is negative creating negative stability.,The vertical distance between G and M decreases creating a smaller GM.,"The vertical distance between G ands M increases, GM increases.",A
+43,What is the curvature of the deck in a transverse direction?,Camber,Flaires,Sheer,Deadrise,A
+44,What is the holes in the bulkwark that allow water to drain into the sea?,Freeing ports,Drainages,Swash port,Scupper holes,A
+45,What threat is reduced by repairing damage to the hull at or above the waterline?,continued progressive flooding,free surface effects,wind heel,capsizing,A
+46,Which statement is not true about the design of the bulbous bow?,lt is design to reduce collision impact if a vessel hit an object.,lt is intended to interact with the primary wave making characteristic of the ship.,lt has a negative effect on power consumption when only partly submerged.,lt is design to reduce wave making resistance and pitching motion of the ship.,A
+47,"With reference to freeboard categories, Type A ships are those designed specifically for the carriage of what kind of commodity?",Liquid cargoes in bulk,Dry cargoes in bulk,Timber cargoes in bulk,General cargoes in bulk,A
+48,What is the distance between the bottom of the hull and waterline?,Draft,Freeboard,Sounding,air draft,A
+49,Which statement is correct regarding the gypsyhead?,Spool-shape drum fitted on a winch.,A swinging derrick for lowering person.,Punt use for painting over the nside.,A portable air winch.,A
+50,Which statement is true regarding the object of watertight subdivision of a ship?,"The safety of the ship if hull is damage below the waterline, it confine any ingress of water to the immediate vicinity.",lt reduces the free surface effect from the water in a damage compartment.,lt limit the floodable lenght along the longitudinal lenght of the vessel.,lt provide good hold configuration in eliminating loss space.,A
+51,What do you call the uppermost continuous deck which is required to have a permanent watertight closure and is exposed to weather and the sea?,Freeboard deck,Weather deck,Main deck,Upper deck,A
+52,What do you call the enclosed area where the surface of the water and the hull of the vessel overlaps?,Water plane,Water base,Water balance,Water line,A
+53,What is the purpose of flare of the bow?,lt promotes deck dryness.,lt increase ship's speed.,lt serve as an ice breaker.,It cuts the waves.,A
+54,What is the term refers to the transverse curvature of the deck?,Camber,Sheer,Gunwale,Deadrise,A
+55,What is the used of the duck keel?,lt is usually use for carrying pipe work.,lt is use for storing fuel.,lt is use for loading ballast.,It is used as void space.,A
+56,What is the reason why a bulk carrier is divided into compartment by watertight bulkhead?,To limit the floodable length along the longitudinal lenght of the vessel.,To have a good hold configuration that eliminate the need for shifting boards.,To have a wide hatch opening to ease cargo handling.,To have a separated cargo holds to avoid mixing cargoes.,A
+57,Which statement is true regarding the fitting of bilge keel on the vessel?,lt is fiited to reduce the rolling of the vessel.,It is fiited to improve vessel stability.,It is fitted as an stabilizer.,lt is fitted to ad strenght to the hull.,A
+58,What is the space provided in the double bottom of some vessels running from forward of the engine room bulkhead to the collision bulkhead and utilized to carry the double bottom piping?,Duck keel,Cofferdam,Void space,Bilge keel,A
+59,Your vessel mean draft is 2.6 meters. You are required to load to a draft of 3.2 meters. How much cargo you can load if your TPC is 1.8 tons?,108 tonnes,128 tonnes,98 tonnes,118 tonnes,A
+60,"Among the movement of the liquids, what is the most detrimental effect on initial stability?",Flowing in and out of a holed wing tank,Pocketing in a slack tank as a vessel heels,Flowing from side to side within the vessel,Flowing from fore to aft within a vessel,A
+61,What is the uppermost continuous deck with permanent means for closing all opening?,Freeboard deck,Superstructure deck,Weather deck,Bulkhead deck,A
+62,Which statement is true about coaming?,It is the vertical structure of a hatch or skylight.,It is a space opening for entry and exit for continuous worker occupancy.,It is a watertight entrance leading from a ship's deck to spaces below.,It is the covering around on any space for protection.,A
+63,Your vessel is stationary and in hogging condition. What kind of stress is placed on the maindeck?,Tension,Bending,Compression,Shear,A
+64,What would be the effect if you add weight to your vessel?,lt will reduce your vessel reserve bouyancy.,lt will increase rigthing moments.,It will decrease the metacentric height.,It will increase the metacentric height.,A
+65,What is the term applied to the bottom shell plating in a double bottom ship?,Outer bottom,Outer plating,Shell plating,Bottom floor,A
+66,Heave is motion along which axis?,The vessels vertical axis,The vessel's transverse axis,The vessel's longitudinal axis,The vessel's centerline axis,A
+67,Which statement is true about the metacentric radius?,The distance between B and metacentre is depending on the displacement and the moment of the inertia of waterplane.,The distance between K and G is depending on the waterline area and the location of G.,It is the distance between the keel and the metacenter,The distance between G and the metacenter is depending on the displacement and the location of G.,A
+68,What do you call the distance from the chief structural member of a ship that extends longitudinally along the center of its bottom to the upper deck?,Extreme depth,Extreme drop,Extreme height,Extreme meridian,A
+69,"During drydock why is it necessary to covered with grease and then masking tape the following echo sounder, log and sonar transducer?",To prevent them from being painted.,To serve as equipment protection,To provide a precautionary marking.,To serve as equipment location marking,A
+70,What is the horizontal line situated amidships on both sides of the vessel the measurement of which is 300mm by 25mm wide?,Deck line,Summer line,Water line,Load line,A
+71,What is the vertical plating immediately above the upper edge of the ship's side surrounding the exposed deck(s)?,Bulwark,Strake,Gunwale,Bulkhead,A
+72,Which is the length between bulkhead on a ship in order to ensure that it will remain float if one or more compartments are flooded?,Permissible length,Floodable length,Length over all,Length between perpendicular.,A
+73,What information you will get when you multiply the ship rigthing arm by the ship displacement?,You will get the rigthing moment,You will get the vertical moment,You will get the longitudinal moment,You will get the transverse moment,A
+74,What is the ability of an object to float?,Bouyancy,Stability,Gravity,Displacement,A
+75,How do hatch cover made weathertight?,A gasket evenly resting against compression bar.,aA gasket evenly resting against the wedges.,A gasket evenly resting against the cleats,A gasket evenly resting on the hatch coaming.,A
+76,What is the void space between two bulkheads?,Cofferdam,Bilges,Floor,Keel,A
+77,What is the point in which your vessel center of gravity may rise and still permit the vessel to have positive stability?,Metacenter,Center of bouyancy,metacentric radius,Center of gravity,A
+78,What is the highest point of the transverse bulkheads at which a watertight deck is situated?,Bulkhead deck,Bulkwark,Maindeck,Gunwale,A
+79,What does indicate when your vessel rolls slowly and sluggishly?,It has a poor stability,lt has a good stabilty.,lt has an off center weight,lt has agreater draft forward than aft.,A
+80,When your vessel has a negative metacentric height. Which oif the following statement is true?,lt should be immediately corrected.,lt will always results an off center.,Your vessel has a negative bouyancy.,lt will cause the vessel to capsize.,A
+81,What is the enclosed portion of the vessel above the highest watertight deck?,Superstructure,Bridge,Masthouse,Coming,A
+82,Which of the following statement is an indication of progressive flooding?,A continual worsening of list or trim.,Alarming of water ingress alarm.,An excessive list or trim,Raising of sounding in the ballast tank,A
+83,What will happen if the weight of the floating ship is greater than the weight of equal volume of water displace by the ship?,The ship will sink.,The ship will capsize.,The ship will list.,The ship will tilt.,A
+84,What is the fitting used to secure a watertight door,Dogs,Clamps,Latches,Clasp,A
+85,What do you call to the arrangement of the main stiffeners of the hull run fore and aft?,Longitudinal frame structures,Horizontal frame structure,Transversely framed structures,Vertical frame structure,A
+86,"What is the ratio of volume of displacement to a block having lenght, breadth and draft of vessel?",Block Coefficient,Volume of displacement,The area of waterplane,Beam and draft ratio,A
+87,Which term indicates the measurement that forms between the ship's bottom and the horizontal plane on either side of the keel?,Deadrise gonia,Deadrise bow,Deadrise transom,Deadrise weldcraft,A
+88,What information you will get when you divided the density of a substance by the density of the water?,You will get the specific gravity of the substance.,You will get the relative gravity of the substance.,You will get the relative density of the substance.,You will get the specific density of the substance.,A
+89,What do you call the underwater narrowing part of a ship's hull forward of the middle body section?,Entrance,Enteree,Door,Access,A
+90,How would you call the flooding of compartment situated outside of the assumed extend damage?,Progressive flooding,Partial flooding,Outside flooding,Down flooding,A
+91,Which statement is correct regarding the function of the bilge keel?,lt reduces the rolling of the vessel.,lt serves as the vessel main strength member.,lt add strength to the bilge.,lt protect the vessel's hull when alongside the dock.,A
+92,What is the part of windlass which physically engages the chain during hauling or paying out?,Wildcat,Cat head,Devil's claw,Bull gear,A
+93,What is the enclosed portion of the vessel below the highest watertight deck that run continuously from to the stern?,Hull,Bulwark,Superstructures,Gunwale,A
+94,What is the purpose of an inclining experiment?,Determine the location of the center of gravity in lightweight condition,Determine the hydrostatic data in lightweight condition,Determine the location of the metacenter in lightweight condition,Determined the location of the center of flotation.,A
+95,"Your vessel had a leak, what it will cause If a weight is added to your vessel?",lt will reduce reserve bouyancy,lt will decrease the metacentric height.,lt will increase the metacentric height.,lt will increase vessel rigthing moment,A
+96,What is the weathertight entrance leading from a ship deck to space below?,Companion way,Hatches,Coaming,Dead covers,A
+97,"What is the condition of the vessel if it includes only the hull and fittings, engine and boiler, shafting and propeller, water in boiler, permanent ballast and other weights that is constant on board?",Light displacement,Light displacement tonnage,Light weight,Light weight tonnage,A
+98,"In ship's contruction, what is the term used during heating a metal and cooling it down for a desired fashion?",Annealing,Heating,Cooling,Strengthening,A
+99,What will be the effect when cargo is shifted from lower hold to maindeck?,The center of gravity will move upward.,The GM will increase.,The center of gravity will move downward.,The center of bouyancy will move down ward.,A
+100,What is the deck fitting used to secure line or rope consisting of single body with protruding horns?,Cleats,Bollard,Bitt,Capstan,A

@@ -104,6 +104,10 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         activeSessionDao.clearActiveSessionForTrack(track.name)
     }
 
+    suspend fun getActiveSessionForTrackOnce(trackName: String): ActiveSessionEntity? {
+        return activeSessionDao.getActiveSessionForTrackOnce(trackName)
+    }
+
     suspend fun saveIncompleteSession(
         track: Track,
         mode: QuizMode,
@@ -188,6 +192,22 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         examRecordDao.clearAllSessionsByTrack(track.name)
     }
 
+    suspend fun deleteActiveSessionByTrack(trackId: String) {
+        activeSessionDao.deleteActiveSessionByTrack(trackId)
+    }
+
+    suspend fun deleteIncompleteSessionsByTrack(trackId: String) {
+        examRecordDao.deleteIncompleteSessionsByTrack(trackId)
+    }
+
+    suspend fun clearAllByTrack(track: String) {
+        examRecordDao.clearAllByTrack(track)
+    }
+
+    suspend fun purgeIncompleteRecords() {
+        examRecordDao.purgeIncompleteRecords()
+    }
+
     fun getQuestionsForSession(
         track: Track,
         mode: QuizMode,
@@ -209,8 +229,8 @@ class ReviewerRepository(private val database: HyperionDatabase) {
                 allTrackQuestions.shuffled()
             }
             QuizMode.MOCK_EXAM -> {
-                // Must strictly contain ALL questions for the track (Deck: 200 items, GMDSS: 100 items)
-                allTrackQuestions.shuffled()
+                // Official MARINA permit breakdown: exactly 200 items for Deck OIC-NW, 100 items for GMDSS
+                MaritimeQuestionBank.getMockExamDataset(track, isProUnlocked = isProUnlocked)
             }
             QuizMode.COMPETENCE_DRILL -> {
                 if (competenceId != null) {

@@ -117,9 +117,10 @@ fun PracticeCompetenceSelectScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E36)),
-                    border = BorderStroke(1.dp, SeaCyan.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(14.dp)
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    shape = RoundedCornerShape(14.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(14.dp),
@@ -129,13 +130,13 @@ fun PracticeCompetenceSelectScreen(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(SeaCyan.copy(alpha = 0.15f)),
+                                .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = SeaCyan,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -145,12 +146,12 @@ fun PracticeCompetenceSelectScreen(
                                 text = "Practice Drill Setup Workflow",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PureWhite
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Choose a target competence or select the entire pool to configure question count & ordering.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PureWhite.copy(alpha = 0.75f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -165,10 +166,10 @@ fun PracticeCompetenceSelectScreen(
                         .clip(RoundedCornerShape(14.dp))
                         .clickable { viewModel.navigateTo(Screen.PracticeConfig(null)) }
                         .testTag("select_all_competencies_card"),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                    border = BorderStroke(1.5.dp, MaritimeGoldBright),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shape = RoundedCornerShape(14.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -180,13 +181,13 @@ fun PracticeCompetenceSelectScreen(
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(CircleShape)
-                                .background(MaritimeGold.copy(alpha = 0.2f)),
+                                .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(26.dp)
                             )
                         }
@@ -196,13 +197,13 @@ fun PracticeCompetenceSelectScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = MaritimeGold.copy(alpha = 0.2f)
+                                color = MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
                                     text = "FULL QUESTION POOL",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaritimeGoldBright,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -211,19 +212,19 @@ fun PracticeCompetenceSelectScreen(
                                 text = "All Competencies ($totalTrackItems Questions)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = PureWhite
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Comprehensive practice covering all ${competences.size} STCW competencies for this track.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PureWhite.copy(alpha = 0.75f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
 
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Configure",
-                            tint = MaritimeGoldBright,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -235,7 +236,7 @@ fun PracticeCompetenceSelectScreen(
                     text = "OR SELECT SPECIFIC STCW COMPETENCE",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = SeaCyan,
+                    color = MaterialTheme.colorScheme.onSurface,
                     letterSpacing = 1.sp
                 )
             }
@@ -258,7 +259,7 @@ fun PracticeCompetenceSelectScreen(
                         Icon(
                             imageVector = funcIcon,
                             contentDescription = null,
-                            tint = SeaCyan,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -266,7 +267,7 @@ fun PracticeCompetenceSelectScreen(
                             text = funcTitle,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SeaCyan
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -286,7 +287,8 @@ fun PracticeCompetenceSelectScreen(
                             .testTag("competence_card_${comp.competenceId}"),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -298,14 +300,14 @@ fun PracticeCompetenceSelectScreen(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(SeaCyan.copy(alpha = 0.15f)),
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = comp.code,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = SeaCyan
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
@@ -316,13 +318,13 @@ fun PracticeCompetenceSelectScreen(
                                     text = comp.title,
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = PureWhite
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "$itemCount Questions Available • ${comp.description}",
+                                    text = "$itemCount Questions Available",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = PureWhite.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1
                                 )
                             }
@@ -330,7 +332,7 @@ fun PracticeCompetenceSelectScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                 contentDescription = "Select",
-                                tint = SeaCyan,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }

@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Warning
@@ -88,13 +90,16 @@ fun MockExamHubScreen(
     val activeQuestions by viewModel.activeQuestions.collectAsState()
     val userStates by viewModel.userQuestionStates.collectAsState()
     val completedCompetences by viewModel.completedCompetences.collectAsState()
+    val isExamSubmitted by viewModel.isExamSubmitted.collectAsState()
 
     var showSubmitDialog by remember { mutableStateOf(false) }
-    var showExitDialog by remember { mutableStateOf(false) }
+    var showLockInDialog by remember { mutableStateOf(false) }
+    var pendingCompetenceId by remember { mutableStateOf<String?>(null) }
+    var showLockedCompetenceDialog by remember { mutableStateOf(false) }
 
-    // Back navigation returns to Dashboard
-    BackHandler {
-        viewModel.navigateTo(Screen.Home)
+    // Intercept back navigation when exam is in progress: cannot exit without submitting
+    BackHandler(enabled = !isExamSubmitted) {
+        showLockInDialog = true
     }
 
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
@@ -105,15 +110,22 @@ fun MockExamHubScreen(
     val flaggedCount = userStates.values.count { it.isFlagged }
     val unansweredCount = (totalQuestions - answeredCount).coerceAtLeast(0)
 
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val headerBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFF0F172A)
+    val headerTitleColor = if (isDark) MaritimeGoldBright else Color(0xFFFFFFFF)
+    val headerSubColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF38BDF8)
+    val headerIconColor = if (isDark) MaritimeGoldBright else Color(0xFFFFFFFF)
+    val headerBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFF1E293B))
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(if (isDark) MaterialTheme.colorScheme.background else Color(0xFFF1F5F9))
     ) {
         // Master Top Bar with countdown timer & Back Button
         Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+            color = headerBg,
+            border = headerBorder
         ) {
             Row(
                 modifier = Modifier
@@ -122,11 +134,17 @@ fun MockExamHubScreen(
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.navigateTo(Screen.Home) }) {
+                IconButton(onClick = {
+                    if (!isExamSubmitted) {
+                        showLockInDialog = true
+                    } else {
+                        viewModel.navigateTo(Screen.Home)
+                    }
+                }) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = MaritimeGoldBright
+                        tint = headerIconColor
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
@@ -135,13 +153,17 @@ fun MockExamHubScreen(
                         text = if (selectedTrack == Track.DECK_OIC_NW) "OIC-NW Mock Examination" else "GMDSS GOC Mock Examination",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        color = headerTitleColor,
                         maxLines = 1
                     )
                     Text(
-                        text = "Master Competence Hub • $answeredCount / $totalQuestions Answered",
+                        text = if (isExamSubmitted) {
+                            "Master Competence Hub • Examination Submitted (Review Mode)"
+                        } else {
+                            "Master Competence Hub • $answeredCount/$totalQuestions Answered • $unansweredCount items left"
+                        },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = headerSubColor
                     )
                 }
 
@@ -163,8 +185,9 @@ fun MockExamHubScreen(
             item {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF),
+                    shadowElevation = if (isDark) 0.dp else 2.dp,
+                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -172,7 +195,7 @@ fun MockExamHubScreen(
                             Icon(
                                 imageVector = Icons.Default.AccessTime,
                                 contentDescription = null,
-                                tint = MaritimeGoldBright,
+                                tint = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -180,14 +203,14 @@ fun MockExamHubScreen(
                                 text = "Licensure Examination Protocol",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright
+                                color = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0F172A)
                             )
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Select any competence to scroll and answer questions. You can revisit and revise answers anytime before submitting the overall exam.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569),
                             lineHeight = 18.sp
                         )
                     }
@@ -198,32 +221,35 @@ fun MockExamHubScreen(
             groupedByFunction.forEach { (functionId, functionCompetences) ->
                 item {
                     val functionTitle = MaritimeCompetenceRegistry.getFunctionTitle(functionId)
-                    val functionItemsCount = functionCompetences.sumOf { it.officialTOSItems }
+                    val permitItems = MaritimeCompetenceRegistry.getPermitItemsForFunction(functionId, selectedTrack)
+                    val compQuestionsForFunc = activeQuestions.filter { it.functionId == functionId }
+                    val functionItemsCount = if (compQuestionsForFunc.isNotEmpty()) compQuestionsForFunc.size else permitItems
 
                     Column(modifier = Modifier.padding(top = 8.dp)) {
                         Text(
                             text = functionTitle.uppercase(),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            color = SeaCyan,
+                            color = if (isDark) SeaCyan else Color(0xFF0284C7),
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "$functionItemsCount Total Items in TOS Function",
+                            text = "$functionItemsCount Items • MARINA Official Permit",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B)
                         )
                     }
                 }
 
                 items(functionCompetences) { competence ->
+                    val permitCount = MaritimeCompetenceRegistry.getPermitItemCount(competence.competenceId, selectedTrack)
                     val compQuestions = activeQuestions.filter { it.competenceId == competence.competenceId }
-                    val compTotal = if (compQuestions.isNotEmpty()) compQuestions.size else competence.officialTOSItems
+                    val compTotal = if (compQuestions.isNotEmpty()) compQuestions.size else permitCount
                     val compAnswered = compQuestions.count { userStates[it.id]?.selectedIndex != null }
                     val isExplicitlyCompleted = competence.competenceId in completedCompetences
 
                     val status = when {
-                        isExplicitlyCompleted || (compTotal > 0 && compAnswered == compTotal) -> CompetenceStatus.COMPLETED
+                        isExplicitlyCompleted -> CompetenceStatus.COMPLETED
                         compAnswered > 0 -> CompetenceStatus.IN_PROGRESS
                         else -> CompetenceStatus.NOT_STARTED
                     }
@@ -233,16 +259,27 @@ fun MockExamHubScreen(
                         itemCount = compTotal,
                         answeredCount = compAnswered,
                         status = status,
-                        onClick = { viewModel.openMockCompetence(competence.competenceId) }
+                        isLocked = isExplicitlyCompleted && !isExamSubmitted,
+                        onClick = {
+                            if (isExamSubmitted) {
+                                viewModel.openMockCompetence(competence.competenceId)
+                            } else if (isExplicitlyCompleted) {
+                                showLockedCompetenceDialog = true
+                            } else {
+                                pendingCompetenceId = competence.competenceId
+                            }
+                        }
                     )
                 }
             }
         }
 
         // Bottom-Right Sticky Action: "Submit Overall Exam"
+        val bottomBarBg = if (isDark) MaterialTheme.colorScheme.surface else Color.White
+        val bottomBarBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFFCBD5E1))
         Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
+            color = bottomBarBg,
+            border = bottomBarBorder
         ) {
             Row(
                 modifier = Modifier
@@ -254,7 +291,7 @@ fun MockExamHubScreen(
             ) {
                 Column {
                     Text(
-                        text = "$answeredCount / $totalQuestions Answered",
+                        text = "$answeredCount / $totalQuestions Answered • $unansweredCount items left",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -263,11 +300,11 @@ fun MockExamHubScreen(
                         Text(
                             text = "$flaggedCount flagged for review",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaritimeGoldBright
+                            color = MaterialTheme.colorScheme.primary
                         )
                     } else if (unansweredCount > 0) {
                         Text(
-                            text = "$unansweredCount items left",
+                            text = "$unansweredCount items left to complete",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -280,22 +317,32 @@ fun MockExamHubScreen(
                     }
                 }
 
+                val submitBtnBg = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7)
                 Button(
-                    onClick = { showSubmitDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
+                    onClick = {
+                        if (isExamSubmitted) {
+                            viewModel.navigateTo(Screen.Results)
+                        } else {
+                            showSubmitDialog = true
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = submitBtnBg,
+                        contentColor = PureWhite
+                    ),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Send,
+                        imageVector = if (isExamSubmitted) Icons.Default.CheckCircle else Icons.Default.Send,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = PureWhite,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Submit Overall Exam",
-                        color = Color.Black,
+                        text = if (isExamSubmitted) "View Results" else "Submit Overall Exam",
+                        color = PureWhite,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -341,9 +388,12 @@ fun MockExamHubScreen(
                         showSubmitDialog = false
                         viewModel.submitExam()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
+                    )
                 ) {
-                    Text("Confirm & Submit", color = Color.Black, fontWeight = FontWeight.Bold)
+                    Text("Confirm & Submit", color = PureWhite, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -354,33 +404,111 @@ fun MockExamHubScreen(
         )
     }
 
-    // Exit Exam Dialog
-    if (showExitDialog) {
+    // Strict Exam Lock-In Confirmation Dialog (Non-dismissible)
+    if (showLockInDialog) {
         AlertDialog(
-            onDismissRequest = { showExitDialog = false },
+            onDismissRequest = { /* Non-dismissible by tapping outside */ },
             title = {
-                Text("Exit Mock Exam?", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Mock Examination In Progress",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
             },
             text = {
                 Text(
-                    "Your active session progress and remaining timer are saved automatically. You can resume this exam anytime from the Home dashboard.",
+                    text = "Official mock examinations cannot be exited until all competencies are completed and submitted. If you wish to finish now, you must submit your overall exam.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        showExitDialog = false
-                        viewModel.navigateTo(Screen.Home)
+                        showLockInDialog = false
+                        viewModel.submitExam()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                        contentColor = PureWhite
+                    )
                 ) {
-                    Text("Exit to Dashboard", color = PureWhite)
+                    Text("Submit Exam Now", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                OutlinedButton(onClick = { showExitDialog = false }) {
+                OutlinedButton(onClick = { showLockInDialog = false }) {
                     Text("Continue Exam")
+                }
+            }
+        )
+    }
+
+    // Entry Confirmation Dialog (Before Opening a Competence)
+    if (pendingCompetenceId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingCompetenceId = null },
+            title = {
+                Text(
+                    text = "Start Competence Confirmation",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Once you enter this competence, you CANNOT exit, switch, or return to the main hub until all questions in this competence have been answered and submitted. Are you ready to begin?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val cid = pendingCompetenceId!!
+                        pendingCompetenceId = null
+                        viewModel.openMockCompetence(cid)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("Begin Competence", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingCompetenceId = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Locked Competence Warning Dialog (Cannot retake in this session)
+    if (showLockedCompetenceDialog) {
+        AlertDialog(
+            onDismissRequest = { showLockedCompetenceDialog = false },
+            title = {
+                Text(
+                    text = "Competence Completed & Locked",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "This competence has already been completed and submitted for this session. It cannot be retaken in this active examination session.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showLockedCompetenceDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("Understood", fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -393,8 +521,11 @@ private fun MockCompetenceHubCard(
     itemCount: Int,
     answeredCount: Int,
     status: CompetenceStatus,
+    isLocked: Boolean = false,
     onClick: () -> Unit
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
     val statusText = when (status) {
         CompetenceStatus.NOT_STARTED -> "Not Started"
         CompetenceStatus.IN_PROGRESS -> "In Progress"
@@ -413,10 +544,38 @@ private fun MockCompetenceHubCard(
         CompetenceStatus.COMPLETED -> Color(0xFF0F3222)
     }
 
-    val borderStroke = when (status) {
-        CompetenceStatus.COMPLETED -> BorderStroke(1.dp, PassGreen.copy(alpha = 0.5f))
-        CompetenceStatus.IN_PROGRESS -> BorderStroke(1.dp, SeaCyan.copy(alpha = 0.5f))
-        CompetenceStatus.NOT_STARTED -> BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline)
+    val borderStroke = if (isDark) {
+        when (status) {
+            CompetenceStatus.COMPLETED -> BorderStroke(1.dp, PassGreen.copy(alpha = 0.5f))
+            CompetenceStatus.IN_PROGRESS -> BorderStroke(1.dp, SeaCyan.copy(alpha = 0.5f))
+            CompetenceStatus.NOT_STARTED -> BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline)
+        }
+    } else {
+        BorderStroke(1.dp, Color(0xFFCBD5E1))
+    }
+
+    val cardBgColor = if (isDark) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color(0xFFFFFFFF)
+    }
+
+    val badgeBg = if (isDark) {
+        statusBg
+    } else {
+        Color(0xFF0284C7).copy(alpha = 0.12f)
+    }
+
+    val badgeTextColor = if (isDark) {
+        statusColor
+    } else {
+        Color(0xFF0F172A)
+    }
+
+    val badgeBorder = if (isDark) {
+        null
+    } else {
+        BorderStroke(1.dp, Color(0xFF94A3B8))
     }
 
     Card(
@@ -425,7 +584,8 @@ private fun MockCompetenceHubCard(
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        colors = CardDefaults.cardColors(containerColor = cardBgColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
         border = borderStroke
     ) {
         Row(
@@ -439,14 +599,15 @@ private fun MockCompetenceHubCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(statusBg),
+                    .background(badgeBg)
+                    .let { if (badgeBorder != null) it.border(badgeBorder, CircleShape) else it },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = competence.code,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = statusColor
+                    color = badgeTextColor
                 )
             }
 
@@ -458,32 +619,72 @@ private fun MockCompetenceHubCard(
                     text = "${competence.code}: ${competence.title} — $itemCount Items",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0F172A),
                     lineHeight = 18.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "$answeredCount / $itemCount Answered",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569)
                 )
             }
 
             Spacer(modifier = Modifier.width(10.dp))
 
             // Right Status Badge
+            val statusBgColor = if (isDark) {
+                statusBg
+            } else {
+                when (status) {
+                    CompetenceStatus.NOT_STARTED -> Color(0xFFE2E8F0)
+                    CompetenceStatus.IN_PROGRESS -> Color(0xFFFEF3C7)
+                    CompetenceStatus.COMPLETED -> Color(0xFFDCFCE7)
+                }
+            }
+            val statusTextColor = if (isDark) {
+                statusColor
+            } else {
+                when (status) {
+                    CompetenceStatus.NOT_STARTED -> Color(0xFF475569)
+                    CompetenceStatus.IN_PROGRESS -> Color(0xFFB45309)
+                    CompetenceStatus.COMPLETED -> Color(0xFF15803D)
+                }
+            }
+            val statusBorder = if (isDark) {
+                BorderStroke(0.75.dp, statusColor.copy(alpha = 0.6f))
+            } else {
+                when (status) {
+                    CompetenceStatus.NOT_STARTED -> BorderStroke(1.dp, Color(0xFFCBD5E1))
+                    CompetenceStatus.IN_PROGRESS -> BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.4f))
+                    CompetenceStatus.COMPLETED -> BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.4f))
+                }
+            }
             Surface(
                 shape = RoundedCornerShape(6.dp),
-                color = statusBg,
-                border = BorderStroke(0.75.dp, statusColor.copy(alpha = 0.6f))
+                color = statusBgColor,
+                border = statusBorder
             ) {
-                Text(
-                    text = statusText,
+                Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = statusColor
-                )
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isLocked) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = statusTextColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+                    Text(
+                        text = if (isLocked) "Completed (Locked)" else statusText,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = statusTextColor
+                    )
+                }
             }
         }
     }
