@@ -29,11 +29,13 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OutlinedFlag
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -53,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -115,244 +118,243 @@ fun MockCompetenceScreen(
             .fillMaxSize()
             .background(if (isDark) MaterialTheme.colorScheme.background else Color(0xFFF1F5F9))
     ) {
-        // Top Bar: Back to Hub + Title + Timer
-        Surface(
-            color = headerBg,
-            border = headerBorder
+        // Compact Exam Header
+        val minutes = timeRemaining / 60
+        val seconds = timeRemaining % 60
+        val formattedRemainingTime = String.format("%02d:%02d", minutes, seconds)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0C0C0C))
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Left side: Security / Exam designation badge
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (isCompetenceFinished) {
-                    IconButton(onClick = { viewModel.navigateTo(Screen.MockHub) }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = headerIconColor
-                        )
-                    }
-                } else {
-                    IconButton(
-                        onClick = { showCompetenceLockedDialog = true },
-                        enabled = false
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = "Competence Locked",
-                            tint = if (isDark) headerIconColor.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.85f)
-                        )
-                    }
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${compInfo?.code ?: competenceId}: ${compInfo?.title ?: "Competence Drills"}",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = headerTitleColor,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = if (isExamSubmitted) {
-                            "$answeredCount / $totalQuestions Answered • Review Mode"
-                        } else {
-                            "$answeredCount / $totalQuestions Answered" + if (flaggedCount > 0) " • $flaggedCount Flagged" else ""
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = headerSubColor,
-                        fontWeight = if (!isDark) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                TimerChip(secondsRemaining = timeRemaining)
-            }
-        }
-
-        // Progress bar for this competence
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp),
-            color = MaritimeGoldBright,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-
-        // Continuous Vertical Scroll List: All items on one continuous page
-        LazyColumn(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
-        ) {
-            item {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF),
-                    shadowElevation = if (isDark) 0.dp else 2.dp,
-                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Continuous Scroll View: Answer, flag, and review all $totalQuestions questions freely. When finished, tap 'Submit Competence' below.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569)
-                        )
-                    }
-                }
-            }
-
-            itemsIndexed(compQuestions, key = { _, q -> q.id }) { index, question ->
-                val state = userStates[question.id]
-                val isFlagged = state?.isFlagged == true
-                val selectedIndex = state?.selectedIndex
-
-                MockQuestionItemCard(
-                    itemNumber = index + 1,
-                    totalItems = totalQuestions,
-                    question = question,
-                    selectedIndex = selectedIndex,
-                    isFlagged = isFlagged,
-                    isExamSubmitted = isExamSubmitted,
-                    onSelectOption = { optIdx ->
-                        if (!isExamSubmitted) {
-                            viewModel.selectOptionForQuestion(question.id, optIdx)
-                        }
-                    },
-                    onToggleFlag = {
-                        if (!isExamSubmitted) {
-                            viewModel.toggleFlagForQuestion(question.id)
-                        }
-                    }
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Session Secured",
+                    tint = Color(0xFF888888),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "SIMULATED EXAM",
+                    color = Color(0xFF888888),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            // End of list spacer
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+            // Right side: Compact countdown readout
+            Surface(
+                color = Color(0xFF191214),
+                border = BorderStroke(1.dp, Color(0xFFFF5A67)),
+                shape = RoundedCornerShape(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Timer,
+                        contentDescription = null,
+                        tint = Color(0xFFFF5A67),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = formattedRemainingTime,
+                        color = Color(0xFFFF5A67),
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
-        // Bottom Navigation Bar with Bottom-Right Competence Action: "Submit Competence"
-        val bottomBarBg = if (isDark) MaterialTheme.colorScheme.surface else Color.White
-        val bottomBarBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFFCBD5E1))
-        val submitBtnBg = if (isDark) PassGreen else Color(0xFF0284C7)
-        val submitTextColor = if (isDark) Color.Black else PureWhite
-        val allAnswered = answeredCount >= totalQuestions && totalQuestions > 0
+        HorizontalDivider(color = Color(0xFF2A2A2A), thickness = 1.dp)
 
-        Surface(
-            color = bottomBarBg,
-            border = bottomBarBorder
-        ) {
-            Row(
+        // Continuous Vertical Scroll List: All items on one continuous page with safety fallback
+        if (compQuestions.isEmpty()) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    Text(
-                        text = "$answeredCount of $totalQuestions Answered",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (answeredCount == totalQuestions) PassGreen else MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = if (answeredCount == totalQuestions) "All questions answered" else "${totalQuestions - answeredCount} items remaining",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    text = "INITIALIZING EXAM MATRIX...",
+                    color = Color(0xFF888888),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 24.dp)
+            ) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF),
+                        shadowElevation = if (isDark) 0.dp else 2.dp,
+                        border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Continuous Scroll View: Answer, flag, and review all $totalQuestions questions freely. When finished, tap 'Submit Competence' below.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569)
+                            )
+                        }
+                    }
+                }
+
+                itemsIndexed(compQuestions, key = { _, q -> q.id }) { index, question ->
+                    val state = userStates[question.id]
+                    val isFlagged = state?.isFlagged == true
+                    val selectedIndex = state?.selectedIndex
+
+                    MockQuestionItemCard(
+                        itemNumber = index + 1,
+                        totalItems = totalQuestions,
+                        question = question,
+                        selectedIndex = selectedIndex,
+                        isFlagged = isFlagged,
+                        isExamSubmitted = isExamSubmitted,
+                        onSelectOption = { optIdx ->
+                            if (!isExamSubmitted) {
+                                viewModel.selectOptionForQuestion(question.id, optIdx)
+                            }
+                        },
+                        onToggleFlag = {
+                            if (!isExamSubmitted) {
+                                viewModel.toggleFlagForQuestion(question.id)
+                            }
+                        }
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                // End of list spacer
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
 
+        // Bottom Navigation Bar with Stacked Column Footer Layout
+        val allAnswered = answeredCount >= totalQuestions && totalQuestions > 0
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF141414))
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // Full-width status readout:
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$answeredCount of $totalQuestions Answered",
+                    color = Color(0xFFEEEEEE),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "${maxOf(0, totalQuestions - answeredCount)} items remaining",
+                    color = Color(0xFF888888),
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Action buttons:
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 if (isExamSubmitted || isCompetenceFinished) {
                     Button(
                         onClick = { viewModel.navigateTo(Screen.MockHub) },
+                        modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
-                            contentColor = PureWhite
+                            containerColor = Color(0xFF1E1E1E),
+                            contentColor = Color.White
                         ),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                        shape = RoundedCornerShape(2.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2A2A2A))
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null,
-                            tint = PureWhite,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Return to Hub",
-                            color = PureWhite,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 } else {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    OutlinedButton(
+                        onClick = { showEarlySubmitConfirmationDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF5A67)
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFFFF5A67)),
+                        shape = RoundedCornerShape(2.dp)
                     ) {
-                        if (!allAnswered) {
-                            OutlinedButton(
-                                onClick = { showEarlySubmitConfirmationDialog = true },
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    text = "Finish & Submit",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
+                        Text(
+                            text = "Finish & Submit",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                        Button(
-                            onClick = {
-                                if (allAnswered) {
-                                    showSubmitConfirmationDialog = true
-                                }
-                            },
-                            enabled = allAnswered,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isDark) PassGreen else Color(0xFF16A34A),
-                                contentColor = if (isDark) Color.Black else PureWhite,
-                                disabledContainerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE2E8F0),
-                                disabledContentColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Done,
-                                contentDescription = null,
-                                tint = if (allAnswered) (if (isDark) Color.Black else PureWhite) else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Submit Competence",
-                                color = if (allAnswered) (if (isDark) Color.Black else PureWhite) else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
+                    Button(
+                        onClick = {
+                            if (allAnswered) {
+                                showSubmitConfirmationDialog = true
+                            }
+                        },
+                        enabled = allAnswered,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF1E1E1E),
+                            contentColor = Color.White,
+                            disabledContainerColor = Color(0xFF141414),
+                            disabledContentColor = Color(0xFF555555)
+                        ),
+                        shape = RoundedCornerShape(2.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2A2A2A))
+                    ) {
+                        Text(
+                            text = "✓ Submit Competence",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
