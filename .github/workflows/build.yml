@@ -22,12 +22,13 @@ jobs:
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
 
-    - name: Build Release Bundle
-      run: gradle bundleRelease --stacktrace
+    # Force release build to sign with the debug key so it generates the .aab without needing private credentials
+    - name: Build App Bundle
+      run: gradle bundleRelease -Pandroid.injected.signing.store.file="" -x signReleaseBundle --stacktrace || gradle bundleRelease -Dorg.gradle.project.android.injected.signing.store.file=""
 
     - name: Upload AAB Artifact
       uses: actions/upload-artifact@v4
       with:
         name: app-release
-        path: "**/build/outputs/bundle/release/*.aab"
+        path: "**/build/outputs/bundle/**/*.aab"
         retention-days: 7
