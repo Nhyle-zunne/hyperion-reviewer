@@ -58,7 +58,7 @@ fun AboutScreen(
     modifier: Modifier = Modifier
 ) {
     BackHandler {
-        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateBack()
     }
 
     Column(
@@ -71,7 +71,7 @@ fun AboutScreen(
             title = "About Hyperion",
             subtitle = "Version & Architecture",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.Home) },
+            onBackClick = { viewModel.navigateBack() },
             onMenuClick = { viewModel.openDrawer() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
         )

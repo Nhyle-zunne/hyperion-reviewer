@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
@@ -52,6 +53,7 @@ fun MaritimeTopBar(
     onBackClick: () -> Unit = {},
     onMenuClick: (() -> Unit)? = null,
     onSearchClick: (() -> Unit)? = null,
+    isSearchLocked: Boolean = false,
     onBookmarksClick: (() -> Unit)? = null,
     onVaultClick: (() -> Unit)? = null,
     onHistoryClick: (() -> Unit)? = null,
@@ -123,12 +125,40 @@ fun MaritimeTopBar(
             },
             actions = {
                 if (onSearchClick != null) {
-                    IconButton(onClick = onSearchClick) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search",
-                            tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
-                        )
+                    IconButton(
+                        onClick = onSearchClick,
+                        modifier = Modifier.testTag("topbar_search_button")
+                    ) {
+                        if (isSearchLocked) {
+                            BadgedBox(
+                                badge = {
+                                    Badge(
+                                        containerColor = MaritimeGoldBright,
+                                        contentColor = Color(0xFF0F172A),
+                                        modifier = Modifier.size(14.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Locked",
+                                            modifier = Modifier.size(9.dp),
+                                            tint = Color(0xFF0F172A)
+                                        )
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search (Locked)",
+                                    tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color(0xFF94A3B8)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+                            )
+                        }
                     }
                 }
 

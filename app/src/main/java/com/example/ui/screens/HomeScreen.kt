@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +64,9 @@ import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +84,7 @@ import com.example.data.model.QuizMode
 import com.example.data.model.Track
 import com.example.data.repository.MaritimeQuestionBank
 import com.example.ui.components.MaritimeTopBar
+import com.example.ui.components.ProStatusBadge
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGold
 import com.example.ui.theme.MaritimeGoldBright
@@ -100,7 +105,14 @@ fun HomeScreen(
     val mistakeEntries by viewModel.mistakeEntries.collectAsState()
     val examRecords by viewModel.examRecords.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
+    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
+    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
+    val isHyperionProUnlocked by viewModel.isHyperionProUnlocked.collectAsState()
+    val isTrackUnlocked = if (selectedTrack == Track.DECK_OIC_NW) isOicNwProUnlocked else isGmdssProUnlocked
     val isActivated by viewModel.isActivated.collectAsState()
+    val isAnyProUnlocked = isOicNwProUnlocked || isGmdssProUnlocked || isHyperionProUnlocked || isActivated
+    var showMockExamWarningDialog by remember { mutableStateOf(false) }
+    var showSearchLockedDialog by remember { mutableStateOf(false) }
 
     val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
     val totalMistakes = trackMistakes.size
@@ -124,12 +136,19 @@ fun HomeScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = "HYPERION",
+            title = if (selectedTrack == Track.DECK_OIC_NW) "OIC-NW Operational Track" else "GMDSS Radio Track",
             showBackButton = true,
             onBackClick = { viewModel.navigateTo(Screen.TrackSelection) },
             onMenuClick = { viewModel.openDrawer() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) },
-            onSearchClick = { viewModel.navigateTo(Screen.Search) },
+            onSearchClick = {
+                if (isAnyProUnlocked) {
+                    viewModel.navigateTo(Screen.Search)
+                } else {
+                    showSearchLockedDialog = true
+                }
+            },
+            isSearchLocked = !isAnyProUnlocked,
             onHistoryClick = { viewModel.navigateTo(Screen.History) },
             onBookmarksClick = { viewModel.navigateTo(Screen.Bookmarks) },
             onVaultClick = { viewModel.navigateTo(Screen.Vault) },
@@ -145,7 +164,7 @@ fun HomeScreen(
         ) {
             item {
                 // Hero Banner
-                HeroBanner(track = selectedTrack)
+                HeroBanner(track = selectedTrack, isUnlocked = isTrackUnlocked)
             }
 
             item {
@@ -182,7 +201,7 @@ fun HomeScreen(
             }
 
             // Quick Mode Launchers
-            if (!isActivated) {
+            if (!isTrackUnlocked) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -206,13 +225,13 @@ fun HomeScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Free Tier Active",
+                                    text = "Full Question Bank & Mock Exam Verification Required",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Try sample questions in Free Practice, or enter your offline key to unlock Hyperion Pro.",
+                                    text = "Verify your terminal to access the complete question bank and timed competency mock exams.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
@@ -220,17 +239,47 @@ fun HomeScreen(
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
-                                onClick = { viewModel.navigateTo(Screen.Activation) },
+                                onClick = { viewModel.navigateTo(Screen.HowToAvail) },
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaritimeGoldBright,
-                                    contentColor = Color(0xFF0F172A)
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                    contentColor = PureWhite
                                 ),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Activate", color = Color(0xFF0F172A), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Account & Device Help", color = PureWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
+                }
+            }
+
+            if (selectedTrack == Track.DECK_OIC_NW) {
+                item {
+                    ModeLauncherCard(
+                        title = "MARINA CRP-Based Practice",
+                        subtitle = "Standard review • 2,065 items across 12 competencies\nNote: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                        badge = "STANDARD REVIEW",
+                        badgeColor = PassGreen,
+                        icon = Icons.Default.School,
+                        accentColor = PassGreen,
+                        onClick = {
+                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
+                        }
+                    )
+                }
+            } else if (selectedTrack == Track.GMDSS_GOC) {
+                item {
+                    ModeLauncherCard(
+                        title = "MARINA CRP-Based Practice",
+                        subtitle = "Standard review • 1,200 items (C1: 2 Parts [500 each], C2: 200 items)\nNote: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                        badge = "STANDARD REVIEW",
+                        badgeColor = PassGreen,
+                        icon = Icons.Default.School,
+                        accentColor = PassGreen,
+                        onClick = {
+                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
+                        }
+                    )
                 }
             }
 
@@ -238,13 +287,13 @@ fun HomeScreen(
                 ModeLauncherCard(
                     title = "Practice Drill Configuration",
                     subtitle = "Two-step setup: select competence, then configure sequential/randomized ordering & item count",
-                    badge = if (isActivated) "CUSTOMIZABLE" else "PRO LOCKED",
-                    badgeColor = if (isActivated) SeaCyan else MaterialTheme.colorScheme.primary,
+                    badge = if (isTrackUnlocked) "CUSTOMIZABLE" else "VERIFICATION REQUIRED",
+                    badgeColor = if (isTrackUnlocked) SeaCyan else MaterialTheme.colorScheme.primary,
                     icon = Icons.Default.Tune,
                     accentColor = SeaCyan,
                     onClick = {
                         viewModel.requireActivationOr {
-                            viewModel.navigateTo(Screen.PracticeCompetenceSelect)
+                            viewModel.navigateTo(Screen.PracticeCompetenceSelect())
                         }
                     }
                 )
@@ -253,16 +302,14 @@ fun HomeScreen(
             item {
                 ModeLauncherCard(
                     title = "Official Timed Mock Exam",
-                    subtitle = if (selectedTrack == Track.DECK_OIC_NW) "200 Items • 200 Minutes • 70% Cutoff" else "100 Items • 100 Minutes • 70% Cutoff",
-                    badge = if (isActivated) "STCW TOS MOCK" else "PRO LOCKED",
+                    subtitle = if (selectedTrack == Track.DECK_OIC_NW) "Competency-based timing • 1 min/item • 70% Cutoff" else "Competency-based timing • Operator standard • 70% Cutoff",
+                    badge = if (isTrackUnlocked) "STCW TOS MOCK" else "VERIFICATION REQUIRED",
                     badgeColor = MaterialTheme.colorScheme.primary,
                     icon = Icons.Default.Timer,
                     accentColor = MaterialTheme.colorScheme.primary,
                     onClick = {
                         viewModel.requireActivationOr {
-                            viewModel.startQuizSession(
-                                mode = QuizMode.MOCK_EXAM
-                            )
+                            showMockExamWarningDialog = true
                         }
                     }
                 )
@@ -310,9 +357,25 @@ fun HomeScreen(
                 )
             }
 
-             item {
+            item {
+                ModeLauncherCard(
+                    title = "MARINA Exam Guidelines",
+                    subtitle = "TOS item distribution, permit & uniform rules, 70% passing cutoff, and Bloom's scoring",
+                    badge = "OFFICIAL RULES",
+                    badgeColor = MaritimeGoldBright,
+                    icon = Icons.Default.Info,
+                    accentColor = MaritimeGoldBright,
+                    onClick = {
+                        viewModel.navigateTo(Screen.ExamGuidelines)
+                    }
+                )
+            }
+
+            item {
                 // MARINA Strict Passing Policy Card
-                MarinaPolicyCard()
+                MarinaPolicyCard(
+                    onClick = { viewModel.navigateTo(Screen.ExamGuidelines) }
+                )
             }
 
             item {
@@ -351,10 +414,127 @@ fun HomeScreen(
             }
         }
     }
+
+    // Official Mock Exam Warning Dialog
+    if (showMockExamWarningDialog) {
+        AlertDialog(
+            onDismissRequest = { showMockExamWarningDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaritimeGoldBright,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Official Mock Exam Warning",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "⚠️ Strict MARINA Board Conditions",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Text(
+                        text = "This is an official timed assessment. Timers are competency-based (allocated strictly per competency upon start) and cannot be paused. Exiting early records an incomplete score. Ensure you are ready before proceeding.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 20.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showMockExamWarningDialog = false
+                        viewModel.startQuizSession(mode = QuizMode.MOCK_EXAM)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text("Continue", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showMockExamWarningDialog = false }
+                ) {
+                    Text("Go Back")
+                }
+            }
+        )
+    }
+
+    // Pro-Gated Search Locked Dialog
+    if (showSearchLockedDialog) {
+        AlertDialog(
+            onDismissRequest = { showSearchLockedDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Question Bank Search Verification",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Full-text search across all 7,644+ Licensure Reviewer questions, STCW conventions, and MARINA regulations requires terminal verification.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 20.sp
+                    )
+                    Text(
+                        text = "Verify your terminal to enable offline search across all deck and radio operator competencies.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSearchLockedDialog = false
+                        viewModel.navigateTo(Screen.HowToAvail)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = PureWhite
+                    )
+                ) {
+                    Text("Account & Device Help", fontWeight = FontWeight.Bold, color = PureWhite)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showSearchLockedDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun HeroBanner(track: Track) {
+private fun HeroBanner(track: Track, isUnlocked: Boolean) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -372,29 +552,40 @@ private fun HeroBanner(track: Track) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "STCW '78 AS AMENDED",
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = "STCW '78 AS AMENDED",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+
+                        ProStatusBadge(
+                            isUnlocked = isUnlocked,
+                            lockedLabel = "VERIFICATION REQUIRED",
+                            unlockedLabel = "VERIFIED TERMINAL"
                         )
                     }
 
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = PassGreen.copy(alpha = 0.2f)
+                        color = if (isUnlocked) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "100% OFFLINE",
+                            text = if (isUnlocked) "VERIFIED TERMINAL" else "OFFLINE MODE",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
-                            color = PassGreen
+                            color = if (isUnlocked) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -402,7 +593,7 @@ private fun HeroBanner(track: Track) {
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = track.title,
+                    text = if (track == Track.DECK_OIC_NW) "OIC-NW Deck Operational Review" else "GMDSS Radio Operator Review",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -412,12 +603,13 @@ private fun HeroBanner(track: Track) {
 
                 Text(
                     text = if (track == Track.DECK_OIC_NW) {
-                        "Navigation (F1: 125 items), Cargo Stowage (F2: 30 items), and Ship Operations (F3: 45 items)."
+                        "3 Functions (12 Competencies) • 6,444 Questions Bank\n• Function 1: Navigation & Passage Planning (C1, C2, C3, C4, C5, C7, C9)\n• Function 2: Cargo Handling & Stowage (C10, C11)\n• Function 3: Ship Operation & Safety (C12, C13, C17)"
                     } else {
-                        "Subsystems & Equipment (C1: 85 items) and Emergency Communications (C2: 15 items)."
+                        "2 Competencies (12 Parts) • 2,260 Questions Bank\n• C1: GMDSS Radio Operations & Subsystems (10 Parts • 1,911 Items)\n• C2: Emergency Communications & SAR Procedures (2 Parts • 349 Items)"
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 18.sp
                 )
             }
         }
@@ -608,9 +800,14 @@ private fun ModeLauncherCard(
 }
 
 @Composable
-private fun MarinaPolicyCard() {
+private fun MarinaPolicyCard(
+    onClick: () -> Unit = {}
+) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
@@ -627,15 +824,27 @@ private fun MarinaPolicyCard() {
             )
             Spacer(modifier = Modifier.width(10.dp))
             Column {
-                Text(
-                    text = "MARINA Evaluation & Weighted Scoring",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "MARINA Evaluation & Weighted Scoring",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "View All →",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaritimeGoldBright
+                    )
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Passing Threshold: 70.0% per competence. A candidate passes only if obtaining >= 70% in EVERY competence within the function. Easy: 3 pts, Moderate: 6 pts, Difficult: 9 pts.",
+                    text = "Passing Threshold: 70.0% per competence. A candidate passes only if obtaining >= 70% in EVERY competence within the function. Easy: 3 pts, Moderate: 6 pts, Difficult: 9 pts. Tap to view full guidelines & permit requirements.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 11.sp

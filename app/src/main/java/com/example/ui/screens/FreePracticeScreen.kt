@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Difficulty
+import com.example.data.model.Track
 import com.example.ui.components.MaritimeTopBar
 import com.example.ui.components.OptionCard
 import com.example.ui.theme.FailRed
@@ -118,9 +119,13 @@ fun FreePracticeScreen(
             .background(MaterialTheme.colorScheme.background)
             .navigationBarsPadding()
     ) {
+        val isGmdss = activeQuestions.firstOrNull()?.track == Track.GMDSS_GOC
+        val totalPoolText = if (isGmdss) "1,200 Items Bank" else "2,065 Items Bank"
+        val bannerPoolText = if (isGmdss) "FREE TIER • 1,200 CRP ITEMS" else "FREE TIER • 2,065 CRP ITEMS"
+
         MaritimeTopBar(
-            title = "Free Practice",
-            subtitle = "Sample Diagnostic Bank",
+            title = "MARINA CRP Practice",
+            subtitle = "Free Tier • $totalPoolText",
             showBackButton = true,
             onBackClick = { viewModel.navigateTo(Screen.Home) },
             onMenuClick = { viewModel.openDrawer() },
@@ -130,7 +135,7 @@ fun FreePracticeScreen(
         // Free Tier Header Banner
         Surface(
             color = Color(0xFF0F1E36),
-            border = BorderStroke(0.5.dp, SeaCyan.copy(alpha = 0.4f))
+            border = BorderStroke(0.5.dp, PassGreen.copy(alpha = 0.4f))
         ) {
             Row(
                 modifier = Modifier
@@ -143,28 +148,28 @@ fun FreePracticeScreen(
                     Icon(
                         imageVector = Icons.Default.School,
                         contentDescription = null,
-                        tint = SeaCyan,
+                        tint = PassGreen,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "FREE TIER • SAMPLE QUESTIONS",
+                        text = bannerPoolText,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = SeaCyan
+                        color = PassGreen
                     )
                 }
 
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = SeaCyan.copy(alpha = 0.2f)
+                    color = PassGreen.copy(alpha = 0.2f)
                 ) {
                     Text(
                         text = "NO ACTIVATION REQUIRED",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = SeaCyan,
+                        color = PassGreen,
                         fontSize = 9.sp
                     )
                 }
@@ -178,7 +183,7 @@ fun FreePracticeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp),
-            color = SeaCyan,
+            color = PassGreen,
             trackColor = Color(0xFF1E293B)
         )
 
@@ -190,6 +195,24 @@ fun FreePracticeScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Prominent Legal Disclaimer Banner
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Note: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.5.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+
             // Index & Difficulty
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -381,7 +404,7 @@ fun FreePracticeScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Button(
-                            onClick = { viewModel.navigateTo(Screen.Activation) },
+                            onClick = { viewModel.navigateTo(Screen.HowToAvail) },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = PureWhite
@@ -389,7 +412,7 @@ fun FreePracticeScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Activate Pro License (Offline Key)", color = PureWhite, fontWeight = FontWeight.Bold)
+                            Text("Account & Device Help", color = PureWhite, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

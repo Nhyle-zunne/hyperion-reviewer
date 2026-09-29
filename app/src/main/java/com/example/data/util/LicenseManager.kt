@@ -2,10 +2,52 @@ package com.example.data.util
 
 import android.content.Context
 import android.provider.Settings
+import com.example.data.model.Track
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.security.MessageDigest
+
+enum class ProTier(
+    val title: String,
+    val codePrefix: String,
+    val subtitle: String,
+    val shortName: String
+) {
+    OIC_NW_PRO(
+        title = "OIC-NW Pro",
+        codePrefix = "HYP-OICPRO",
+        subtitle = "Full 12-Competence Deck Question Bank & Mocks",
+        shortName = "Deck Operational"
+    ),
+    GMDSS_PRO(
+        title = "GMDSS Pro",
+        codePrefix = "HYP-GOCPRO",
+        subtitle = "Complete GOC Subsystems & Emergency Radio Mocks",
+        shortName = "GOC Radio Operator"
+    ),
+    HYPERION_PRO(
+        title = "Hyperion Pro",
+        codePrefix = "HYP-HYPPRO",
+        subtitle = "OIC-NW Pro + GMDSS Pro Unlocked 🔥",
+        shortName = "All-Access Bundle"
+    );
+
+    companion object {
+        val MASTER_PRO: ProTier get() = HYPERION_PRO
+    }
+}
+
+enum class UnlockResult(val toastMessage: String, val isSuccess: Boolean) {
+    OIC_NW_UNLOCKED("OIC-NW Pro Unlocked! Full deck review access granted.", true),
+    GMDSS_UNLOCKED("GMDSS Pro Unlocked! Full GOC review access granted.", true),
+    HYPERION_UNLOCKED("Hyperion Pro Unlocked! Complete access granted.", true),
+    INVALID_KEY("Invalid license key. Please check your Request Code and try again.", false);
+
+    companion object {
+        val MASTER_UNLOCKED: UnlockResult get() = HYPERION_UNLOCKED
+    }
+}
 
 object LicenseManager {
     const val PREFS_NAME = "hyperion_license_prefs"
@@ -14,18 +56,39 @@ object LicenseManager {
     const val KEY_INSTALL_SESSION_ID = "install_session_id"
     const val KEY_INSTALL_DATE = "install_session_date"
 
+    const val KEY_OIC_NW_PRO_UNLOCKED = "is_oic_nw_pro_unlocked"
+    const val KEY_GMDSS_PRO_UNLOCKED = "is_gmdss_pro_unlocked"
+    const val KEY_LICENSE_ACTIVATED = "is_license_activated"
+
+    private val _isOicNwProUnlockedFlow = MutableStateFlow(false)
+    val isOicNwProUnlockedFlow: StateFlow<Boolean> = _isOicNwProUnlockedFlow.asStateFlow()
+
+    private val _isGmdssProUnlockedFlow = MutableStateFlow(false)
+    val isGmdssProUnlockedFlow: StateFlow<Boolean> = _isGmdssProUnlockedFlow.asStateFlow()
+
     private val _isProActivatedFlow = MutableStateFlow(false)
     val isProActivatedFlow: StateFlow<Boolean> = _isProActivatedFlow.asStateFlow()
 
+    private val _isHyperionProUnlockedFlow = MutableStateFlow(false)
+    val isHyperionProUnlockedFlow: StateFlow<Boolean> = _isHyperionProUnlockedFlow.asStateFlow()
+
     fun init(context: Context) {
-        _isProActivatedFlow.value = isActivated(context)
+        val oic = isOicNwProUnlocked(context)
+        val gmdss = isGmdssProUnlocked(context)
+        val hyp = oic && gmdss
+        val active = oic || gmdss
+
+        _isOicNwProUnlockedFlow.value = oic
+        _isGmdssProUnlockedFlow.value = gmdss
+        _isHyperionProUnlockedFlow.value = hyp
+        _isProActivatedFlow.value = active
     }
 
     /**
      * Permanent Hardware ID derived directly from Settings.Secure.ANDROID_ID.
      * Format: DEV- + first 8 characters uppercase (e.g., DEV-A8F2-771C).
      * Tagged as (Hardware Bound). Does NOT depend on SharedPreferences,
-     * so it persists across uninstalls and app clears on the same physical device.
+     * so it persists across uninstalls on the same physical device.
      */
     fun getPermanentHardwareId(context: Context): String {
         val rawAndroidId = try {
@@ -55,7 +118,6 @@ object LicenseManager {
         }
         val token = "INST-" + java.util.UUID.randomUUID().toString().replace("-", "").take(4).uppercase()
         prefs.edit().putString(KEY_INSTALL_SESSION_ID, token).apply()
-        // Ensure install date is initialized at the same time
         getInstallDate(context)
         return token
     }
@@ -75,32 +137,40 @@ object LicenseManager {
     }
 
     /**
-     * Master Request Code:
-     * Alphanumeric code combining hardware and session tokens:
-     * HYP- + hardware prefix + - + session prefix + checksum (e.g., HYP-A8F2-9024-B105).
+     * Formats Pro Request Code based on the chosen tier:
+     * - OIC-NW Pro: HYP-OICPRO-[HardwareID]-[SessionID]
+     * - GMDSS Pro: HYP-GOCPRO-[HardwareID]-[SessionID]
+     * - Hyperion Pro: HYP-HYPPRO-[HardwareID]-[SessionID]
      */
-    fun getMasterRequestCode(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val stored = prefs.getString(KEY_REQUEST_CODE, null)
-        if (stored != null && stored.startsWith("HYP-") && stored.count { it == '-' } >= 2) {
-            return stored
-        }
-
-        val hwId = getPermanentHardwareId(context)
-        val sessId = getInstallSessionId(context)
-        val hwPrefix = hwId.removePrefix("DEV-").replace("-", "").take(4)
-        val sessPrefix = sessId.removePrefix("INST-").replace("-", "").take(4)
-
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest(("$hwPrefix:$sessPrefix:HYP_2026").toByteArray(Charsets.UTF_8))
-        val checksum = hash.joinToString("") { "%02X".format(it) }.take(4)
-
-        val code = "HYP-$hwPrefix-$sessPrefix-$checksum"
-        prefs.edit().putString(KEY_REQUEST_CODE, code).apply()
-        return code
+    fun getRequestCodeForTier(context: Context, tier: ProTier): String {
+        val hwToken = getPermanentHardwareId(context).removePrefix("DEV-").replace("-", "")
+        val sessToken = getInstallSessionId(context).removePrefix("INST-").replace("-", "")
+        return "${tier.codePrefix}-$hwToken-$sessToken"
     }
 
-    // Obfuscated salt fragments: XOR masked with 0x5A to prevent detection via simple string search in decompilers
+    /**
+     * Master Request Code (defaulting to Hyperion Pro format)
+     */
+    fun getMasterRequestCode(context: Context): String {
+        return getRequestCodeForTier(context, ProTier.HYPERION_PRO)
+    }
+
+    fun getOrGenerateRequestCode(context: Context): String {
+        return getMasterRequestCode(context)
+    }
+
+    fun getOrGenerateInstallationToken(context: Context): String {
+        return getInstallSessionId(context)
+    }
+
+    fun generateRequestCode(seed: String): String {
+        val h = (seed.hashCode().toLong() and 0xFFFFFFFFL)
+        val part1 = ((h shr 16) and 0xFFFFL).toString(16).uppercase().padStart(4, '0')
+        val part2 = (h and 0xFFFFL).toString(16).uppercase().padStart(4, '0')
+        return "HYP-$part1-$part2"
+    }
+
+    // Obfuscated salt fragments: XOR masked with 0x5A
     private val SALT_PART_A = byteArrayOf(0x12, 0x03, 0x0A, 0x1F, 0x08) // "HYPER"
     private val SALT_PART_B = byteArrayOf(0x13, 0x15, 0x14, 0x05) // "ION_"
     private val SALT_PART_C = byteArrayOf(0x17, 0x1B, 0x08, 0x13, 0x0E, 0x13, 0x17, 0x1F, 0x05) // "MARITIME_"
@@ -118,9 +188,6 @@ object LicenseManager {
         return String(decoded, Charsets.UTF_8)
     }
 
-    /**
-     * Dynamically decodes and reassembles the secret salt at runtime.
-     */
     fun getSecretSalt(): String {
         return decodeSaltChunk(SALT_PART_A) +
                decodeSaltChunk(SALT_PART_B) +
@@ -134,105 +201,255 @@ object LicenseManager {
     val SECRET_SALT: String get() = getSecretSalt()
 
     /**
-     * Checks if the app license is currently activated.
+     * Checks if OIC-NW Deck Pro is unlocked.
+     */
+    fun isOicNwProUnlocked(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val altPrefs = context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+        val unlocked = prefs.getBoolean(KEY_OIC_NW_PRO_UNLOCKED, false) ||
+                       altPrefs.getBoolean(KEY_OIC_NW_PRO_UNLOCKED, false)
+        _isOicNwProUnlockedFlow.value = unlocked
+        return unlocked
+    }
+
+    /**
+     * Checks if GMDSS GOC Pro is unlocked.
+     */
+    fun isGmdssProUnlocked(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val altPrefs = context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+        val unlocked = prefs.getBoolean(KEY_GMDSS_PRO_UNLOCKED, false) ||
+                       altPrefs.getBoolean(KEY_GMDSS_PRO_UNLOCKED, false)
+        _isGmdssProUnlockedFlow.value = unlocked
+        return unlocked
+    }
+
+    /**
+     * Checks if Hyperion Pro (both tracks) is unlocked.
+     */
+    fun isHyperionProUnlocked(context: Context): Boolean {
+        val hyp = isOicNwProUnlocked(context) && isGmdssProUnlocked(context)
+        _isHyperionProUnlockedFlow.value = hyp
+        return hyp
+    }
+
+    fun isMasterProUnlocked(context: Context): Boolean = isHyperionProUnlocked(context)
+
+    /**
+     * Checks track-specific Pro access.
+     */
+    fun isTrackProUnlocked(context: Context, track: Track): Boolean {
+        return if (track == Track.DECK_OIC_NW) {
+            isOicNwProUnlocked(context)
+        } else {
+            isGmdssProUnlocked(context)
+        }
+    }
+
+    /**
+     * Global activation status: True if either track is unlocked.
      */
     fun isActivated(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getBoolean("is_license_activated", false)) {
-            _isProActivatedFlow.value = true
-            return true
-        }
-        val altPrefs = context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
-        val active = altPrefs.getBoolean("is_license_activated", false)
+        val active = isOicNwProUnlocked(context) || isGmdssProUnlocked(context)
         _isProActivatedFlow.value = active
         return active
     }
 
-    /**
-     * Sets the license activation state across preference stores.
-     */
-    fun setActivated(context: Context, activated: Boolean) {
+    fun setOicNwProUnlocked(context: Context, unlocked: Boolean) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean("is_license_activated", activated).apply()
+            .edit().putBoolean(KEY_OIC_NW_PRO_UNLOCKED, unlocked).apply()
         context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
-            .edit().putBoolean("is_license_activated", activated).apply()
-        _isProActivatedFlow.value = activated
+            .edit().putBoolean(KEY_OIC_NW_PRO_UNLOCKED, unlocked).apply()
+        _isOicNwProUnlockedFlow.value = unlocked
+        _isHyperionProUnlockedFlow.value = unlocked && _isGmdssProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isGmdssProUnlockedFlow.value
+    }
+
+    fun setGmdssProUnlocked(context: Context, unlocked: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_GMDSS_PRO_UNLOCKED, unlocked).apply()
+        context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_GMDSS_PRO_UNLOCKED, unlocked).apply()
+        _isGmdssProUnlockedFlow.value = unlocked
+        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value
+    }
+
+    fun setHyperionProUnlocked(context: Context, unlocked: Boolean) {
+        setOicNwProUnlocked(context, unlocked)
+        setGmdssProUnlocked(context, unlocked)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_LICENSE_ACTIVATED, unlocked).apply()
+        context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_LICENSE_ACTIVATED, unlocked).apply()
+        _isHyperionProUnlockedFlow.value = unlocked
+        _isProActivatedFlow.value = unlocked
+    }
+
+    fun setMasterProUnlocked(context: Context, unlocked: Boolean) {
+        setHyperionProUnlocked(context, unlocked)
+    }
+
+    fun setActivated(context: Context, activated: Boolean) {
+        setHyperionProUnlocked(context, activated)
     }
 
     /**
-     * Retrieves or generates the installation-bound hardware token.
-     * Checks SharedPreferences for a stored installation token.
-     * If it does not exist (first launch after an install), mixes ANDROID_ID with System.currentTimeMillis()
-     * and saves it permanently to SharedPreferences.
-     * If it already exists, returns the saved token (ensuring stability across launches and updates).
-     * Whenever the user uninstalls the app or clears app data, this token is wiped, forcing a brand new
-     * timestamp and Request Code on the next launch.
+     * Computes the SHA-256 license key for a given request code.
      */
-    fun getOrGenerateInstallationToken(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val existing = prefs.getString(KEY_INSTALLATION_TOKEN, null)
-        if (!existing.isNullOrEmpty()) {
-            return existing
-        }
-
-        val androidId = try {
-            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "DEVICE_FALLBACK"
-        } catch (_: Exception) {
-            "DEVICE_FALLBACK"
-        }
-        val timestamp = System.currentTimeMillis()
-        val newToken = "${androidId}_${timestamp}"
-        prefs.edit().putString(KEY_INSTALLATION_TOKEN, newToken).apply()
-        return newToken
-    }
-
-    /**
-     * Returns the installation-bound Request Code, generating it if necessary.
-     * Uses the Master Request Code format combining hardware and session tokens.
-     */
-    fun getOrGenerateRequestCode(context: Context): String {
-        return getMasterRequestCode(context)
-    }
-
-    /**
-     * Deterministically generates a persistent formatted device Request Code
-     * in standardized format: "HYP-XXXX-XXXX" (e.g., HYP-A1B2-C3D4)
-     * using the device identifier or persistent seed.
-     */
-    fun generateRequestCode(deviceSeed: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest((deviceSeed + "HYP_REQ_SEED_2026").toByteArray(Charsets.UTF_8))
-        val hex = hash.joinToString("") { "%02X".format(it) }
-        return "HYP-${hex.substring(0, 4)}-${hex.substring(4, 8)}"
-    }
-
-    /**
-     * Computes the matching SHA-256 license key for a given request code.
-     * Verification rule:
-     * Calculate SHA-256 of (DeviceRequestCode + ":" + SecretSalt).
-     * Take the first 12 hex characters in uppercase, grouped into 3 chunks of 4:
-     * "ACTV-" + chunk1 + "-" + chunk2 + "-" + chunk3.
-     * Formatted as: ACTV-XXXX-XXXX-XXXX (e.g., ACTV-1A2B-3C4D-5E6F)
-     */
-    fun computeValidKey(requestCode: String): String {
+    fun computeValidKey(
+        requestCode: String,
+        prefix: String = "ACTV",
+        salt: String = SECRET_SALT
+    ): String {
         val cleanReq = requestCode.uppercase().trim()
         val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest((cleanReq + ":" + SECRET_SALT).toByteArray(Charsets.UTF_8))
+        val hash = digest.digest((cleanReq + ":" + salt).toByteArray(Charsets.UTF_8))
         val hex = hash.joinToString("") { "%02X".format(it) }
         val chunk1 = hex.substring(0, 4)
         val chunk2 = hex.substring(4, 8)
         val chunk3 = hex.substring(8, 12)
-        return "ACTV-$chunk1-$chunk2-$chunk3"
+        return if (prefix.isEmpty()) "$chunk1-$chunk2-$chunk3" else "$prefix-$chunk1-$chunk2-$chunk3"
     }
 
-    /**
-     * Validates whether an entered license key matches the expected cryptographic key.
-     * Returns true if valid for this device request code, false otherwise.
-     */
     fun verifyKey(requestCode: String, enteredKey: String): Boolean {
         val cleanKey = enteredKey.uppercase().trim().replace(" ", "")
         if (cleanKey.isEmpty()) return false
         val expected = computeValidKey(requestCode)
         return cleanKey == expected || cleanKey == expected.replace("-", "")
+    }
+
+    private fun matchesHash(
+        cleanKey: String,
+        requestCode: String,
+        salts: List<String>,
+        prefixes: List<String>
+    ): Boolean {
+        val cleanReq = requestCode.uppercase().trim()
+        val hwToken = cleanReq.removePrefix("HYP-").removePrefix("OICPRO-").removePrefix("GOCPRO-").removePrefix("MASTERPRO-")
+
+        val requestsToTry = listOf(
+            cleanReq,
+            cleanReq.replace("-", ""),
+            hwToken
+        )
+
+        for (req in requestsToTry) {
+            for (salt in salts) {
+                val digest = MessageDigest.getInstance("SHA-256")
+                val hashBytes = digest.digest((req + ":" + salt).toByteArray(Charsets.UTF_8))
+                val hex = hashBytes.joinToString("") { "%02X".format(it) }
+                val chunk1 = hex.substring(0, 4)
+                val chunk2 = hex.substring(4, 8)
+                val chunk3 = hex.substring(8, 12)
+
+                for (prefix in prefixes) {
+                    val candidate = if (prefix.isEmpty()) "$chunk1-$chunk2-$chunk3" else "$prefix-$chunk1-$chunk2-$chunk3"
+                    if (cleanKey == candidate || cleanKey == candidate.replace("-", "")) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun verifyLegacyKey(context: Context, cleanKey: String): Boolean {
+        val hwId = getPermanentHardwareId(context)
+        val sessId = getInstallSessionId(context)
+        val hwPrefix = hwId.removePrefix("DEV-").replace("-", "").take(4)
+        val sessPrefix = sessId.removePrefix("INST-").replace("-", "").take(4)
+        val legacyDigest = MessageDigest.getInstance("SHA-256")
+        val legacyHash = legacyDigest.digest(("$hwPrefix:$sessPrefix:HYP_2026").toByteArray(Charsets.UTF_8))
+        val legacyChecksum = legacyHash.joinToString("") { "%02X".format(it) }.take(4)
+        val legacyCode = "HYP-$hwPrefix-$sessPrefix-$legacyChecksum"
+        val expected = computeValidKey(legacyCode)
+        return cleanKey == expected || cleanKey == expected.replace("-", "")
+    }
+
+    /**
+     * Validates an entered license key against all Pro tiers and unlocks the respective tier.
+     * Aligned with HTML key generator format (KEY-OIC-XXXX-XXXX-XXXX, KEY-GOC-XXXX-XXXX-XXXX, and KEY-HYP- / KEY-MST-XXXX-XXXX-XXXX):
+     * - If the entered key starts with KEY-OIC- or hashes correctly against the OIC salt:
+     *   Sets isOicNwProUnlocked = true -> "OIC-NW Pro Unlocked! Full deck review access granted."
+     * - If the entered key starts with KEY-GOC- or hashes correctly against the GOC salt:
+     *   Sets isGmdssProUnlocked = true -> "GMDSS Pro Unlocked! Full GOC review access granted."
+     * - If the entered key starts with KEY-HYP-, KEY-MST-, or hashes correctly against the Hyperion/Master salt:
+     *   Sets both isOicNwProUnlocked = true and isGmdssProUnlocked = true -> "Hyperion Pro Unlocked! Complete access granted."
+     */
+    fun verifyAndUnlockKey(context: Context, enteredKey: String, selectedTier: ProTier? = null): UnlockResult {
+        val cleanKey = enteredKey.uppercase().trim().replace(" ", "")
+        if (cleanKey.isEmpty()) return UnlockResult.INVALID_KEY
+
+        val oicSalts = listOf(
+            SECRET_SALT + "_OIC",
+            SECRET_SALT + ":OIC",
+            SECRET_SALT,
+            "OIC_SALT"
+        )
+        val gocSalts = listOf(
+            SECRET_SALT + "_GOC",
+            SECRET_SALT + ":GOC",
+            SECRET_SALT,
+            "GOC_SALT"
+        )
+        val masterSalts = listOf(
+            SECRET_SALT + "_HYP",
+            SECRET_SALT + "_MST",
+            SECRET_SALT + ":HYP",
+            SECRET_SALT + ":MST",
+            SECRET_SALT + "_MASTER",
+            SECRET_SALT,
+            "HYPERION_SALT",
+            "MASTER_SALT"
+        )
+
+        val hypReq = getRequestCodeForTier(context, ProTier.HYPERION_PRO)
+        val oicReq = getRequestCodeForTier(context, ProTier.OIC_NW_PRO)
+        val gmdssReq = getRequestCodeForTier(context, ProTier.GMDSS_PRO)
+
+        // 1. Check Hyperion Pro (KEY-HYP- or KEY-MST-)
+        val isMasterFormat = cleanKey.startsWith("KEY-HYP-") ||
+                             cleanKey.startsWith("KEYHYP-") ||
+                             cleanKey.startsWith("KEY-MST-") ||
+                             cleanKey.startsWith("KEYMST-") ||
+                             cleanKey.startsWith("KEY-MASTER-") ||
+                             (cleanKey.startsWith("KEYHYP") && cleanKey.length >= 10) ||
+                             (cleanKey.startsWith("KEYMST") && cleanKey.length >= 10)
+
+        if (isMasterFormat ||
+            matchesHash(cleanKey, hypReq, masterSalts, listOf("KEY-HYP", "KEY-MST", "KEY-MASTER", "ACTV", "HYP", "MST", "")) ||
+            verifyLegacyKey(context, cleanKey)
+        ) {
+            setHyperionProUnlocked(context, true)
+            return UnlockResult.HYPERION_UNLOCKED
+        }
+
+        // 2. Check OIC-NW Pro (KEY-OIC-)
+        val isOicFormat = cleanKey.startsWith("KEY-OIC-") ||
+                          cleanKey.startsWith("KEYOIC-") ||
+                          (cleanKey.startsWith("KEYOIC") && cleanKey.length >= 10)
+
+        if (isOicFormat ||
+            matchesHash(cleanKey, oicReq, oicSalts, listOf("KEY-OIC", "ACTV", "OIC", ""))
+        ) {
+            setOicNwProUnlocked(context, true)
+            return UnlockResult.OIC_NW_UNLOCKED
+        }
+
+        // 3. Check GMDSS Pro (KEY-GOC-)
+        val isGocFormat = cleanKey.startsWith("KEY-GOC-") ||
+                          cleanKey.startsWith("KEYGOC-") ||
+                          cleanKey.startsWith("KEY-GMDSS-") ||
+                          (cleanKey.startsWith("KEYGOC") && cleanKey.length >= 10)
+
+        if (isGocFormat ||
+            matchesHash(cleanKey, gmdssReq, gocSalts, listOf("KEY-GOC", "KEY-GMDSS", "ACTV", "GOC", ""))
+        ) {
+            setGmdssProUnlocked(context, true)
+            return UnlockResult.GMDSS_UNLOCKED
+        }
+
+        return UnlockResult.INVALID_KEY
     }
 }

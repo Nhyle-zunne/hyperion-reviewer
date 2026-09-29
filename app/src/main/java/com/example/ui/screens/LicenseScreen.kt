@@ -72,8 +72,10 @@ fun LicenseScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isActivatedState by viewModel.isActivated.collectAsState()
-    val isActivated = LicenseManager.isActivated(context) || isActivatedState
+    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
+    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
+    val isBothUnlocked = isOicNwProUnlocked && isGmdssProUnlocked
+    val isAnyUnlocked = isOicNwProUnlocked || isGmdssProUnlocked
     val isDark = isSystemInDarkTheme()
 
     val screenBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)
@@ -84,7 +86,7 @@ fun LicenseScreen(
     var activationError by remember { mutableStateOf<String?>(null) }
 
     BackHandler {
-        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateBack()
     }
 
     Column(
@@ -96,7 +98,7 @@ fun LicenseScreen(
         MaritimeTopBar(
             title = "Device Verification & License",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.Home) },
+            onBackClick = { viewModel.navigateBack() },
             onMenuClick = { viewModel.openDrawer() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
         )
@@ -108,7 +110,18 @@ fun LicenseScreen(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (isActivated) {
+            if (isAnyUnlocked) {
+                val bannerTitle = when {
+                    isBothUnlocked -> "Hyperion Pro Active"
+                    isOicNwProUnlocked -> "OIC-NW Pro Active"
+                    else -> "GMDSS Pro Active"
+                }
+                val bannerDesc = when {
+                    isBothUnlocked -> "Your all-access license is permanently activated for this device. Full question repository, Intensive Mode recycling drill, and official timed mock exams are completely unlocked offline."
+                    isOicNwProUnlocked -> "Deck Operational Level license is permanently activated. Full 12-competence question bank, Intensive drills, and timed mock exams are unlocked offline."
+                    else -> "GMDSS Radio Operator license is permanently activated. Full GOC subsystems, emergency radio communications, and timed mock exams are unlocked offline."
+                }
+
                 // Activated Status Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -132,7 +145,7 @@ fun LicenseScreen(
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    text = "Hyperion Pro Active",
+                                    text = bannerTitle,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = PassGreen
@@ -141,10 +154,11 @@ fun LicenseScreen(
 
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = PassGreen.copy(alpha = 0.2f)
+                                color = PassGreen.copy(alpha = 0.2f),
+                                border = BorderStroke(0.5.dp, PassGreen)
                             ) {
                                 Text(
-                                    text = "ACTIVE",
+                                    text = bannerTitle,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
@@ -157,7 +171,7 @@ fun LicenseScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "Your license is permanently activated for this device. Full question repository, Intensive Mode recycling drill, and official timed mock exams are completely unlocked offline.",
+                            text = bannerDesc,
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                             lineHeight = 18.sp
@@ -168,14 +182,11 @@ fun LicenseScreen(
 
             // Standalone Device Verification & Activation Card
             DeviceVerificationCard(
-                permanentHardwareId = viewModel.permanentHardwareId,
-                installSessionId = viewModel.installSessionId,
-                installDate = viewModel.installDate,
-                requestCode = viewModel.deviceRequestCode
+                initialTier = com.example.data.util.ProTier.HYPERION_PRO
             )
 
             // Key Input & Activation Card
-            if (!isActivated) {
+            if (!isBothUnlocked) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
@@ -204,7 +215,7 @@ fun LicenseScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Enter your activation key to permanently activate Hyperion Pro:",
+                            text = "Enter your activation key to permanently activate Pro features:",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
                             fontSize = 12.sp
@@ -215,13 +226,11 @@ fun LicenseScreen(
                         OutlinedTextField(
                             value = keyInput,
                             onValueChange = { input ->
-                                val sanitized = input.filter { it.isLetterOrDigit() }.uppercase().take(16)
-                                keyInput = sanitized
+                                keyInput = input.uppercase().filter { it.isLetterOrDigit() || it == '-' }
                                 activationError = null
                             },
-                            visualTransformation = LicenseKeyVisualTransformation(),
-                            label = { Text("Activation Key (e.g. ACTV-XXXX-XXXX-XXXX)") },
-                            placeholder = { Text("ACTV-XXXX-XXXX-XXXX") },
+                            label = { Text("License Key (e.g. KEY-OIC-XXXX-XXXX-XXXX)") },
+                            placeholder = { Text("KEY-OIC-XXXX-XXXX-XXXX") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.Characters,
@@ -264,13 +273,12 @@ fun LicenseScreen(
 
                         Button(
                             onClick = {
-                                val formattedKey = keyInput.chunked(4).joinToString("-")
-                                val success = viewModel.activateLicense(formattedKey) || viewModel.activateLicense(keyInput)
-                                if (success) {
+                                val result = viewModel.activateLicense(keyInput)
+                                if (result.isSuccess) {
                                     activationError = null
-                                    Toast.makeText(context, "Hyperion Pro activated successfully!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, result.toastMessage, Toast.LENGTH_LONG).show()
                                 } else {
-                                    activationError = "Invalid key for this device identifier."
+                                    activationError = result.toastMessage
                                 }
                             },
                             modifier = Modifier

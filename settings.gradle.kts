@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Hyperion"
+rootProject.name = "Hyperion Maritime Reviewer"
 
 include(":app")

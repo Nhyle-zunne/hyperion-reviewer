@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Radio
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -71,6 +74,8 @@ fun HyperionDrawerContent(
 ) {
     val currentScreen by viewModel.currentScreen.collectAsState()
     val isActivated by viewModel.isActivated.collectAsState()
+    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
+    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
     val selectedTrack by viewModel.selectedTrack.collectAsState()
 
     ModalDrawerSheet(
@@ -96,7 +101,13 @@ fun HyperionDrawerContent(
             ) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        HyperionEmblem(size = 40.dp)
+                        Surface(
+                            shape = CircleShape,
+                            shadowElevation = 4.dp,
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            HyperionEmblem(size = 48.dp)
+                        }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
@@ -109,7 +120,7 @@ fun HyperionDrawerContent(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "By HyperionNavTech",
+                                text = "By Nhyle",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = FontFamily.Serif
@@ -137,12 +148,19 @@ fun HyperionDrawerContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Status Pill
+                    val (statusLabel, isPillActive) = when {
+                        isOicNwProUnlocked && isGmdssProUnlocked -> "HYPERION SUITE • VERIFIED" to true
+                        isOicNwProUnlocked -> "OIC-NW TRACK • VERIFIED" to true
+                        isGmdssProUnlocked -> "GMDSS TRACK • VERIFIED" to true
+                        else -> "STANDARD ACCESS" to false
+                    }
+
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isActivated) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        color = if (isPillActive) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                         border = BorderStroke(
                             1.dp,
-                            if (isActivated) PassGreen else MaterialTheme.colorScheme.primary
+                            if (isPillActive) PassGreen else MaterialTheme.colorScheme.primary
                         )
                     ) {
                         Row(
@@ -150,17 +168,17 @@ fun HyperionDrawerContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (isActivated) Icons.Default.CheckCircle else Icons.Default.Lock,
+                                imageVector = if (isPillActive) Icons.Default.CheckCircle else Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = if (isActivated) PassGreen else MaterialTheme.colorScheme.primary,
+                                tint = if (isPillActive) PassGreen else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isActivated) "HYPERION PRO • UNLOCKED" else "FREE TIER • LIMITED ACCESS",
+                                text = statusLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isActivated) PassGreen else MaterialTheme.colorScheme.primary,
+                                color = if (isPillActive) PassGreen else MaterialTheme.colorScheme.primary,
                                 fontSize = 10.sp
                             )
                         }
@@ -200,7 +218,7 @@ fun HyperionDrawerContent(
              NavigationDrawerItem(
                 label = {
                     Text(
-                        text = "Deck Operational Level (OIC-NW)",
+                        text = "OIC-NW Deck Operational",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp
                     )
@@ -208,9 +226,24 @@ fun HyperionDrawerContent(
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Navigation,
-                        contentDescription = "Deck OIC-NW",
+                        contentDescription = "OIC-NW Deck Operational",
                         tint = if (selectedTrack == Track.DECK_OIC_NW) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                },
+                badge = {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isOicNwProUnlocked) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = if (isOicNwProUnlocked) "VERIFIED" else "STANDARD",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isOicNwProUnlocked) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 8.5.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                 },
                 selected = selectedTrack == Track.DECK_OIC_NW && (currentScreen is Screen.Home || currentScreen is Screen.PracticeCompetenceSelect || currentScreen is Screen.MockHub || currentScreen is Screen.Flashcards),
                 onClick = {
@@ -230,7 +263,7 @@ fun HyperionDrawerContent(
             NavigationDrawerItem(
                 label = {
                     Text(
-                        text = "GMDSS Radio Operator (GOC)",
+                        text = "GMDSS Radio Communications",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp
                     )
@@ -238,9 +271,24 @@ fun HyperionDrawerContent(
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Radio,
-                        contentDescription = "GMDSS GOC",
+                        contentDescription = "GMDSS Radio Communications",
                         tint = if (selectedTrack == Track.GMDSS_GOC) SeaCyan else MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                },
+                badge = {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isGmdssProUnlocked) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = if (isGmdssProUnlocked) "VERIFIED" else "STANDARD",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isGmdssProUnlocked) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 8.5.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                 },
                 selected = selectedTrack == Track.GMDSS_GOC && (currentScreen is Screen.Home || currentScreen is Screen.PracticeCompetenceSelect || currentScreen is Screen.MockHub || currentScreen is Screen.Flashcards),
                 onClick = {
@@ -264,11 +312,103 @@ fun HyperionDrawerContent(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Section 3: Account & Licensing
-            DrawerSectionHeader("ACCOUNT & LICENSING")
+            // Section 2: Study Tools & Search Bank
+            DrawerSectionHeader("QUESTION BANK & TOOLS")
+
+            val isAnyProUnlocked = isOicNwProUnlocked || isGmdssProUnlocked || isActivated
 
             NavigationDrawerItem(
-                label = { Text("Activation & License", fontWeight = FontWeight.SemiBold) },
+                label = { Text("Search Bank", fontWeight = FontWeight.SemiBold) },
+                icon = {
+                    Icon(
+                        imageVector = if (isAnyProUnlocked) Icons.Default.Search else Icons.Default.Lock,
+                        contentDescription = "Search Bank",
+                        tint = if (isAnyProUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                badge = {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isAnyProUnlocked) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = if (isAnyProUnlocked) "PRO" else "LOCKED",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isAnyProUnlocked) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 8.5.sp,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                },
+                selected = currentScreen is Screen.Search,
+                onClick = {
+                    onCloseDrawer()
+                    if (isAnyProUnlocked) {
+                        viewModel.navigateTo(Screen.Search)
+                    } else {
+                        viewModel.navigateTo(Screen.Activation)
+                    }
+                },
+                modifier = Modifier
+                    .padding(NavigationDrawerItemDefaults.ItemPadding)
+                    .testTag("drawer_item_search"),
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    unselectedContainerColor = Color.Transparent
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                modifier = Modifier.padding(horizontal = 20.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Section 3: Account & Support
+            DrawerSectionHeader("ACCOUNT & SUPPORT")
+
+            NavigationDrawerItem(
+                label = { Text("Account & Device Help", fontWeight = FontWeight.SemiBold) },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Help,
+                        contentDescription = "Account & Device Help",
+                        tint = MaritimeGoldBright
+                    )
+                },
+                badge = {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaritimeGoldBright.copy(alpha = 0.2f)
+                    ) {
+                        Text(
+                            text = "SUPPORT",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaritimeGoldBright,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 8.5.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                },
+                selected = currentScreen is Screen.HowToAvail,
+                onClick = {
+                    onCloseDrawer()
+                    viewModel.navigateTo(Screen.HowToAvail)
+                },
+                modifier = Modifier
+                    .padding(NavigationDrawerItemDefaults.ItemPadding)
+                    .testTag("drawer_item_how_to_avail"),
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaritimeGoldBright.copy(alpha = 0.15f),
+                    unselectedContainerColor = Color.Transparent
+                )
+            )
+
+            NavigationDrawerItem(
+                label = { Text("Device Registration", fontWeight = FontWeight.SemiBold) },
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Key,
@@ -282,11 +422,16 @@ fun HyperionDrawerContent(
                         color = if (isActivated) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                     ) {
                         Text(
-                            text = if (isActivated) "ACTIVATED" else "LOCKED",
+                            text = when {
+                                isOicNwProUnlocked && isGmdssProUnlocked -> "HYPERION PRO"
+                                isOicNwProUnlocked -> "OIC PRO"
+                                isGmdssProUnlocked -> "GMDSS PRO"
+                                else -> "LOCKED"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isActivated) PassGreen else MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
+                            fontSize = 8.5.sp,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -314,6 +459,29 @@ fun HyperionDrawerContent(
 
             // Section 4: Legal & Compliance
             DrawerSectionHeader("LEGAL & COMPLIANCE")
+
+            NavigationDrawerItem(
+                label = { Text("MARINA Exam Guidelines", fontWeight = FontWeight.SemiBold) },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaritimeGoldBright
+                    )
+                },
+                selected = currentScreen is Screen.ExamGuidelines,
+                onClick = {
+                    onCloseDrawer()
+                    viewModel.navigateTo(Screen.ExamGuidelines)
+                },
+                modifier = Modifier
+                    .padding(NavigationDrawerItemDefaults.ItemPadding)
+                    .testTag("drawer_item_exam_guidelines"),
+                colors = NavigationDrawerItemDefaults.colors(
+                    selectedContainerColor = MaritimeGoldBright.copy(alpha = 0.15f),
+                    unselectedContainerColor = Color.Transparent
+                )
+            )
 
             NavigationDrawerItem(
                 label = { Text("Terms & Academic Disclaimer", fontWeight = FontWeight.SemiBold) },

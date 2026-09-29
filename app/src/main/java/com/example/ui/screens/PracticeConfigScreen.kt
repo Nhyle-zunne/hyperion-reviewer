@@ -25,12 +25,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,6 +41,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -92,6 +95,7 @@ import com.example.viewmodel.Screen
 fun PracticeConfigScreen(
     viewModel: ReviewerViewModel,
     competenceId: String? = null,
+    isCrpMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
@@ -100,16 +104,35 @@ fun PracticeConfigScreen(
 
     // Back navigation returns to Step 1: Competence Selection
     BackHandler {
-        viewModel.navigateTo(Screen.PracticeCompetenceSelect)
+        viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = isCrpMode))
     }
 
     val compInfo = competenceId?.let { MaritimeCompetenceRegistry.getCompetenceById(it, selectedTrack) }
 
     var selectedPart by remember(competenceId) { mutableStateOf<Int?>(null) }
+    var showProLockedDialog by remember { mutableStateOf<String?>(null) }
 
     // Dynamic max available questions
-    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isActivated, context) {
-        if (!isActivated) {
+    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isActivated, isCrpMode, context) {
+        if (isCrpMode) {
+            if (selectedTrack == Track.GMDSS_GOC) {
+                when (competenceId) {
+                    "C1" -> when (selectedPart) {
+                        1 -> 500
+                        2 -> 500
+                        else -> 1000
+                    }
+                    "C2" -> 200
+                    else -> 1200
+                }
+            } else {
+                if (competenceId == null) {
+                    2065
+                } else {
+                    MaritimeCompetenceRegistry.PIETRO_CRP_DECK_DISTRIBUTION[competenceId] ?: 100
+                }
+            }
+        } else if (!isActivated) {
             5
         } else if (selectedTrack == Track.GMDSS_GOC) {
             if (competenceId != null) {
@@ -134,35 +157,50 @@ fun PracticeConfigScreen(
     // Step 2: Delivery Format (Standard Drill vs Intensive Mode)
     var deliveryMode by remember { mutableStateOf(DrillDeliveryMode.STANDARD) }
 
-    // Step 3: Randomization Controls (Two switches) - locked in Free Reviewer Mode
+    // Step 3: Randomization Controls (Two switches)
+    // In CRP Mode: Randomize Questions is disabled/locked, Shuffled Choices is enabled (ON) by default
     var randomizeQuestionOrder by remember { mutableStateOf(false) } // Default Sequential
-    var shuffleChoices by remember { mutableStateOf(isActivated) } // Default Shuffle choices if Pro
+    var shuffleChoices by remember { mutableStateOf(if (isCrpMode) true else isActivated) } // Default Shuffle choices ON for CRP / Pro
 
-    // Step 4: Question count state
-    var questionCount by remember(maxAvailable, isActivated) {
-        mutableIntStateOf(if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
+    // Step 4: Question count state - fixed to maxAvailable in CRP mode
+    var questionCount by remember(maxAvailable, isActivated, isCrpMode) {
+        mutableIntStateOf(if (isCrpMode) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
     }
     var textFieldValue by remember(questionCount) {
         mutableStateOf(questionCount.toString())
     }
 
     fun updateCount(newVal: Int) {
-        if (!isActivated) return
+        if (isCrpMode || !isActivated) return
         val clamped = newVal.coerceIn(1, maxAvailable)
         questionCount = clamped
         textFieldValue = clamped.toString()
     }
 
     val greetingTitle = if (compInfo != null) {
-        "Configure Drill: ${compInfo.code} - ${compInfo.title}"
+        if (isCrpMode) "MARINA CRP Drill: ${compInfo.code} - ${compInfo.title}" else "Configure Drill: ${compInfo.code} - ${compInfo.title}"
     } else {
-        "Configure Drill: All Competencies"
+        if (isCrpMode) "MARINA CRP Drill: All Competencies" else "Configure Drill: All Competencies"
     }
 
     val greetingSubtitle = if (compInfo != null) {
-        "${compInfo.functionName} • $maxAvailable Items Available"
+        if (isCrpMode) {
+            if (selectedTrack == Track.GMDSS_GOC) {
+                if (competenceId == "C1") "GMDSS Radio Operations • $maxAvailable Items (Pietro's Pool: 2 Parts [500 each])"
+                else "GMDSS Emergency Communications • $maxAvailable Items (Pietro's Pool)"
+            } else {
+                "${compInfo.functionName} • $maxAvailable Items (Pietro's Pool)"
+            }
+        } else {
+            "${compInfo.functionName} • $maxAvailable Items"
+        }
     } else {
-        "${selectedTrack.title} • Full Pool ($maxAvailable Items Available)"
+        if (isCrpMode) {
+            if (selectedTrack == Track.GMDSS_GOC) "GMDSS Pro • Pietro's Full Pool (1,200 Items Available)"
+            else "Deck OIC-NW • Pietro's Full Pool (2,065 Items Available)"
+        } else {
+            "${selectedTrack.title} • Full Pool ($maxAvailable Items Available)"
+        }
     }
 
     Column(
@@ -172,10 +210,10 @@ fun PracticeConfigScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = "Drill Setup",
+            title = if (isCrpMode) "MARINA CRP Setup" else "Drill Setup",
             subtitle = if (compInfo != null) compInfo.code else "All Competencies",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.PracticeCompetenceSelect) },
+            onBackClick = { viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = isCrpMode)) },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
         )
 
@@ -186,6 +224,28 @@ fun PracticeConfigScreen(
             contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (isCrpMode) {
+                // Prominent Legal Disclaimer Banner
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Note: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.5.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+            }
+
             // Examinee Greeting Banner with Selected Competence Title
             item {
                 Card(
@@ -199,13 +259,13 @@ fun PracticeConfigScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
-                                text = "STEP 2 OF 2 • PRACTICE DRILL CONFIGURATION",
+                                text = if (isCrpMode) "STEP 2 OF 2 • MARINA CRP DRILL CONFIGURATION" else "STEP 2 OF 2 • PRACTICE DRILL CONFIGURATION",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
@@ -224,7 +284,7 @@ fun PracticeConfigScreen(
                         Text(
                             text = greetingSubtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary
                         )
 
                         compInfo?.description?.let { desc ->
@@ -254,51 +314,119 @@ fun PracticeConfigScreen(
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "SELECT SPECIFIC PART OR ALL PARTS",
+                                    text = if (isCrpMode) "SELECT CRP PART OR ALL PARTS" else "SELECT SPECIFIC PART OR ALL PARTS",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                     letterSpacing = 0.5.sp
                                 )
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            val parts = ProQuestionRepository.getPartsForCompetence(competenceId)
-                            androidx.compose.foundation.lazy.LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                item {
-                                    FilterChip(
-                                        selected = selectedPart == null,
-                                        onClick = { selectedPart = null },
-                                        label = { Text("All Parts (${ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId).size})", fontSize = 11.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Color(0xFF0F172A),
-                                            selectedLabelColor = PureWhite,
-                                            containerColor = Color(0xFFE2E8F0),
-                                            labelColor = Color(0xFF334155)
-                                        )
-                                    )
+                            if (isCrpMode) {
+                                if (competenceId == "C1") {
+                                    androidx.compose.foundation.lazy.LazyRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        item {
+                                            FilterChip(
+                                                selected = selectedPart == null,
+                                                onClick = { selectedPart = null },
+                                                label = { Text("All Parts (1,000 Qs)", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = PassGreen,
+                                                    selectedLabelColor = PureWhite,
+                                                    containerColor = Color(0xFFE2E8F0),
+                                                    labelColor = Color(0xFF334155)
+                                                )
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = selectedPart == 1,
+                                                onClick = { selectedPart = 1 },
+                                                label = { Text("Part 1 (500 Qs)", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = PassGreen,
+                                                    selectedLabelColor = PureWhite,
+                                                    containerColor = Color(0xFFE2E8F0),
+                                                    labelColor = Color(0xFF334155)
+                                                )
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = selectedPart == 2,
+                                                onClick = { selectedPart = 2 },
+                                                label = { Text("Part 2 (500 Qs)", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = PassGreen,
+                                                    selectedLabelColor = PureWhite,
+                                                    containerColor = Color(0xFFE2E8F0),
+                                                    labelColor = Color(0xFF334155)
+                                                )
+                                            )
+                                        }
+                                    }
+                                } else if (competenceId == "C2") {
+                                    androidx.compose.foundation.lazy.LazyRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        item {
+                                            FilterChip(
+                                                selected = true,
+                                                onClick = { selectedPart = null },
+                                                label = { Text("Part 1 (200 Qs)", fontSize = 11.sp) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = PassGreen,
+                                                    selectedLabelColor = PureWhite,
+                                                    containerColor = Color(0xFFE2E8F0),
+                                                    labelColor = Color(0xFF334155)
+                                                )
+                                            )
+                                        }
+                                    }
                                 }
-                                items(parts.size) { index ->
-                                    val pNum = parts[index]
-                                    val count = ProQuestionRepository.getExpectedQuestionCount(competenceId, pNum)
-                                    FilterChip(
-                                        selected = selectedPart == pNum,
-                                        onClick = { selectedPart = pNum },
-                                        label = { Text("Part $pNum ($count)", fontSize = 11.sp) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Color(0xFF0F172A),
-                                            selectedLabelColor = PureWhite,
-                                            containerColor = Color(0xFFE2E8F0),
-                                            labelColor = Color(0xFF334155)
+                            } else {
+                                val parts = ProQuestionRepository.getPartsForCompetence(competenceId)
+                                androidx.compose.foundation.lazy.LazyRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = selectedPart == null,
+                                            onClick = { selectedPart = null },
+                                            label = { Text("All Parts (${ProQuestionRepository.loadAllCompetenceQuestions(context, competenceId).size})", fontSize = 11.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF0F172A),
+                                                selectedLabelColor = PureWhite,
+                                                containerColor = Color(0xFFE2E8F0),
+                                                labelColor = Color(0xFF334155)
+                                            )
                                         )
-                                    )
+                                    }
+                                    items(parts.size) { index ->
+                                        val pNum = parts[index]
+                                        val count = ProQuestionRepository.getExpectedQuestionCount(competenceId, pNum)
+                                        FilterChip(
+                                            selected = selectedPart == pNum,
+                                            onClick = { selectedPart = pNum },
+                                            label = { Text("Part $pNum ($count)", fontSize = 11.sp) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF0F172A),
+                                                selectedLabelColor = PureWhite,
+                                                containerColor = Color(0xFFE2E8F0),
+                                                labelColor = Color(0xFF334155)
+                                            )
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -342,12 +470,12 @@ fun PracticeConfigScreen(
                                 .clip(RoundedCornerShape(10.dp))
                                 .border(
                                     width = if (isStandard) 2.dp else 1.dp,
-                                    color = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    color = if (isStandard) (if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(10.dp)
                                 )
                                 .clickable { deliveryMode = DrillDeliveryMode.STANDARD }
                                 .testTag("drill_mode_standard"),
-                            color = if (isStandard) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                            color = if (isStandard) (if (isCrpMode) PassGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer) else Color.Transparent
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
@@ -356,7 +484,7 @@ fun PracticeConfigScreen(
                                 Icon(
                                     imageVector = if (isStandard) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
                                     contentDescription = null,
-                                    tint = if (isStandard) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                    tint = if (isStandard) (if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -371,13 +499,13 @@ fun PracticeConfigScreen(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer
+                                            color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
-                                                text = "FIXED ITEMS",
+                                                text = if (isCrpMode) "SEQUENTIAL ACTIVE" else "FIXED ITEMS",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
@@ -395,8 +523,8 @@ fun PracticeConfigScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Option 2: Intensive Mode (Dynamic Recycling Queue)
-                        val isIntensive = deliveryMode == DrillDeliveryMode.INTENSIVE
+                        // Option 2: Intensive Mode (Dynamic Recycling Queue) - Locked in CRP Mode
+                        val isIntensive = deliveryMode == DrillDeliveryMode.INTENSIVE && !isCrpMode
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -406,20 +534,35 @@ fun PracticeConfigScreen(
                                     color = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                     shape = RoundedCornerShape(10.dp)
                                 )
-                                .clickable { deliveryMode = DrillDeliveryMode.INTENSIVE }
+                                .clickable {
+                                    if (isCrpMode) {
+                                        showProLockedDialog = "Intensive Mode (dynamic question recycling queue) is a Hyperion Pro feature. Free MARINA CRP practice runs in Standard Sequential mode."
+                                    } else {
+                                        deliveryMode = DrillDeliveryMode.INTENSIVE
+                                    }
+                                }
                                 .testTag("drill_mode_intensive"),
-                            color = if (isIntensive) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                            color = if (isIntensive) MaterialTheme.colorScheme.primaryContainer else if (isCrpMode) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isIntensive) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                                    contentDescription = null,
-                                    tint = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                if (isCrpMode) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Locked",
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (isIntensive) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                        contentDescription = null,
+                                        tint = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -427,25 +570,29 @@ fun PracticeConfigScreen(
                                             text = "Intensive Mode",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = if (isCrpMode) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
-                                            color = MaterialTheme.colorScheme.primaryContainer
+                                            color = if (isCrpMode) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
-                                                text = "RECYCLING QUEUE",
+                                                text = if (isCrpMode) "PRO LOCKED" else "RECYCLING QUEUE",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                color = if (isCrpMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
                                         }
                                     }
                                     Text(
-                                        text = "Missed questions display rationale and recycle to the end of the queue. The drill only finishes when all questions are mastered.",
+                                        text = if (isCrpMode) {
+                                            "Requires Pro Mode to unlock dynamic mistake recycling queue."
+                                        } else {
+                                            "Missed questions display rationale and recycle to the end of the queue. The drill only finishes when all questions are mastered."
+                                        },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
@@ -485,40 +632,57 @@ fun PracticeConfigScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Switch 1: Randomize Question Order (Sequential vs Shuffled)
+                        // Switch 1: Randomize Question Order (Sequential vs Shuffled) - Locked in CRP Mode
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable { randomizeQuestionOrder = !randomizeQuestionOrder }
+                                .clickable {
+                                    if (isCrpMode) {
+                                        showProLockedDialog = "Randomizing question order requires unlocking Pro Mode. Free MARINA CRP practice follows sequential question ordering (#1, #2, #3...)"
+                                    } else {
+                                        randomizeQuestionOrder = !randomizeQuestionOrder
+                                    }
+                                }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isCrpMode) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Locked",
+                                            tint = MaterialTheme.colorScheme.outline,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                    }
                                     Text(
                                         text = "Randomize Question Order",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = if (isCrpMode) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = MaterialTheme.colorScheme.primaryContainer
+                                        color = if (isCrpMode) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                                     ) {
                                         Text(
-                                            text = if (randomizeQuestionOrder) "SHUFFLED" else "SEQUENTIAL",
+                                            text = if (isCrpMode) "PRO LOCKED" else if (randomizeQuestionOrder) "SHUFFLED" else "SEQUENTIAL",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            color = if (isCrpMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
                                             fontSize = 9.sp,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
                                     }
                                 }
                                 Text(
-                                    text = if (randomizeQuestionOrder) {
+                                    text = if (isCrpMode) {
+                                        "Randomizing question order requires unlocking Pro Mode (Sequential by default)."
+                                    } else if (randomizeQuestionOrder) {
                                         "Questions are dynamically shuffled at the start of the drill."
                                     } else {
                                         "Questions appear in strict original database order (#1, #2, #3...)."
@@ -530,13 +694,22 @@ fun PracticeConfigScreen(
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Switch(
-                                checked = randomizeQuestionOrder,
-                                onCheckedChange = { randomizeQuestionOrder = it },
+                                checked = if (isCrpMode) false else randomizeQuestionOrder,
+                                onCheckedChange = {
+                                    if (isCrpMode) {
+                                        showProLockedDialog = "Randomizing question order requires unlocking Pro Mode."
+                                    } else {
+                                        randomizeQuestionOrder = it
+                                    }
+                                },
+                                enabled = !isCrpMode,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = PureWhite,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary,
                                     uncheckedThumbColor = PureWhite,
-                                    uncheckedTrackColor = MaterialTheme.colorScheme.outline
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.outline,
+                                    disabledUncheckedThumbColor = PureWhite.copy(alpha = 0.6f),
+                                    disabledUncheckedTrackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                                 ),
                                 modifier = Modifier.testTag("switch_randomize_question_order")
                             )
@@ -544,7 +717,7 @@ fun PracticeConfigScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Switch 2: Shuffle Choices (A/B/C/D)
+                        // Switch 2: Shuffle Choices (A/B/C/D) - Enabled (ON) by default in CRP mode
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -567,7 +740,7 @@ fun PracticeConfigScreen(
                                         color = if (shuffleChoices) PassGreen.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant
                                     ) {
                                         Text(
-                                            text = if (shuffleChoices) "RANDOMIZED" else "FIXED",
+                                            text = if (shuffleChoices) "ENABLED (ON)" else "FIXED",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = if (shuffleChoices) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -600,7 +773,7 @@ fun PracticeConfigScreen(
                 }
             }
 
-            // Step 4: Dual Question Count Selector (Slider + Numeric Input)
+            // Step 4: Dual Question Count Selector (Slider + Numeric Input) - Fixed in CRP Mode
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -613,33 +786,82 @@ fun PracticeConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "3. QUESTION COUNT (1 TO $maxAvailable AVAILABLE)",
+                                text = if (isCrpMode) "3. QUESTION COUNT ($maxAvailable ITEMS POOL)" else "3. QUESTION COUNT (1 TO $maxAvailable AVAILABLE)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Quick Preset Chips (10, 25, 50, 100, All Available)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val presets = listOf(10, 25, 50, 100).filter { it <= maxAvailable }
-                            for (preset in presets) {
-                                val isSelected = questionCount == preset
+                        if (isCrpMode) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = PassGreen.copy(alpha = 0.1f),
+                                border = BorderStroke(1.dp, PassGreen.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = PassGreen,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Fixed Pietro Question Pool: $maxAvailable Items",
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Free practice automatically delivers all $maxAvailable sequential questions in this competency block.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Quick Preset Chips (10, 25, 50, 100, All Available)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val presets = listOf(10, 25, 50, 100).filter { it <= maxAvailable }
+                                for (preset in presets) {
+                                    val isSelected = questionCount == preset
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { updateCount(preset) },
+                                        label = { Text("$preset", fontSize = 12.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF0F172A),
+                                            selectedLabelColor = PureWhite,
+                                            containerColor = Color(0xFFE2E8F0),
+                                            labelColor = Color(0xFF334155)
+                                        )
+                                    )
+                                }
+                                // All Available Chip
+                                val isAllPreset = questionCount == maxAvailable
                                 FilterChip(
-                                    selected = isSelected,
-                                    onClick = { updateCount(preset) },
-                                    label = { Text("$preset", fontSize = 12.sp) },
+                                    selected = isAllPreset,
+                                    onClick = { updateCount(maxAvailable) },
+                                    label = { Text("All ($maxAvailable)", fontSize = 12.sp) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Color(0xFF0F172A),
                                         selectedLabelColor = PureWhite,
@@ -648,89 +870,76 @@ fun PracticeConfigScreen(
                                     )
                                 )
                             }
-                            // All Available Chip
-                            val isAllPreset = questionCount == maxAvailable
-                            FilterChip(
-                                selected = isAllPreset,
-                                onClick = { updateCount(maxAvailable) },
-                                label = { Text("All ($maxAvailable)", fontSize = 12.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF0F172A),
-                                    selectedLabelColor = PureWhite,
-                                    containerColor = Color(0xFFE2E8F0),
-                                    labelColor = Color(0xFF334155)
-                                )
-                            )
-                        }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                        // Dual Row: Interactive Slider + Numeric Type Box
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Slider(
-                                    value = questionCount.toFloat(),
-                                    onValueChange = { floatVal ->
-                                        updateCount(floatVal.toInt())
-                                    },
-                                    valueRange = 1f..maxAvailable.toFloat().coerceAtLeast(1f),
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = MaterialTheme.colorScheme.primary,
-                                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.outline
-                                    ),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("practice_question_count_slider")
-                                )
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "1 item",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            // Dual Row: Interactive Slider + Numeric Type Box
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Slider(
+                                        value = questionCount.toFloat(),
+                                        onValueChange = { floatVal ->
+                                            updateCount(floatVal.toInt())
+                                        },
+                                        valueRange = 1f..maxAvailable.toFloat().coerceAtLeast(1f),
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = MaterialTheme.colorScheme.primary,
+                                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                                            inactiveTrackColor = MaterialTheme.colorScheme.outline
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("practice_question_count_slider")
                                     )
-                                    Text(
-                                        text = "$maxAvailable items",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(16.dp))
-
-                            OutlinedTextField(
-                                value = textFieldValue,
-                                onValueChange = { input ->
-                                    val digitsOnly = input.filter { it.isDigit() }
-                                    textFieldValue = digitsOnly
-                                    if (digitsOnly.isNotEmpty()) {
-                                        val parsed = digitsOnly.toIntOrNull()
-                                        if (parsed != null) {
-                                            val clamped = parsed.coerceIn(1, maxAvailable)
-                                            questionCount = clamped
-                                        }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "1 item",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "$maxAvailable items",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
-                                },
-                                modifier = Modifier
-                                    .width(88.dp)
-                                    .testTag("practice_question_count_input"),
-                                label = { Text("Items", fontSize = 10.sp) },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
-                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                OutlinedTextField(
+                                    value = textFieldValue,
+                                    onValueChange = { input ->
+                                        val digitsOnly = input.filter { it.isDigit() }
+                                        textFieldValue = digitsOnly
+                                        if (digitsOnly.isNotEmpty()) {
+                                            val parsed = digitsOnly.toIntOrNull()
+                                            if (parsed != null) {
+                                                val clamped = parsed.coerceIn(1, maxAvailable)
+                                                questionCount = clamped
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .width(88.dp)
+                                        .testTag("practice_question_count_input"),
+                                    label = { Text("Items", fontSize = 10.sp) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -738,7 +947,9 @@ fun PracticeConfigScreen(
 
             // Launch Action Button
             item {
-                val launchLabel = if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
+                val launchLabel = if (isCrpMode) {
+                    "Start MARINA CRP Drill ($questionCount Items)"
+                } else if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
                     "Start Intensive Mode Drill ($questionCount Items Queue)"
                 } else {
                     "Start Standard Practice Drill ($questionCount Items)"
@@ -751,8 +962,9 @@ fun PracticeConfigScreen(
                             selectedPart = selectedPart,
                             deliveryMode = deliveryMode,
                             questionCount = questionCount,
-                            shuffleQuestions = randomizeQuestionOrder,
-                            shuffleChoices = shuffleChoices
+                            shuffleQuestions = if (isCrpMode) false else randomizeQuestionOrder,
+                            shuffleChoices = shuffleChoices,
+                            isCrpMode = isCrpMode
                         )
                     },
                     modifier = Modifier
@@ -760,13 +972,13 @@ fun PracticeConfigScreen(
                         .height(54.dp)
                         .testTag("launch_practice_drill_button"),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
+                        containerColor = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                         contentColor = PureWhite
                     ),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = if (deliveryMode == DrillDeliveryMode.INTENSIVE) Icons.Default.Autorenew else Icons.Default.PlayArrow,
+                        imageVector = if (deliveryMode == DrillDeliveryMode.INTENSIVE && !isCrpMode) Icons.Default.Autorenew else Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
                     )
@@ -779,5 +991,50 @@ fun PracticeConfigScreen(
                 }
             }
         }
+    }
+
+    // Pro Feature Lock Dialog
+    if (showProLockedDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showProLockedDialog = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaritimeGoldBright,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Pro Mode Feature",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium
+                )
+            },
+            text = {
+                Text(
+                    text = showProLockedDialog!!,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showProLockedDialog = null
+                        viewModel.navigateTo(Screen.HowToAvail)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Account & Device Help", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showProLockedDialog = null }) {
+                    Text("Continue Free Practice")
+                }
+            }
+        )
     }
 }

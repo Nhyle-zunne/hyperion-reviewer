@@ -70,12 +70,18 @@ object ProQuestionRepository {
      * HARD ENFORCEMENT: If LicenseManager.isActivated(context) is false, returns emptyList() immediately.
      */
     fun loadPartQuestions(context: Context, competence: String, part: Int): List<ProQuestion> {
-        val normComp = competence.uppercase().trim()
         if (!LicenseManager.isActivated(context)) {
             return emptyList()
         }
+        return loadRawPartQuestions(context, competence, part)
+    }
 
-        val cacheKey = "${normComp}_part$part"
+    /**
+     * Loads questions from CSV assets directly without license gating (used for Free-Tier MARINA CRP mode).
+     */
+    fun loadRawPartQuestions(context: Context, competence: String, part: Int): List<ProQuestion> {
+        val normComp = competence.uppercase().trim()
+        val cacheKey = "raw_${normComp}_part$part"
         questionsCache[cacheKey]?.let { return it }
 
         val assetPath = "questions/pro/${normComp.lowercase()}_part$part.csv"
@@ -233,6 +239,14 @@ object ProQuestionRepository {
         if (!LicenseManager.isActivated(context)) return emptyList()
         val parts = getPartsForCompetence(competence)
         return parts.flatMap { loadPartQuestions(context, competence, it) }
+    }
+
+    /**
+     * Loads all raw questions across all parts for a competence without license gating.
+     */
+    fun loadAllRawCompetenceQuestions(context: Context, competence: String): List<ProQuestion> {
+        val parts = getPartsForCompetence(competence)
+        return parts.flatMap { loadRawPartQuestions(context, competence, it) }
     }
 
     /**

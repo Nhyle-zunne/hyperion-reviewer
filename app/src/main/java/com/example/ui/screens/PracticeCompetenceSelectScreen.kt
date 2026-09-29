@@ -73,6 +73,7 @@ import com.example.viewmodel.Screen
 @Composable
 fun PracticeCompetenceSelectScreen(
     viewModel: ReviewerViewModel,
+    isCrpMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
@@ -85,7 +86,9 @@ fun PracticeCompetenceSelectScreen(
 
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
     val groupedByFunction = competences.groupBy { it.functionId }
-    val totalTrackItems = if (selectedTrack == Track.GMDSS_GOC) {
+    val totalTrackItems = if (isCrpMode) {
+        if (selectedTrack == Track.GMDSS_GOC) 1200 else 2065
+    } else if (selectedTrack == Track.GMDSS_GOC) {
         ProQuestionRepository.loadAllCompetenceQuestions(context, "C1").size +
         ProQuestionRepository.loadAllCompetenceQuestions(context, "C2").size
     } else {
@@ -99,8 +102,12 @@ fun PracticeCompetenceSelectScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = "Select Competence",
-            subtitle = "${selectedTrack.shortName} • Step 1 of 2",
+            title = if (isCrpMode) "MARINA CRP Practice" else "Select Competence",
+            subtitle = if (isCrpMode) {
+                if (selectedTrack == Track.GMDSS_GOC) "Free Tier (1,200 Items) • Step 1 of 2" else "Free Tier (2,065 Items) • Step 1 of 2"
+            } else {
+                "${selectedTrack.shortName} • Step 1 of 2"
+            },
             showBackButton = true,
             onBackClick = { viewModel.navigateTo(Screen.Home) },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
@@ -113,6 +120,28 @@ fun PracticeCompetenceSelectScreen(
             contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (isCrpMode) {
+                // Prominent Legal Disclaimer Banner
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Note: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.5.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+            }
+
             // Header card
             item {
                 Card(
@@ -130,26 +159,26 @@ fun PracticeCompetenceSelectScreen(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .background(if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Practice Drill Setup Workflow",
+                                text = if (isCrpMode) "MARINA CRP Drill Workflow" else "Practice Drill Setup Workflow",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Choose a target competence or select the entire pool to configure question count & ordering.",
+                                text = if (isCrpMode) "Select 'All Competencies' (2,065 items) or choose a target competence to practice." else "Choose a target competence or select the entire pool to configure question count & ordering.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -164,7 +193,7 @@ fun PracticeCompetenceSelectScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .clickable { viewModel.navigateTo(Screen.PracticeConfig(null)) }
+                        .clickable { viewModel.navigateTo(Screen.PracticeConfig(null, isCrpMode = isCrpMode)) }
                         .testTag("select_all_competencies_card"),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -181,13 +210,13 @@ fun PracticeCompetenceSelectScreen(
                             modifier = Modifier
                                 .size(46.dp)
                                 .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
+                                .background(if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(26.dp)
                             )
                         }
@@ -197,13 +226,15 @@ fun PracticeCompetenceSelectScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
+                                color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                             ) {
                                 Text(
-                                    text = "FULL QUESTION POOL",
+                                    text = if (isCrpMode) {
+                                        if (selectedTrack == Track.GMDSS_GOC) "FREE CRP POOL (1,200 Qs)" else "FREE CRP POOL (2,065 Qs)"
+                                    } else "FULL QUESTION POOL",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -215,7 +246,10 @@ fun PracticeCompetenceSelectScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Comprehensive practice covering all ${competences.size} STCW competencies for this track.",
+                                text = if (isCrpMode) {
+                                    if (selectedTrack == Track.GMDSS_GOC) "Comprehensive free practice covering Pietro's full GMDSS pool (1,200 items across C1 & C2)."
+                                    else "Comprehensive free practice covering Pietro's full pool across all 12 competencies."
+                                } else "Comprehensive practice covering all ${competences.size} STCW competencies for this track.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -224,7 +258,7 @@ fun PracticeCompetenceSelectScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = "Configure",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -273,17 +307,31 @@ fun PracticeCompetenceSelectScreen(
                 }
 
                 items(compList) { comp ->
-                    val itemCount = if (selectedTrack == Track.GMDSS_GOC) {
+                    val itemCount = if (isCrpMode) {
+                        if (selectedTrack == Track.GMDSS_GOC) {
+                            MaritimeCompetenceRegistry.PIETRO_CRP_GMDSS_DISTRIBUTION[comp.competenceId] ?: 200
+                        } else {
+                            MaritimeCompetenceRegistry.PIETRO_CRP_DECK_DISTRIBUTION[comp.competenceId] ?: 100
+                        }
+                    } else if (selectedTrack == Track.GMDSS_GOC) {
                         ProQuestionRepository.loadAllCompetenceQuestions(context, comp.competenceId).size
                     } else {
                         MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, selectedTrack).size
+                    }
+
+                    val itemDetail = if (isCrpMode && selectedTrack == Track.GMDSS_GOC) {
+                        if (comp.competenceId == "C1") "1,000 Questions (Part 1: 500, Part 2: 500)" else "200 Questions (Part 1: 200)"
+                    } else if (isCrpMode) {
+                        "$itemCount CRP Questions Available"
+                    } else {
+                        "$itemCount Questions Available"
                     }
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { viewModel.navigateTo(Screen.PracticeConfig(comp.competenceId)) }
+                            .clickable { viewModel.navigateTo(Screen.PracticeConfig(comp.competenceId, isCrpMode = isCrpMode)) }
                             .testTag("competence_card_${comp.competenceId}"),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -322,7 +370,7 @@ fun PracticeCompetenceSelectScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "$itemCount Questions Available",
+                                    text = itemDetail,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1

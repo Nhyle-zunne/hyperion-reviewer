@@ -63,6 +63,7 @@ import com.example.data.local.answeredQuestions
 import com.example.data.model.Track
 import com.example.data.util.LicenseManager
 import com.example.ui.components.HyperionLogo
+import com.example.ui.components.ProStatusBadge
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGold
 import com.example.ui.theme.MaritimeGoldBright
@@ -91,6 +92,8 @@ fun TrackSelectionScreen(
     val context = LocalContext.current
     val activeSession by viewModel.activeSession.collectAsState()
     val examRecords by viewModel.examRecords.collectAsState()
+    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
+    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
 
     Box(
         modifier = modifier
@@ -128,30 +131,59 @@ fun TrackSelectionScreen(
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                            modifier = Modifier.clickable { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(1.dp, MaritimeGoldBright.copy(alpha = 0.6f)),
+                                modifier = Modifier.clickable { viewModel.navigateTo(Screen.ExamGuidelines) }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Legal & Terms",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Legal & Terms",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 10.sp
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "MARINA Guidelines",
+                                        tint = MaritimeGoldBright,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Exam Guidelines",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier.clickable { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Legal & Terms",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Legal & Terms",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 10.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -159,7 +191,7 @@ fun TrackSelectionScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     HyperionLogo(
-                        emblemSize = 88.dp,
+                        emblemSize = 90.dp,
                         showSubtitle = true,
                         isCenterAligned = true
                     )
@@ -223,14 +255,15 @@ fun TrackSelectionScreen(
                 }
             }
 
-            // Track Card 1: Deck Operational Level (OIC-NW)
+            // Track Card 1: Deck Operational Level (OIC-NW Deck Operational Track)
             item {
                 TrackCard(
-                    title = "Deck Operational Level",
-                    subtitle = "Officer-in-Charge of a Navigational Watch (OIC-NW)",
+                    title = "OIC-NW Deck Operational Track",
+                    subtitle = "Officer-in-Charge of a Navigational Watch (Deck Operational Level)",
                     code = "STCW II/1 • 70% CUTOFF",
+                    isUnlocked = isOicNwProUnlocked,
                     icon = Icons.Default.Explore,
-                    competenceCountText = "12 Competencies • 200 Questions Benchmark",
+                    competenceCountText = "3 Functions (12 Competencies) • 6,444 Questions Bank",
                     scopeDetails = listOf(
                         "Function 1: Navigation & Passage Planning (C1, C2, C3, C4, C5, C7, C9)",
                         "Function 2: Cargo Handling & Stowage (C10, C11)",
@@ -244,12 +277,13 @@ fun TrackSelectionScreen(
                 )
             }
 
-            // Track Card 2: GMDSS Radio Operator (GOC)
+            // Track Card 2: GMDSS Radio Operator (GMDSS Radio Operator Track)
             item {
                 TrackCard(
-                    title = "GMDSS Radio Operator",
-                    subtitle = "General Operator's Certificate (GOC)",
+                    title = "GMDSS Radio Operator Track",
+                    subtitle = "General Operator's Certificate (GOC Radio Operator)",
                     code = "STCW IV/2 • 70% CUTOFF",
+                    isUnlocked = isGmdssProUnlocked,
                     icon = Icons.Default.CellTower,
                     competenceCountText = "2 Competencies (12 Parts) • 2,260 Questions Bank",
                     scopeDetails = listOf(
@@ -262,57 +296,6 @@ fun TrackSelectionScreen(
                         viewModel.selectTrackAndOpenDashboard(Track.GMDSS_GOC)
                     }
                 )
-            }
-
-            // Quick Actions Footer (Search question bank / Past History)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { viewModel.navigateTo(Screen.Search) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("track_selection_search_button"),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Search Bank", fontSize = 13.sp)
-                    }
-
-                    OutlinedButton(
-                        onClick = { viewModel.navigateTo(Screen.History) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("track_selection_history_button"),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = SeaCyan
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (examRecords.isNotEmpty()) "Logs (${examRecords.size})" else "Session Logs",
-                            fontSize = 13.sp
-                        )
-                    }
-                }
             }
 
             item {
@@ -354,6 +337,7 @@ private fun TrackCard(
     title: String,
     subtitle: String,
     code: String,
+    isUnlocked: Boolean,
     icon: ImageVector,
     competenceCountText: String,
     scopeDetails: List<String>,
@@ -401,16 +385,27 @@ private fun TrackCard(
                 Spacer(modifier = Modifier.width(14.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = accentColor.copy(alpha = 0.15f)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = code,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = accentColor.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = code,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        ProStatusBadge(
+                            isUnlocked = isUnlocked,
+                            lockedLabel = "FULL ACCESS",
+                            unlockedLabel = "VERIFIED TERMINAL"
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
@@ -487,17 +482,10 @@ private fun TrackCard(
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text(
-                    text = "Launch Track Dashboard",
+                    text = "Launch Track Dashboard ->",
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF0F172A),
                     fontSize = 14.sp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = Color(0xFF0F172A),
-                    modifier = Modifier.size(16.dp)
                 )
             }
         }

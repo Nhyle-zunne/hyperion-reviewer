@@ -421,3 +421,56 @@ private fun LegendItem(label: String, color: Color) {
         )
     }
 }
+
+/**
+ * Status Badge with exact Light/Dark tokens.
+ */
+@Composable
+fun ProStatusBadge(
+    isUnlocked: Boolean,
+    modifier: Modifier = Modifier,
+    lockedLabel: String = "VERIFICATION REQUIRED",
+    unlockedLabel: String = "VERIFIED TERMINAL"
+) {
+    val isDark = isSystemInDarkTheme()
+
+    val containerColor = if (isUnlocked) {
+        if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
+    } else {
+        if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+    }
+
+    val textColor = if (isUnlocked) {
+        if (isDark) Color(0xFF34D399) else Color(0xFF15803D)
+    } else {
+        if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+    }
+
+    val borderStroke = if (isUnlocked) {
+        if (isDark) androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF059669)) else androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF86EFAC))
+    } else {
+        if (isDark) androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF334155)) else androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFCBD5E1))
+    }
+
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = containerColor,
+        border = borderStroke,
+        modifier = modifier
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (isUnlocked) unlockedLabel else lockedLabel,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = textColor,
+                fontSize = 10.sp,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
+

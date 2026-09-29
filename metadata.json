@@ -1,6 +1,6 @@
 {
-  "name": "Hyperion",
-  "description": "Offline Maritime Licensure Examination Reviewer for Deck Operational Level (OIC-NW) and GMDSS Radio Operators (GOC) aligned with MARINA & STCW Competency Standards.",
+  "name": "Hyperion Maritime Reviewer",
+  "description": "Maritime Licensure Reviewer",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

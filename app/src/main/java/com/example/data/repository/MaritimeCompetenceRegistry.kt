@@ -192,6 +192,41 @@ object MaritimeCompetenceRegistry {
         "C17" to 15
     )
 
+    /**
+     * Pietro's restricted question distribution for Free-Tier MARINA CRP-Based Practice.
+     * Total: exactly 2,065 items across 12 Deck OIC-NW competencies.
+     */
+    val PIETRO_CRP_DECK_DISTRIBUTION = mapOf(
+        "C1" to 420,
+        "C2" to 221,
+        "C3" to 258,
+        "C4" to 160,
+        "C5" to 100,
+        "C7" to 196,
+        "C9" to 176,
+        "C10" to 109,
+        "C11" to 96,
+        "C12" to 110,
+        "C13" to 122,
+        "C17" to 97
+    )
+
+    /**
+     * Pietro's restricted question distribution for Free-Tier MARINA CRP-Based Practice in GMDSS Pro.
+     * C1: 2 parts, 500 questions each (1,000 total)
+     * C2: 1 part, 200 questions (200 total)
+     * Total: exactly 1,200 items.
+     */
+    val PIETRO_CRP_GMDSS_DISTRIBUTION = mapOf(
+        "C1" to 1000,
+        "C2" to 200
+    )
+
+    val PIETRO_CRP_GMDSS_PARTS_DISTRIBUTION = mapOf(
+        "C1" to mapOf(1 to 500, 2 to 500),
+        "C2" to mapOf(1 to 200)
+    )
+
     val OFFICIAL_GMDSS_PERMIT_DISTRIBUTION = mapOf(
         "C1" to 85,
         "C2" to 15

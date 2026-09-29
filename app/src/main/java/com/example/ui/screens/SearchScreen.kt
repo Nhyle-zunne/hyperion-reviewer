@@ -66,7 +66,7 @@ fun SearchScreen(
     val selectedTrack by viewModel.selectedTrack.collectAsState()
 
     BackHandler {
-        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateBack()
     }
 
     val quickTerms = listOf(
@@ -83,7 +83,7 @@ fun SearchScreen(
             title = "Maritime Rule & Term Search",
             subtitle = selectedTrack.shortName,
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.Home) }
+            onBackClick = { viewModel.navigateBack() }
         )
 
         Column(modifier = Modifier.padding(16.dp)) {

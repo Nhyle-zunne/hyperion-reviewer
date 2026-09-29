@@ -52,8 +52,8 @@ sealed class Screen {
     object TermsAndDisclaimer : Screen() // Permanent legal agreement viewer
     object TrackSelection : Screen() // Dedicated Track Selection Homepage
     object Home : Screen() // Track Dashboard
-    object PracticeCompetenceSelect : Screen() // Step 1: Competence Selection Screen
-    data class PracticeConfig(val competenceId: String? = null) : Screen() // Step 2: Practice Configuration Page
+    data class PracticeCompetenceSelect(val isCrpMode: Boolean = false) : Screen() // Step 1: Competence Selection Screen
+    data class PracticeConfig(val competenceId: String? = null, val isCrpMode: Boolean = false) : Screen() // Step 2: Practice Configuration Page
     object Flashcards : Screen() // Flashcard Revision Mode
     object Topics : Screen()
     object Quiz : Screen() // PracticeQuizScreen (Practice / Drills / Vault / Bookmarks)
@@ -66,7 +66,9 @@ sealed class Screen {
     object History : Screen()
     object FreePractice : Screen() // Free Tier Practice Viewer with sample questions
     object Activation : Screen() // Account & Licensing screen
+    object HowToAvail : Screen() // Dedicated How to Avail Pro Mode Screen
     object License : Screen() // Dedicated License & Device Verification screen
+    object ExamGuidelines : Screen() // Dedicated MARINA Theoretical Examination Guidelines Screen
     object About : Screen() // About Hyperion
 }
 
@@ -93,24 +95,32 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Licensing & Activation State (Single reactive state across app)
+    // Licensing & Activation State (Independent Pro Tiers)
     val deviceRequestCode: String get() = LicenseManager.getOrGenerateRequestCode(getApplication())
     val permanentHardwareId: String get() = LicenseManager.getPermanentHardwareId(getApplication())
     val installSessionId: String get() = LicenseManager.getInstallSessionId(getApplication())
     val installDate: String get() = LicenseManager.getInstallDate(getApplication())
 
+    val isOicNwProUnlocked: StateFlow<Boolean> = LicenseManager.isOicNwProUnlockedFlow
+    val isGmdssProUnlocked: StateFlow<Boolean> = LicenseManager.isGmdssProUnlockedFlow
+    val isHyperionProUnlocked: StateFlow<Boolean> = LicenseManager.isHyperionProUnlockedFlow
+    val isMasterProUnlocked: StateFlow<Boolean> = LicenseManager.isHyperionProUnlockedFlow
     val isActivated: StateFlow<Boolean> = LicenseManager.isProActivatedFlow
 
-    fun activateLicense(enteredKey: String): Boolean {
-        val isValid = LicenseManager.verifyKey(deviceRequestCode, enteredKey)
-        if (isValid) {
-            LicenseManager.setActivated(getApplication(), true)
+    fun isTrackProUnlocked(track: Track = _selectedTrack.value): Boolean {
+        return LicenseManager.isTrackProUnlocked(getApplication(), track)
+    }
+
+    fun activateLicense(enteredKey: String, targetTier: com.example.data.util.ProTier? = null): com.example.data.util.UnlockResult {
+        val result = LicenseManager.verifyAndUnlockKey(getApplication(), enteredKey, targetTier)
+        if (result.isSuccess) {
+            ProQuestionRepository.clearCache()
         }
-        return isValid
+        return result
     }
 
     fun deactivateLicense() {
-        LicenseManager.setActivated(getApplication(), false)
+        LicenseManager.setMasterProUnlocked(getApplication(), false)
         ProQuestionRepository.clearCache()
         _currentScreen.value = Screen.Activation
     }
@@ -123,12 +133,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _drawerOpenEvent.tryEmit(Unit)
     }
 
-    // Access Gate Helper: routes directly to Activation screen without modal popups
-    fun requireActivationOr(onAccessGranted: () -> Unit) {
-        if (LicenseManager.isActivated(getApplication())) {
+    // Access Gate Helper: routes directly to Account & Device Help screen if track is not unlocked
+    fun requireActivationOr(track: Track = _selectedTrack.value, onAccessGranted: () -> Unit) {
+        if (LicenseManager.isTrackProUnlocked(getApplication(), track)) {
             onAccessGranted()
         } else {
-            navigateTo(Screen.Activation)
+            navigateTo(Screen.HowToAvail)
         }
     }
 
@@ -148,10 +158,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun acceptTerms() {
         prefs.edit().putBoolean("has_accepted_terms", true).apply()
         _hasAcceptedTerms.value = true
+        backStack.clear()
         _currentScreen.value = Screen.TrackSelection
     }
 
-    // Navigation State - starts at TermsOnboarding if not accepted, else TrackSelection
+    // Navigation State & History Back Stack
+    private val backStack = ArrayDeque<Screen>()
+
     private val _currentScreen = MutableStateFlow<Screen>(
         if (prefs.getBoolean("has_accepted_terms", false)) Screen.TrackSelection else Screen.TermsOnboarding
     )
@@ -325,7 +338,42 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun navigateTo(screen: Screen) {
+        val current = _currentScreen.value
+        if (current == screen) return
+        backStack.addLast(current)
         _currentScreen.value = screen
+    }
+
+    fun navigateBack() {
+        if (backStack.isNotEmpty()) {
+            val prev = backStack.removeLast()
+            _currentScreen.value = prev
+        } else {
+            when (_currentScreen.value) {
+                is Screen.ExamGuidelines,
+                is Screen.TermsAndDisclaimer,
+                is Screen.Activation,
+                is Screen.License,
+                is Screen.About -> _currentScreen.value = Screen.Home
+                is Screen.PracticeConfig -> {
+                    val crp = (_currentScreen.value as Screen.PracticeConfig).isCrpMode
+                    _currentScreen.value = Screen.PracticeCompetenceSelect(isCrpMode = crp)
+                }
+                is Screen.PracticeCompetenceSelect,
+                is Screen.MockHub,
+                is Screen.Flashcards,
+                is Screen.Vault,
+                is Screen.Bookmarks,
+                is Screen.Search,
+                is Screen.History,
+                is Screen.Topics -> _currentScreen.value = Screen.Home
+                is Screen.MockCompetence -> _currentScreen.value = Screen.MockHub
+                is Screen.Quiz -> exitQuiz()
+                is Screen.FreePractice,
+                is Screen.Home -> _currentScreen.value = Screen.TrackSelection
+                else -> _currentScreen.value = Screen.TrackSelection
+            }
+        }
     }
 
     fun setTrack(track: Track) {
@@ -334,6 +382,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun selectTrackAndOpenDashboard(track: Track) {
         _selectedTrack.value = track
+        backStack.clear()
+        backStack.addLast(Screen.TrackSelection)
         _currentScreen.value = Screen.Home
     }
 
@@ -369,23 +419,29 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun startFreePractice() {
+    fun startMarinaCrpPractice(competenceId: String? = null, selectedPart: Int? = null) {
+        timerJob?.cancel()
         _activeQuizMode.value = QuizMode.PRACTICE
         _activeDrillDeliveryMode.value = DrillDeliveryMode.STANDARD
         _activeFunctionId.value = null
-        _activeCompetenceId.value = null
+        _activeCompetenceId.value = competenceId
         _currentQuestionIndex.value = 0
         _showSubmitDialog.value = false
         _isPaletteOpen.value = false
 
-        val deckQuestions = MaritimeQuestionBank.getQuestionsByTrack(Track.DECK_OIC_NW).take(5)
-        val gmdssQuestions = MaritimeQuestionBank.getQuestionsByTrack(Track.GMDSS_GOC).take(5)
-        val freeList = deckQuestions + gmdssQuestions
-
-        _activeQuestions.value = freeList
-        _userQuestionStates.value = freeList.associate { it.id to UserQuestionState(questionId = it.id) }
+        val crpQuestions = if (_selectedTrack.value == Track.GMDSS_GOC) {
+            MaritimeQuestionBank.getMarinaCrpGmdssQuestions(getApplication(), competenceId, selectedPart)
+        } else {
+            MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+        }
+        _activeQuestions.value = crpQuestions
+        _userQuestionStates.value = crpQuestions.associate { it.id to UserQuestionState(questionId = it.id) }
         _timeRemainingSeconds.value = 0
         _currentScreen.value = Screen.FreePractice
+    }
+
+    fun startFreePractice() {
+        startMarinaCrpPractice()
     }
 
     fun startConfiguredPractice(
@@ -394,7 +450,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
         questionCount: Int? = null,
         shuffleQuestions: Boolean = false,
-        shuffleChoices: Boolean = true
+        shuffleChoices: Boolean = true,
+        isCrpMode: Boolean = false
     ) {
         timerJob?.cancel()
         _activeQuizMode.value = QuizMode.PRACTICE
@@ -408,7 +465,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isPro = isActivated.value
         val context = getApplication<Application>()
 
-        var questions: List<Question> = if (_selectedTrack.value == Track.GMDSS_GOC) {
+        var questions: List<Question> = if (isCrpMode) {
+            if (_selectedTrack.value == Track.GMDSS_GOC) {
+                MaritimeQuestionBank.getMarinaCrpGmdssQuestions(context, competenceId, selectedPart)
+            } else {
+                MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+            }
+        } else if (_selectedTrack.value == Track.GMDSS_GOC) {
             val proQuestions = if (competenceId != null) {
                 if (selectedPart != null) {
                     ProQuestionRepository.loadPartQuestions(context, competenceId, selectedPart)
@@ -428,12 +491,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        // Secondary defense check: Truncate to first 5 questions if unactivated
-        if (!isPro) {
+        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode
+        if (!isPro && !isCrpMode) {
             questions = questions.take(5)
         }
 
-        if (shuffleQuestions) {
+        if (shuffleQuestions && (isPro || !isCrpMode)) {
             questions = questions.shuffled()
         }
 
@@ -453,7 +516,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
-        if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
+        if (deliveryMode == DrillDeliveryMode.INTENSIVE && isPro) {
             _intensiveQueue.value = questions
             _intensiveInitialTotal.value = questions.size
             _intensiveClearedCount.value = 0
@@ -585,12 +648,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         // Set up timer if Mock Exam
         if (mode == QuizMode.MOCK_EXAM) {
             _completedCompetences.value = emptySet()
-            val totalSeconds = when (_selectedTrack.value) {
-                Track.DECK_OIC_NW -> 200 * 60 // 200 mins
-                Track.GMDSS_GOC -> 100 * 60 // 100 mins
-            }
-            _timeRemainingSeconds.value = totalSeconds
-            startTimer()
+            _activeCompetenceId.value = null
+            timerJob?.cancel()
+            _timeRemainingSeconds.value = 0 // Overview page does NOT show a global countdown timer
             autoSaveCurrentSession()
             _currentScreen.value = Screen.MockHub
         } else {
@@ -601,6 +661,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun startTimer() {
+        timerJob?.cancel()
         timerJob = viewModelScope.launch {
             var counter = 0
             while (_timeRemainingSeconds.value > 0) {
@@ -612,8 +673,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     autoSaveCurrentSession()
                 }
             }
-            // Auto submit when time runs out!
-            submitExam()
+            // Auto complete active competence or submit exam when time runs out!
+            if (_activeQuizMode.value == QuizMode.MOCK_EXAM) {
+                val activeComp = _activeCompetenceId.value
+                if (activeComp != null) {
+                    markCompetenceCompleted(activeComp)
+                } else {
+                    submitExam()
+                }
+            } else {
+                submitExam()
+            }
         }
     }
 
@@ -801,11 +871,31 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openMockCompetence(competenceId: String) {
+        _activeCompetenceId.value = competenceId
+        if (!_isExamSubmitted.value && competenceId !in _completedCompetences.value) {
+            timerJob?.cancel()
+            val compQuestions = getQuestionsForCompetence(competenceId)
+            val count = if (compQuestions.isNotEmpty()) {
+                compQuestions.size
+            } else {
+                MaritimeCompetenceRegistry.getPermitItemCount(competenceId, _selectedTrack.value)
+            }
+            // Standard durations:
+            // OIC-NW Pro Competencies: 1 minute per question (e.g. 35 items -> 35 minutes; 50 items -> 50 minutes)
+            // GMDSS Pro Competencies: Standard operator timing (1 minute per question per competency block)
+            val allocatedSeconds = (count * 60).coerceAtLeast(60)
+            _timeRemainingSeconds.value = allocatedSeconds
+            startTimer()
+            autoSaveCurrentSession()
+        }
         _currentScreen.value = Screen.MockCompetence(competenceId)
     }
 
     fun markCompetenceCompleted(competenceId: String) {
+        timerJob?.cancel()
+        _timeRemainingSeconds.value = 0
         _completedCompetences.value = _completedCompetences.value + competenceId
+        _activeCompetenceId.value = null
         autoSaveCurrentSession()
         _currentScreen.value = Screen.MockHub
     }

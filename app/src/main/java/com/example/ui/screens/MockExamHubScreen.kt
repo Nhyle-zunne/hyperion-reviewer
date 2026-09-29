@@ -166,9 +166,6 @@ fun MockExamHubScreen(
                         color = headerSubColor
                     )
                 }
-
-                // Master Countdown Timer Chip
-                TimerChip(secondsRemaining = timeRemaining)
             }
         }
 
@@ -208,7 +205,7 @@ fun MockExamHubScreen(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Select any competence to scroll and answer questions. You can revisit and revise answers anytime before submitting the overall exam.",
+                            text = "Select any competence to begin. Timers are competency-based (1 minute per item) and only count down while actively inside that specific competence module.",
                             style = MaterialTheme.typography.bodySmall,
                             color = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF475569),
                             lineHeight = 18.sp

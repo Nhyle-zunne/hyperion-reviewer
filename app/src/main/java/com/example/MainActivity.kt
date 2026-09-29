@@ -21,12 +21,14 @@ import androidx.compose.ui.Modifier
 import com.example.ui.components.HyperionDrawerContent
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.ActivationScreen
+import com.example.ui.screens.ExamGuidelinesScreen
 import com.example.ui.screens.LicenseScreen
 import com.example.ui.screens.BookmarksScreen
 import com.example.ui.screens.FlashcardScreen
 import com.example.ui.screens.FreePracticeScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.HowToAvailScreen
 import com.example.ui.screens.MockCompetenceScreen
 import com.example.ui.screens.MockExamHubScreen
 import com.example.ui.screens.PracticeCompetenceSelectScreen
@@ -95,11 +97,11 @@ fun ReviewerApp(viewModel: ReviewerViewModel) {
             Crossfade(targetState = currentScreen, label = "screen_transition") { screen ->
                 when (screen) {
                     is Screen.TermsOnboarding -> TermsOnboardingScreen(onAcceptTerms = { viewModel.acceptTerms() })
-                    is Screen.TermsAndDisclaimer -> TermsAndDisclaimerScreen(onBackClick = { viewModel.navigateTo(Screen.Home) })
+                    is Screen.TermsAndDisclaimer -> TermsAndDisclaimerScreen(onBackClick = { viewModel.navigateBack() })
                     is Screen.TrackSelection -> TrackSelectionScreen(viewModel = viewModel)
                     is Screen.Home -> HomeScreen(viewModel = viewModel)
-                    is Screen.PracticeCompetenceSelect -> PracticeCompetenceSelectScreen(viewModel = viewModel)
-                    is Screen.PracticeConfig -> PracticeConfigScreen(viewModel = viewModel, competenceId = screen.competenceId)
+                    is Screen.PracticeCompetenceSelect -> PracticeCompetenceSelectScreen(viewModel = viewModel, isCrpMode = screen.isCrpMode)
+                    is Screen.PracticeConfig -> PracticeConfigScreen(viewModel = viewModel, competenceId = screen.competenceId, isCrpMode = screen.isCrpMode)
                     is Screen.Flashcards -> FlashcardScreen(viewModel = viewModel)
                     is Screen.Topics -> TopicScreen(viewModel = viewModel)
                     is Screen.Quiz -> PracticeQuizScreen(viewModel = viewModel)
@@ -112,7 +114,9 @@ fun ReviewerApp(viewModel: ReviewerViewModel) {
                     is Screen.History -> HistoryScreen(viewModel = viewModel)
                     is Screen.FreePractice -> FreePracticeScreen(viewModel = viewModel)
                     is Screen.Activation -> ActivationScreen(viewModel = viewModel)
+                    is Screen.HowToAvail -> HowToAvailScreen(viewModel = viewModel)
                     is Screen.License -> LicenseScreen(viewModel = viewModel)
+                    is Screen.ExamGuidelines -> ExamGuidelinesScreen(viewModel = viewModel)
                     is Screen.About -> AboutScreen(viewModel = viewModel)
                 }
             }

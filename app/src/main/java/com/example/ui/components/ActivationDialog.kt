@@ -4,6 +4,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,21 +16,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -46,38 +59,46 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.util.LicenseManager
+import com.example.data.util.ProTier
+import com.example.data.util.UnlockResult
+import com.example.ui.theme.FailRed
+import com.example.ui.theme.MaritimeGoldBright
+import com.example.ui.theme.PassGreen
+import com.example.ui.theme.SeaCyan
 
 /**
  * Standalone Device Verification & Activation Card
- * Provides hardware-bound & session diagnostics, high contrast Master Request Code display,
+ * Displays hardware-bound & session diagnostics, tier selector, dynamic Pro Request Code,
  * 1-tap "Copy Verification Details" action, and light/dark mode contrast tokens.
  */
 @Composable
 fun DeviceVerificationCard(
     modifier: Modifier = Modifier,
-    permanentHardwareId: String? = null,
-    installSessionId: String? = null,
-    installDate: String? = null,
-    requestCode: String? = null,
+    initialTier: ProTier = ProTier.HYPERION_PRO,
+    onTierChanged: ((ProTier) -> Unit)? = null,
     onDetailsCopied: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val isDark = isSystemInDarkTheme()
 
-    val actualHwId = permanentHardwareId ?: remember { LicenseManager.getPermanentHardwareId(context) }
-    val actualSessionId = installSessionId ?: remember { LicenseManager.getInstallSessionId(context) }
-    val actualInstallDate = installDate ?: remember { LicenseManager.getInstallDate(context) }
-    val actualRequestCode = requestCode ?: remember { LicenseManager.getMasterRequestCode(context) }
+    var selectedTier by remember { mutableStateOf(initialTier) }
+
+    val actualHwId = remember { LicenseManager.getPermanentHardwareId(context) }
+    val actualSessionId = remember { LicenseManager.getInstallSessionId(context) }
+    val actualInstallDate = remember { LicenseManager.getInstallDate(context) }
     val deviceModel = remember { "${Build.MANUFACTURER.uppercase()} ${Build.MODEL}" }
+    val actualRequestCode = LicenseManager.getRequestCodeForTier(context, selectedTier)
 
     var copiedFeedback by remember { mutableStateOf(false) }
 
-    // Explicit contrast tokens based on active theme
+    // Contrast tokens based on active theme
     val cardSurface = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
     val cardBorder = if (isDark) BorderStroke(1.dp, Color(0xFF334155)) else BorderStroke(1.dp, Color(0xFFCBD5E1))
     val primaryText = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
@@ -127,7 +148,7 @@ fun DeviceVerificationCard(
                         border = BorderStroke(0.5.dp, if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7))
                     ) {
                         Text(
-                            text = "OFFLINE LICENSE",
+                            text = "OFFLINE VERIFICATION",
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
@@ -137,7 +158,113 @@ fun DeviceVerificationCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Module / Suite Selection Cards
+                Text(
+                    text = "SELECT REVIEW MODULE / SUITE:",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = primaryText,
+                    letterSpacing = 0.5.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ProTier.values().forEach { tier ->
+                        val isSelected = tier == selectedTier
+                        val tierBg = if (isSelected) {
+                            if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF)
+                        } else {
+                            if (isDark) Color(0xFF1E293B).copy(alpha = 0.5f) else Color(0xFFE2E8F0).copy(alpha = 0.5f)
+                        }
+                        val tierBorder = if (isSelected) {
+                            BorderStroke(1.5.dp, if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7))
+                        } else {
+                            BorderStroke(0.5.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1))
+                        }
+
+                        val tierDisplayTitle = when (tier) {
+                            ProTier.OIC_NW_PRO -> "OIC-NW Deck Operational"
+                            ProTier.GMDSS_PRO -> "GMDSS Radio Communications"
+                            ProTier.HYPERION_PRO -> "Full Maritime Review Suite"
+                        }
+                        val tierDisplaySub = when (tier) {
+                            ProTier.OIC_NW_PRO -> "Full 12-Competence Deck Question Bank & Mocks"
+                            ProTier.GMDSS_PRO -> "Complete GOC Subsystems & Emergency Radio Mocks"
+                            ProTier.HYPERION_PRO -> "Complete Deck Operational + GMDSS Suite"
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = tierBg,
+                            border = tierBorder,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    selectedTier = tier
+                                    onTierChanged?.invoke(tier)
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isSelected) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (isSelected) (if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7)) else secondaryText,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = tierDisplayTitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = primaryText
+                                        )
+                                        if (tier == ProTier.HYPERION_PRO) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = MaritimeGoldBright.copy(alpha = 0.2f),
+                                                border = BorderStroke(0.5.dp, MaritimeGoldBright)
+                                            ) {
+                                                Text(
+                                                    text = "RECOMMENDED",
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaritimeGoldBright,
+                                                    fontSize = 8.5.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = tierDisplaySub,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = secondaryText,
+                                        fontSize = 10.5.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // SelectionContainer enables manual text selection
                 SelectionContainer {
@@ -209,6 +336,38 @@ fun DeviceVerificationCard(
                             )
                         }
 
+                        // Selected Track / Suite
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val labelPrefix = when (selectedTier) {
+                                ProTier.OIC_NW_PRO, ProTier.GMDSS_PRO -> "Track:"
+                                ProTier.HYPERION_PRO -> "Suite:"
+                            }
+                            val suiteName = when (selectedTier) {
+                                ProTier.OIC_NW_PRO -> "OIC-NW Deck Operational"
+                                ProTier.GMDSS_PRO -> "GMDSS Radio Communications"
+                                ProTier.HYPERION_PRO -> "Full Maritime Review Suite"
+                            }
+
+                            Text(
+                                text = labelPrefix,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = secondaryText,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = suiteName,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                                fontSize = 12.sp
+                            )
+                        }
+
                         // Install Date
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -267,7 +426,7 @@ fun DeviceVerificationCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "MASTER REQUEST CODE:",
+                                text = "TERMINAL REGISTRATION CODE:",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = primaryText,
@@ -295,7 +454,7 @@ fun DeviceVerificationCard(
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 2.sp
+                                        letterSpacing = 1.sp
                                     ),
                                     color = codeTextColor,
                                     modifier = Modifier.testTag("device_request_code_text")
@@ -310,17 +469,23 @@ fun DeviceVerificationCard(
                 // Single "Copy All Details" Action Button
                 Button(
                     onClick = {
+                        val trackOrSuite = when (selectedTier) {
+                            ProTier.OIC_NW_PRO -> "Track: OIC-NW Deck Operational"
+                            ProTier.GMDSS_PRO -> "Track: GMDSS Radio Communications"
+                            ProTier.HYPERION_PRO -> "Suite: Full Maritime Review Suite"
+                        }
                         val fullDetails = """
                             Device ID: $actualHwId
                             Session: $actualSessionId
+                            $trackOrSuite
                             Date: $actualInstallDate
                             Model: $deviceModel
-                            Request Code: $actualRequestCode
+                            Terminal Code: $actualRequestCode
                         """.trimIndent()
 
                         clipboardManager.setText(AnnotatedString(fullDetails))
                         copiedFeedback = true
-                        Toast.makeText(context, "All activation details copied to clipboard!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "All registration details copied to clipboard!", Toast.LENGTH_SHORT).show()
                         onDetailsCopied?.invoke()
                     },
                     modifier = Modifier
@@ -370,7 +535,7 @@ fun DeviceVerificationCard(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "Tap Copy or screenshot this card. If you ever reinstall or reset your phone, your Permanent Hardware ID verifies your previous purchase even if your install session changes.",
+                text = "Tip: Copy or screenshot this card. If you ever reinstall or reset your phone, your Permanent Hardware ID verifies your terminal registration even if your MATCH creator changes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = secondaryText,
                 fontSize = 11.5.sp,
@@ -386,14 +551,18 @@ fun DeviceVerificationCard(
 @Composable
 fun ActivationDialog(
     onDismissRequest: () -> Unit,
-    permanentHardwareId: String? = null,
-    installSessionId: String? = null,
-    installDate: String? = null,
-    requestCode: String? = null,
-    onActivate: (String) -> Boolean
+    initialTier: ProTier = ProTier.HYPERION_PRO,
+    onActivationSuccess: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
     val dialogCanvas = if (isDark) Color(0xFF0F172A) else Color(0xFFFFFFFF)
+    val primaryText = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
+    val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+
+    var currentTier by remember { mutableStateOf(initialTier) }
+    var keyInput by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismissRequest) {
         Surface(
@@ -408,15 +577,146 @@ fun ActivationDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                DeviceVerificationCard(
-                    permanentHardwareId = permanentHardwareId,
-                    installSessionId = installSessionId,
-                    installDate = installDate,
-                    requestCode = requestCode
+                // Dialog Header: "Verify Terminal Access" with subtitle "Verify offline access for this device"
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.WorkspacePremium,
+                                contentDescription = null,
+                                tint = MaritimeGoldBright,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Verify Terminal Access",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = primaryText
+                            )
+                        }
+                        Text(
+                            text = "Verify offline access for this device",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = secondaryText,
+                            fontSize = 11.5.sp
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = secondaryText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    color = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
                 )
+
+                // Device Verification & Tier Card
+                DeviceVerificationCard(
+                    initialTier = currentTier,
+                    onTierChanged = { tier ->
+                        currentTier = tier
+                        errorMessage = null
+                    }
+                )
+
+                // License Key Input
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "ENTER VERIFICATION KEY:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = primaryText
+                    )
+
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { input ->
+                            keyInput = input.uppercase().filter { ch -> ch.isLetterOrDigit() || ch == '-' }
+                            errorMessage = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("license_key_input_field"),
+                        placeholder = {
+                            Text(
+                                "XXXX-XXXX-XXXX-XXXX-XXXX",
+                                color = secondaryText.copy(alpha = 0.6f),
+                                fontFamily = FontFamily.Monospace
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Done
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
+                            unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
+                            focusedTextColor = primaryText,
+                            unfocusedTextColor = primaryText
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    )
+
+                    errorMessage?.let { err ->
+                        Text(
+                            text = err,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = FailRed,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            val result = LicenseManager.verifyAndUnlockKey(context, keyInput, currentTier)
+                            if (result.isSuccess) {
+                                Toast.makeText(context, result.toastMessage, Toast.LENGTH_LONG).show()
+                                onActivationSuccess?.invoke()
+                                onDismissRequest()
+                            } else {
+                                errorMessage = result.toastMessage
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("activate_pro_submit_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaritimeGoldBright,
+                            contentColor = Color(0xFF0F172A)
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "Verify Terminal",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFF0F172A)
+                        )
+                    }
+                }
             }
         }
     }
