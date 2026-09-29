@@ -19,13 +19,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # Matches Android Gradle Plugin 9.1.1 requirement (minimum 9.3.1)
+    # Allows setup-gradle to use the latest stable Gradle 9 that satisfied your AGP 9.1.1 earlier
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '9.4'
+        gradle-version: 'current'
 
-    # Creates standard debug keystore file so signReleaseBundle finds a valid keystore
+    # Pre-generates the debug keystore so :signReleaseBundle finds it and avoids NullPointerException
     - name: Prepare Debug Keystore
       run: |
         mkdir -p $HOME/.android
@@ -34,7 +34,6 @@ jobs:
           -keyalg RSA -keysize 2048 -validity 10000 \
           -dname "CN=Android Debug,O=Android,C=US"
 
-    # --no-daemon prevents KSP/IntelliJ ApplicationManager null pointer issues on Gradle 9
     - name: Build App Bundle
       run: |
         gradle bundleRelease \
@@ -42,7 +41,6 @@ jobs:
           -Pandroid.injected.signing.store.password=android \
           -Pandroid.injected.signing.key.alias=androiddebugkey \
           -Pandroid.injected.signing.key.password=android \
-          --no-daemon \
           --stacktrace
 
     - name: Upload AAB Artifact
