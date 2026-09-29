@@ -19,13 +19,14 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    # Pin Gradle to 8.7 to prevent KSP crash with Gradle 9
+    # Matches Android Gradle Plugin 9.1.1 requirement (minimum 9.3.1)
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.7'
+        gradle-version: '9.4'
 
-    - name: Generate Debug Keystore
+    # Creates standard debug keystore file so signReleaseBundle finds a valid keystore
+    - name: Prepare Debug Keystore
       run: |
         mkdir -p $HOME/.android
         keytool -genkey -v -keystore $HOME/.android/debug.keystore \
@@ -33,6 +34,7 @@ jobs:
           -keyalg RSA -keysize 2048 -validity 10000 \
           -dname "CN=Android Debug,O=Android,C=US"
 
+    # --no-daemon prevents KSP/IntelliJ ApplicationManager null pointer issues on Gradle 9
     - name: Build App Bundle
       run: |
         gradle bundleRelease \
@@ -40,6 +42,7 @@ jobs:
           -Pandroid.injected.signing.store.password=android \
           -Pandroid.injected.signing.key.alias=androiddebugkey \
           -Pandroid.injected.signing.key.password=android \
+          --no-daemon \
           --stacktrace
 
     - name: Upload AAB Artifact
