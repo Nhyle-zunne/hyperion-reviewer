@@ -19,11 +19,21 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    # Pin Gradle to 8.7 to prevent KSP crash with Gradle 9
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '8.7'
 
-    # Configures release to use the debug keystore so signing succeeds without null pointers
-    - name: Configure Signing and Build Bundle
+    - name: Generate Debug Keystore
+      run: |
+        mkdir -p $HOME/.android
+        keytool -genkey -v -keystore $HOME/.android/debug.keystore \
+          -storepass android -alias androiddebugkey -keypass android \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=Android Debug,O=Android,C=US"
+
+    - name: Build App Bundle
       run: |
         gradle bundleRelease \
           -Pandroid.injected.signing.store.file="$HOME/.android/debug.keystore" \
