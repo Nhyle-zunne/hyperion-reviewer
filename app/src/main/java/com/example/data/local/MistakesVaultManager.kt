@@ -15,7 +15,11 @@ data class MistakeEntry(
     val competenceOrPart: String,
     val consecutiveCorrect: Int = 0,// 0, 1, or 2
     val question: Question          // Store full Question object to avoid failed asset lookups
-)
+) {
+    val competenceId: String get() = competenceOrPart
+    val incorrectCount: Int get() = 1
+    val lastAnsweredDate: String get() = "Recently"
+}
 
 object MistakesVaultManager {
     fun getVaultFile(context: Context): File {

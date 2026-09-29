@@ -4,6 +4,7 @@ import com.example.data.model.CompetenceScore
 import com.example.data.model.ExamResult
 import com.example.data.model.FunctionScore
 import com.example.data.model.Question
+import com.example.data.model.QuestionResult
 import com.example.data.model.QuizMode
 import com.example.data.model.Track
 import com.example.data.model.UserQuestionState
@@ -110,6 +111,25 @@ object MarinaScoringEngine {
             overallPct >= PASSING_PERCENTAGE
         }
 
+        val questionResults = questions.map { q ->
+            val state = answers[q.id]
+            val selectedIdx = state?.selectedIndex
+            val selectedText = selectedIdx?.let { if (it in q.options.indices) q.options[it] else null }
+            val correctText = if (q.correctAnswerIndex in q.options.indices) q.options[q.correctAnswerIndex] else ""
+            val isCorrect = selectedIdx == q.correctAnswerIndex
+            QuestionResult(
+                questionId = q.id,
+                competenceId = q.competenceId,
+                questionText = q.questionText,
+                selectedOptionIndex = selectedIdx,
+                selectedOptionText = selectedText,
+                correctOptionIndex = q.correctAnswerIndex,
+                correctOptionText = correctText,
+                isCorrect = isCorrect,
+                rationale = q.explanation
+            )
+        }
+
         return ExamResult(
             examId = UUID.randomUUID().toString(),
             timestamp = System.currentTimeMillis(),
@@ -123,7 +143,8 @@ object MarinaScoringEngine {
             isOverallPassed = isOverallPassed,
             functionScores = functionScores,
             competenceScores = competenceScores,
-            questionStates = answers
+            questionStates = answers,
+            questionResults = questionResults
         )
     }
 }

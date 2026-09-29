@@ -6,9 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,14 +16,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -33,22 +29,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,479 +46,383 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.Difficulty
 import com.example.data.model.Question
-import com.example.data.model.Track
-import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.data.repository.MaritimeQuestionBank
-import com.example.data.repository.ProQuestionRepository
 import com.example.ui.components.DifficultyBadge
 import com.example.ui.components.MaritimeTopBar
-import com.example.ui.theme.MaritimeGold
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.PassGreenContainer
-import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MianButton
+import com.example.ui.components.MianRuleButton
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.components.SpaghettiProgressBar
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
 import com.example.viewmodel.Screen
 
 /**
- * Flashcard Revision Mode Screen.
- * Provides rapid active recall with double-sided cards:
- * Front: Competence badge, Bloom's difficulty, question prompt
- * Back: Correct MARINA answer, key rationale, and options breakdown
+ * Editorial MIAN "Spaghetti" Flashcard Revision Screen:
+ * Active recall study, tap-to-flip editorial card, 3dp top rules, sharp square badges.
  */
 @Composable
 fun FlashcardScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
-    val context = LocalContext.current
 
-    // Back navigation to Track Dashboard
-    BackHandler {
-        viewModel.navigateTo(Screen.Home)
-    }
-
-    val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
-    var selectedCompetenceId by remember { mutableStateOf<String?>(null) }
-
-    // Cards list based on competence filter
-    var cards by remember(selectedCompetenceId, selectedTrack, context) {
-        val initial = if (selectedTrack == Track.GMDSS_GOC) {
-            if (selectedCompetenceId != null) {
-                ProQuestionRepository.loadAllCompetenceQuestions(context, selectedCompetenceId!!).map { it.toQuestion() }
-            } else {
-                ProQuestionRepository.loadAllCompetenceQuestions(context, "C1").map { it.toQuestion() } +
-                ProQuestionRepository.loadAllCompetenceQuestions(context, "C2").map { it.toQuestion() }
-            }
-        } else {
-            if (selectedCompetenceId == null) {
-                MaritimeQuestionBank.getQuestionsByTrack(selectedTrack)
-            } else {
-                MaritimeQuestionBank.getQuestionsByCompetence(selectedCompetenceId!!, selectedTrack)
-            }
-        }
-        mutableStateOf(initial)
-    }
-
-    var currentIndex by remember(cards) { mutableIntStateOf(0) }
+    var selectedComp by remember { mutableStateOf("ALL") }
+    var currentIndex by remember { mutableIntStateOf(0) }
     var isFlipped by remember { mutableStateOf(false) }
 
-    val currentCard = if (cards.isNotEmpty()) cards[currentIndex.coerceIn(0, cards.size - 1)] else null
+    val trackQuestions = remember(selectedTrack) {
+        MaritimeQuestionBank.getQuestionsByTrack(selectedTrack, isProUnlocked = true)
+    }
+
+    val filteredQuestions = remember(trackQuestions, selectedComp) {
+        if (selectedComp == "ALL") trackQuestions
+        else trackQuestions.filter { it.competenceId == selectedComp }
+    }
+
+    val competences = remember(trackQuestions) {
+        listOf("ALL") + trackQuestions.map { it.competenceId }.distinct().sorted()
+    }
+
+    BackHandler {
+        viewModel.navigateBack()
+    }
+
+    if (filteredQuestions.isEmpty()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = colors.background
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = "NO FLASHCARDS FOUND",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.muted
+                )
+            }
+        }
+        return
+    }
+
+    val safeIndex = currentIndex.coerceIn(0, filteredQuestions.size - 1)
+    val currentCard = filteredQuestions[safeIndex]
+    val isBookmarked = bookmarkedIds.contains(currentCard.id)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
     ) {
         MaritimeTopBar(
-            title = "Flashcard Revision",
-            subtitle = "${selectedTrack.shortName} • Active Recall",
+            title = "FLASHCARD REVISION MODE",
+            subtitle = "${filteredQuestions.size} CARDS • ACTIVE RECALL",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.Home) },
-            onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+            onBackClick = { viewModel.navigateBack() }
         )
 
-        // Competence Filter Row
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = selectedCompetenceId == null,
-                        onClick = {
-                            selectedCompetenceId = null
-                            isFlipped = false
-                        },
-                        label = { Text("All Competencies", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaritimeGoldBright,
-                            selectedLabelColor = Color.Black
-                        )
-                    )
-                }
-                items(competences) { comp ->
-                    val isSelected = selectedCompetenceId == comp.competenceId
-                    FilterChip(
-                        selected = isSelected,
-                        onClick = {
-                            selectedCompetenceId = comp.competenceId
-                            isFlipped = false
-                        },
-                        label = { Text(comp.code, fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaritimeGoldBright,
-                            selectedLabelColor = Color.Black
-                        )
-                    )
-                }
-            }
-        }
+        // Progress Bar
+        val progressFraction = (safeIndex + 1).toFloat() / filteredQuestions.size.coerceAtLeast(1)
+        SpaghettiProgressBar(progress = progressFraction, height = 3.dp)
 
-        if (currentCard == null || cards.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No flashcards found for this selection.", color = PureWhite)
-            }
-            return
-        }
-
-        // Progress bar & counter
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Card ${currentIndex + 1} of ${cards.size}",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright
+            Column {
+                // Competence Selector Chips
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    items(competences) { comp ->
+                        val isSelected = selectedComp == comp
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = if (isSelected) colors.accent else colors.surface,
+                            modifier = Modifier.clickable {
+                                selectedComp = comp
+                                currentIndex = 0
+                                isFlipped = false
+                            }
+                        ) {
+                            Text(
+                                text = comp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isSelected) colors.accentForeground else colors.foreground,
+                                fontSize = 11.sp,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                    }
+                }
+
+                // Card Metadata Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "CARD ${safeIndex + 1} OF ${filteredQuestions.size} • ${currentCard.competenceId}".uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.2.sp
+                    )
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { viewModel.toggleBookmark(currentCard.id) }) {
+                            Icon(
+                                imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = "Bookmark",
+                                tint = if (isBookmarked) colors.accent else colors.foreground
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // The Flashcard ("Rules, not boxes": 3dp top rule, flat surface, tap to flip)
+                MianRuleCard(
+                    ruleColor = if (isFlipped) colors.success else colors.accent,
+                    containerColor = colors.surface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(340.dp)
+                        .clickable { isFlipped = !isFlipped }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        AnimatedContent(
+                            targetState = isFlipped,
+                            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                            label = "flashcard_content"
+                        ) { flipped ->
+                            if (!flipped) {
+                                // FRONT: QUESTION
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(2.dp),
+                                            color = colors.surface2
+                                        ) {
+                                            Text(
+                                                text = "QUESTION PROMPT",
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = colors.muted,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+
+                                        DifficultyBadge(difficulty = currentCard.difficulty)
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Text(
+                                        text = currentCard.questionText,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontSize = 17.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            lineHeight = 25.sp,
+                                            letterSpacing = (-0.3).sp
+                                        ),
+                                        color = colors.foreground
+                                    )
+                                }
+                            } else {
+                                // BACK: ANSWER & RATIONALE
+                                Column {
+                                    val correctOptText = currentCard.options.getOrNull(currentCard.correctAnswerIndex) ?: ""
+                                    val correctOptLetter = listOf("A", "B", "C", "D").getOrElse(currentCard.correctAnswerIndex) { "?" }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(2.dp),
+                                        color = colors.surface2
+                                    ) {
+                                        Text(
+                                            text = "CORRECT ANSWER",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.success,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(colors.success),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = correctOptLetter,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 14.sp,
+                                                color = colors.primaryForeground
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Text(
+                                            text = correctOptText,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.success,
+                                            lineHeight = 22.sp
+                                        )
+                                    }
+
+                                    if (!currentCard.rationale.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "MARINA RATIONALE",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.muted,
+                                            fontSize = 10.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = currentCard.rationale,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.foreground,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.TouchApp,
+                                contentDescription = null,
+                                tint = colors.muted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isFlipped) "TAP TO FLIP TO QUESTION" else "TAP TO FLIP TO ANSWER",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.muted,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom Navigation Controls
+            Column {
+                // 3dp Rule
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(colors.border)
                 )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MianRuleButton(
                         onClick = {
-                            cards = cards.shuffled()
-                            currentIndex = 0
-                            isFlipped = false
-                        }
+                            if (safeIndex > 0) {
+                                currentIndex = safeIndex - 1
+                                isFlipped = false
+                            }
+                        },
+                        enabled = safeIndex > 0,
+                        ruleColor = colors.border,
+                        modifier = Modifier.weight(1f)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = "Shuffle Cards",
-                            tint = SeaCyan,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Previous",
+                            tint = if (safeIndex > 0) colors.foreground else colors.muted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "PREVIOUS",
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (safeIndex > 0) colors.foreground else colors.muted,
+                            fontSize = 12.sp,
+                            letterSpacing = 1.sp
                         )
                     }
 
-                    IconButton(
-                        onClick = { viewModel.toggleBookmark(currentCard.id) }
+                    MianButton(
+                        onClick = {
+                            if (safeIndex < filteredQuestions.size - 1) {
+                                currentIndex = safeIndex + 1
+                                isFlipped = false
+                            }
+                        },
+                        enabled = safeIndex < filteredQuestions.size - 1,
+                        accent = true,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        val isBookmarked = bookmarkedIds.contains(currentCard.id)
+                        Text(
+                            text = "NEXT",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Bookmark",
-                            tint = if (isBookmarked) MaritimeGoldBright else PureWhite.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Next",
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-                }
-            }
-
-            val progress = (currentIndex + 1).toFloat() / cards.size.toFloat()
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = MaritimeGoldBright,
-                trackColor = Color(0xFF1E293B)
-            )
-        }
-
-        // Interactive Flashcard
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(
-                        width = 1.5.dp,
-                        color = if (isFlipped) PassGreen else MaritimeGoldBright,
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                    .clickable { isFlipped = !isFlipped }
-                    .testTag("flashcard_flip_target"),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isFlipped) Color(0xFF0D251C) else Color(0xFF0F1E36)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                AnimatedContent(
-                    targetState = isFlipped,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(220))
-                    },
-                    label = "card_flip"
-                ) { flipped ->
-                    if (!flipped) {
-                        // FRONT SIDE: Question prompt
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(22.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = SeaCyan.copy(alpha = 0.18f)
-                                    ) {
-                                        Text(
-                                            text = "${currentCard.competenceId} • ${currentCard.topic}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = SeaCyan,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                    DifficultyBadge(difficulty = currentCard.difficulty)
-                                }
-
-                                Spacer(modifier = Modifier.height(24.dp))
-
-                                Text(
-                                    text = currentCard.questionText,
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = 18.sp,
-                                        lineHeight = 26.sp
-                                    ),
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = PureWhite
-                                )
-                            }
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(vertical = 12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.TouchApp,
-                                        contentDescription = null,
-                                        tint = MaritimeGoldBright,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Tap Card to Reveal Answer",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaritimeGoldBright
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // BACK SIDE: Correct Answer & Official Explanation
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(22.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = PassGreen,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "CORRECT ANSWER",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = PassGreen,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(14.dp))
-
-                                val correctOptionLetter = when (currentCard.correctAnswerIndex) {
-                                    0 -> "A"
-                                    1 -> "B"
-                                    2 -> "C"
-                                    else -> "D"
-                                }
-                                val correctText = currentCard.options.getOrElse(currentCard.correctAnswerIndex) { "" }
-
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = PassGreenContainer.copy(alpha = 0.5f),
-                                    border = BorderStroke(1.dp, PassGreen)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(14.dp),
-                                        verticalAlignment = Alignment.Top
-                                    ) {
-                                        Text(
-                                            text = "$correctOptionLetter.",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PassGreen
-                                        )
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = correctText,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PureWhite
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                Text(
-                                    text = "RATIONALE & KEY PRINCIPLE",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SeaCyan,
-                                    letterSpacing = 0.5.sp
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = currentCard.explanation,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = PureWhite.copy(alpha = 0.9f),
-                                    lineHeight = 22.sp
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 16.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.TouchApp,
-                                    contentDescription = null,
-                                    tint = SeaCyan,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Tap to Flip Back",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SeaCyan
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Bottom Controls: Previous, Flip, Next
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = {
-                        if (currentIndex > 0) {
-                            currentIndex--
-                            isFlipped = false
-                        }
-                    },
-                    enabled = currentIndex > 0,
-                    modifier = Modifier.testTag("flashcard_prev_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Previous",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Previous")
-                }
-
-                Button(
-                    onClick = { isFlipped = !isFlipped },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaritimeGoldBright,
-                        contentColor = Color.Black
-                    ),
-                    modifier = Modifier.testTag("flashcard_flip_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Style,
-                        contentDescription = "Flip",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (isFlipped) "Show Question" else "Flip Card", fontWeight = FontWeight.Bold)
-                }
-
-                Button(
-                    onClick = {
-                        if (currentIndex < cards.size - 1) {
-                            currentIndex++
-                            isFlipped = false
-                        }
-                    },
-                    enabled = currentIndex < cards.size - 1,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SeaCyan,
-                        contentColor = Color.Black
-                    ),
-                    modifier = Modifier.testTag("flashcard_next_button")
-                ) {
-                    Text("Next")
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Next",
-                        modifier = Modifier.size(16.dp)
-                    )
                 }
             }
         }

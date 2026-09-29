@@ -4,6 +4,14 @@ object LegalAgreementText {
     const val TITLE = "TERMS OF SERVICE, ACADEMIC DISCLAIMER AND DATA PRIVACY AGREEMENT"
     const val LAST_REVISED = "Last Revised: September 2026"
 
+    const val DISCLAIMER_SUMMARY = "Hyperion is an independently developed academic study aid. It is NOT affiliated with, authorized by, or endorsed by the Maritime Industry Authority (MARINA), the Professional Regulation Commission (PRC), CHED, or the International Maritime Organization (IMO). All materials are independently authored diagnostic items for study purposes only."
+
+    const val SECTION_1_PURPOSE = "Hyperion is an independent educational review tool designed for supplementary theoretical self-assessment. It does not replace certified maritime education, onboard training records, or official maritime training institution instruction."
+
+    const val SECTION_2_IP = "Any references to STCW competencies, Tables of Specifications (TOS), or MARINA examination nomenclatures are for pedagogical alignment and categorization purposes under fair academic use. All mock examination questions are independently synthesized practice items."
+
+    const val SECTION_3_LIABILITY = "The application and study questions are provided 'as is' without warranty of passing official licensure examinations. The developers assume no liability for individual licensure examination outcomes, administrative actions, or operational bridge decisions."
+
     const val FULL_AGREEMENT_TEXT = """TERMS OF SERVICE, ACADEMIC DISCLAIMER AND DATA PRIVACY AGREEMENT
 
 Last Revised: September 2026

@@ -44,6 +44,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextButton
+import com.example.data.util.LicenseManager
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
@@ -67,11 +71,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.alpha
 import com.example.data.model.Track
 import com.example.data.repository.MaritimeCompetenceRegistry
 import com.example.data.repository.MaritimeQuestionBank
 import com.example.data.repository.ProQuestionRepository
+import com.example.ui.components.LuminousDeskSupportButton
 import com.example.ui.components.MaritimeTopBar
+import com.example.ui.components.openMessengerSupport
 import com.example.ui.theme.FailRed
 import com.example.ui.theme.MaritimeGold
 import com.example.ui.theme.MaritimeGoldBright
@@ -102,9 +109,9 @@ fun PracticeConfigScreen(
     val isActivated by viewModel.isActivated.collectAsState()
     val context = LocalContext.current
 
-    // Back navigation returns to Step 1: Competence Selection
+    // Back navigation pops back to previous screen (Competence Selection or previous)
     BackHandler {
-        viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = isCrpMode))
+        viewModel.navigateBack()
     }
 
     val compInfo = competenceId?.let { MaritimeCompetenceRegistry.getCompetenceById(it, selectedTrack) }
@@ -154,8 +161,27 @@ fun PracticeConfigScreen(
         }
     }
 
+    val currentLicenseTier = when {
+        LicenseManager.isHyperionProUnlocked(context) -> com.example.data.util.LicenseTier.HYPERION_ALL_ACCESS
+        selectedTrack == Track.GMDSS_GOC && LicenseManager.isGmdssProUnlocked(context) -> com.example.data.util.LicenseTier.GMDSS
+        selectedTrack != Track.GMDSS_GOC && LicenseManager.isOicNwProUnlocked(context) -> com.example.data.util.LicenseTier.OIC_NW
+        LicenseManager.isOicNwProUnlocked(context) -> com.example.data.util.LicenseTier.OIC_NW
+        LicenseManager.isGmdssProUnlocked(context) -> com.example.data.util.LicenseTier.GMDSS
+        else -> com.example.data.util.LicenseTier.OIC_NW
+    }
+    val isOicNwModule = selectedTrack != Track.GMDSS_GOC
+    val isGmdssModule = selectedTrack == Track.GMDSS_GOC
+    val isVerified = when (currentLicenseTier) {
+        com.example.data.util.LicenseTier.HYPERION_ALL_ACCESS -> true
+        com.example.data.util.LicenseTier.OIC_NW -> isOicNwModule
+        com.example.data.util.LicenseTier.GMDSS -> isGmdssModule
+        else -> false
+    }
+    var showVerificationDialog by remember { mutableStateOf(false) }
+    val isAdvancedLocked = !isVerified
+
     // Step 2: Delivery Format (Standard Drill vs Intensive Mode)
-    var deliveryMode by remember { mutableStateOf(DrillDeliveryMode.STANDARD) }
+    var selectedDeliveryFormat by remember { mutableStateOf(DrillDeliveryMode.STANDARD) }
 
     // Step 3: Randomization Controls (Two switches)
     // In CRP Mode: Randomize Questions is disabled/locked, Shuffled Choices is enabled (ON) by default
@@ -185,19 +211,13 @@ fun PracticeConfigScreen(
 
     val greetingSubtitle = if (compInfo != null) {
         if (isCrpMode) {
-            if (selectedTrack == Track.GMDSS_GOC) {
-                if (competenceId == "C1") "GMDSS Radio Operations • $maxAvailable Items (Pietro's Pool: 2 Parts [500 each])"
-                else "GMDSS Emergency Communications • $maxAvailable Items (Pietro's Pool)"
-            } else {
-                "${compInfo.functionName} • $maxAvailable Items (Pietro's Pool)"
-            }
+            "MARINA CRP REFERENCE DRILL • $maxAvailable Official Review Questions"
         } else {
             "${compInfo.functionName} • $maxAvailable Items"
         }
     } else {
         if (isCrpMode) {
-            if (selectedTrack == Track.GMDSS_GOC) "GMDSS Pro • Pietro's Full Pool (1,200 Items Available)"
-            else "Deck OIC-NW • Pietro's Full Pool (2,065 Items Available)"
+            "MARINA CRP REFERENCE DRILL • $maxAvailable Official Review Questions"
         } else {
             "${selectedTrack.title} • Full Pool ($maxAvailable Items Available)"
         }
@@ -210,10 +230,10 @@ fun PracticeConfigScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = if (isCrpMode) "MARINA CRP Setup" else "Drill Setup",
+            title = if (isCrpMode) "MARINA CRP PRACTICE" else "PRACTICE ALL QUESTIONS",
             subtitle = if (compInfo != null) compInfo.code else "All Competencies",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = isCrpMode)) },
+            onBackClick = { viewModel.navigateBack() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
         )
 
@@ -262,7 +282,7 @@ fun PracticeConfigScreen(
                             color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Text(
-                                text = if (isCrpMode) "STEP 2 OF 2 • MARINA CRP DRILL CONFIGURATION" else "STEP 2 OF 2 • PRACTICE DRILL CONFIGURATION",
+                                text = if (isCrpMode) "STEP 2 OF 2 · MARINA CRP PRACTICE" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -462,30 +482,31 @@ fun PracticeConfigScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Option 1: Standard Drill
-                        val isStandard = deliveryMode == DrillDeliveryMode.STANDARD
-                        Surface(
+                        // Option 1: Standard Drill Card
+                        val isStandardSelected = selectedDeliveryFormat == DrillDeliveryMode.STANDARD
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { selectedDeliveryFormat = DrillDeliveryMode.STANDARD }
                                 .border(
-                                    width = if (isStandard) 2.dp else 1.dp,
-                                    color = if (isStandard) (if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.outline,
+                                    width = if (isStandardSelected) 1.5.dp else 1.dp,
+                                    color = if (isStandardSelected) Color(0xFFFF5A67) else Color(0xFF2A2A2A),
                                     shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable { deliveryMode = DrillDeliveryMode.STANDARD }
-                                .testTag("drill_mode_standard"),
-                            color = if (isStandard) (if (isCrpMode) PassGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.primaryContainer) else Color.Transparent
+                                ),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = if (isStandard) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                                    contentDescription = null,
-                                    tint = if (isStandard) (if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary) else MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(20.dp)
+                                RadioButton(
+                                    selected = isStandardSelected,
+                                    onClick = { selectedDeliveryFormat = DrillDeliveryMode.STANDARD },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = Color(0xFFFF5A67),
+                                        unselectedColor = Color(0xFF555555)
+                                    )
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
@@ -494,7 +515,7 @@ fun PracticeConfigScreen(
                                             text = "Standard Drill",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            color = Color.White
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
@@ -521,78 +542,94 @@ fun PracticeConfigScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        // Option 2: Intensive Mode (Dynamic Recycling Queue) - Locked in CRP Mode
-                        val isIntensive = deliveryMode == DrillDeliveryMode.INTENSIVE && !isCrpMode
-                        Surface(
+                        // Option 2: Intensive Mode Card
+                        val isIntensiveSelected = selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .border(
-                                    width = if (isIntensive) 2.dp else 1.dp,
-                                    color = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
+                                .alpha(if (isVerified) 1f else 0.45f)
                                 .clickable {
-                                    if (isCrpMode) {
-                                        showProLockedDialog = "Intensive Mode (dynamic question recycling queue) is a Hyperion Pro feature. Free MARINA CRP practice runs in Standard Sequential mode."
+                                    if (isVerified) {
+                                        selectedDeliveryFormat = DrillDeliveryMode.INTENSIVE
                                     } else {
-                                        deliveryMode = DrillDeliveryMode.INTENSIVE
+                                        showVerificationDialog = true
                                     }
                                 }
-                                .testTag("drill_mode_intensive"),
-                            color = if (isIntensive) MaterialTheme.colorScheme.primaryContainer else if (isCrpMode) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent
+                                .border(
+                                    width = if (isIntensiveSelected) 1.5.dp else 1.dp,
+                                    color = if (isIntensiveSelected) Color(0xFFFF5A67) else Color(0xFF2A2A2A),
+                                    shape = RoundedCornerShape(10.dp)
+                                ),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                            shape = RoundedCornerShape(10.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isCrpMode) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Locked",
-                                        tint = MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.size(20.dp)
+                                RadioButton(
+                                    selected = isIntensiveSelected,
+                                    onClick = {
+                                        if (isVerified) {
+                                            selectedDeliveryFormat = DrillDeliveryMode.INTENSIVE
+                                        } else {
+                                            showVerificationDialog = true
+                                        }
+                                    },
+                                    enabled = true,
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = Color(0xFFFF5A67),
+                                        unselectedColor = Color(0xFF555555),
+                                        disabledSelectedColor = Color(0xFF555555),
+                                        disabledUnselectedColor = Color(0xFF555555)
                                     )
-                                } else {
-                                    Icon(
-                                        imageVector = if (isIntensive) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
-                                        contentDescription = null,
-                                        tint = if (isIntensive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                         Text(
                                             text = "Intensive Mode",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isCrpMode) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                                            color = Color.White
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
-                                            color = if (isCrpMode) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
+                                            color = MaterialTheme.colorScheme.primaryContainer
                                         ) {
                                             Text(
-                                                text = if (isCrpMode) "PRO LOCKED" else "RECYCLING QUEUE",
+                                                text = "RECYCLING QUEUE",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isCrpMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
                                         }
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        if (!isVerified) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(Color(0xFF1E1517), RoundedCornerShape(2.dp))
+                                                    .border(1.dp, Color(0xFFFF5A67), RoundedCornerShape(2.dp))
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = "LOCKED",
+                                                    color = Color(0xFFFF5A67),
+                                                    fontSize = 9.sp,
+                                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
                                     }
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = if (isCrpMode) {
-                                            "Requires Pro Mode to unlock dynamic mistake recycling queue."
-                                        } else {
-                                            "Missed questions display rationale and recycle to the end of the queue. The drill only finishes when all questions are mastered."
-                                        },
+                                        text = if (isCrpMode) "LOCKED · Sequential reference delivery only." else "Missed questions display rationale and recycle to the end of the queue. The drill only finishes when all questions are mastered.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
@@ -607,13 +644,15 @@ fun PracticeConfigScreen(
             // Step 3: Randomization & Sequencing Card (Two switches together)
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(if (isVerified) 1f else 0.45f),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = null,
@@ -628,20 +667,37 @@ fun PracticeConfigScreen(
                                 color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (!isVerified) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFF1E1517), RoundedCornerShape(2.dp))
+                                        .border(1.dp, Color(0xFFFF5A67), RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "LOCKED",
+                                        color = Color(0xFFFF5A67),
+                                        fontSize = 9.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Switch 1: Randomize Question Order (Sequential vs Shuffled) - Locked in CRP Mode
+                        // Switch 1: Randomize Question Order (Sequential vs Shuffled)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .clickable {
-                                    if (isCrpMode) {
-                                        showProLockedDialog = "Randomizing question order requires unlocking Pro Mode. Free MARINA CRP practice follows sequential question ordering (#1, #2, #3...)"
-                                    } else {
+                                    if (isVerified) {
                                         randomizeQuestionOrder = !randomizeQuestionOrder
+                                    } else {
+                                        showVerificationDialog = true
                                     }
                                 }
                                 .padding(vertical = 4.dp),
@@ -649,40 +705,29 @@ fun PracticeConfigScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isCrpMode) {
-                                        Icon(
-                                            imageVector = Icons.Default.Lock,
-                                            contentDescription = "Locked",
-                                            tint = MaterialTheme.colorScheme.outline,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                    }
                                     Text(
                                         text = "Randomize Question Order",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isCrpMode) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = if (isCrpMode) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primaryContainer
+                                        color = MaterialTheme.colorScheme.primaryContainer
                                     ) {
                                         Text(
-                                            text = if (isCrpMode) "PRO LOCKED" else if (randomizeQuestionOrder) "SHUFFLED" else "SEQUENTIAL",
+                                            text = if (randomizeQuestionOrder) "SHUFFLED" else "SEQUENTIAL",
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = if (isCrpMode) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimaryContainer,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             fontSize = 9.sp,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
                                     }
                                 }
                                 Text(
-                                    text = if (isCrpMode) {
-                                        "Randomizing question order requires unlocking Pro Mode (Sequential by default)."
-                                    } else if (randomizeQuestionOrder) {
+                                    text = if (randomizeQuestionOrder) {
                                         "Questions are dynamically shuffled at the start of the drill."
                                     } else {
                                         "Questions appear in strict original database order (#1, #2, #3...)."
@@ -694,15 +739,15 @@ fun PracticeConfigScreen(
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Switch(
-                                checked = if (isCrpMode) false else randomizeQuestionOrder,
+                                checked = if (isVerified) randomizeQuestionOrder else false,
                                 onCheckedChange = {
-                                    if (isCrpMode) {
-                                        showProLockedDialog = "Randomizing question order requires unlocking Pro Mode."
-                                    } else {
+                                    if (isVerified) {
                                         randomizeQuestionOrder = it
+                                    } else {
+                                        showVerificationDialog = true
                                     }
                                 },
-                                enabled = !isCrpMode,
+                                enabled = true,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = PureWhite,
                                     checkedTrackColor = MaterialTheme.colorScheme.primary,
@@ -776,13 +821,15 @@ fun PracticeConfigScreen(
             // Step 4: Dual Question Count Selector (Slider + Numeric Input) - Fixed in CRP Mode
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(if (isAdvancedLocked) 0.45f else 1f),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
@@ -797,6 +844,10 @@ fun PracticeConfigScreen(
                                 color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                            if (isAdvancedLocked) {
+                                ClearanceRequiredBadge()
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(14.dp))
@@ -945,11 +996,55 @@ fun PracticeConfigScreen(
                 }
             }
 
+            // Institutional Clearance Callout Banner if unverified
+            if (!isVerified) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161918)),
+                        border = BorderStroke(1.dp, Color(0xFFFF5A67).copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF5A67),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "VERIFICATION REQUIRED",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF5A67),
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Intensive recycling queues and question randomization require institutional terminal verification.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            LuminousDeskSupportButton(
+                                title = "CONTACT SUPPORT DESK ↗",
+                                subtitle = "Direct candidate identity verification & seat clearance"
+                            ) {
+                                openMessengerSupport(context)
+                            }
+                        }
+                    }
+                }
+            }
+
             // Launch Action Button
             item {
                 val launchLabel = if (isCrpMode) {
                     "Start MARINA CRP Drill ($questionCount Items)"
-                } else if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
+                } else if (selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE) {
                     "Start Intensive Mode Drill ($questionCount Items Queue)"
                 } else {
                     "Start Standard Practice Drill ($questionCount Items)"
@@ -960,7 +1055,7 @@ fun PracticeConfigScreen(
                         viewModel.startConfiguredPractice(
                             competenceId = competenceId,
                             selectedPart = selectedPart,
-                            deliveryMode = deliveryMode,
+                            deliveryMode = selectedDeliveryFormat,
                             questionCount = questionCount,
                             shuffleQuestions = if (isCrpMode) false else randomizeQuestionOrder,
                             shuffleChoices = shuffleChoices,
@@ -978,7 +1073,7 @@ fun PracticeConfigScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Icon(
-                        imageVector = if (deliveryMode == DrillDeliveryMode.INTENSIVE && !isCrpMode) Icons.Default.Autorenew else Icons.Default.PlayArrow,
+                        imageVector = if (selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE && !isCrpMode) Icons.Default.Autorenew else Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1035,6 +1130,71 @@ fun PracticeConfigScreen(
                     Text("Continue Free Practice")
                 }
             }
+        )
+    }
+
+    // Institutional Verification Dialog
+    if (showVerificationDialog) {
+        AlertDialog(
+            onDismissRequest = { showVerificationDialog = false },
+            containerColor = Color(0xFF141414),
+            title = {
+                Text(
+                    text = "VERIFICATION REQUIRED",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFF5A67)
+                )
+            },
+            text = {
+                Text(
+                    text = "Intensive recycling queues and question randomization require institutional terminal verification.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showVerificationDialog = false
+                        openMessengerSupport(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1D1D1D),
+                        contentColor = Color(0xFFFF5A67)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFFF5A67)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("CONTACT SUPPORT DESK ↗", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showVerificationDialog = false }
+                ) {
+                    Text("DISMISS", color = Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ClearanceRequiredBadge() {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = Color(0xFF1E1517),
+        border = BorderStroke(1.dp, Color(0xFFFF5A67))
+    ) {
+        Text(
+            text = "[CLEARANCE REQUIRED]",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            color = Color(0xFFFF5A67),
+            fontSize = 10.sp,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }

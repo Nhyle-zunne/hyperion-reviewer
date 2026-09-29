@@ -2,35 +2,30 @@ package com.example.ui.screens
 
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material.icons.filled.WorkspacePremium
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -41,49 +36,59 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.util.LicenseManager
-import com.example.ui.components.DeviceVerificationCard
 import com.example.ui.components.MaritimeTopBar
-import com.example.ui.theme.FailRed
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MianButton
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
-import com.example.viewmodel.Screen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Dedicated License & Device Verification Screen
+ * Editorial MIAN "Spaghetti" License & Verification Screen:
+ * Terminal verification, request code display, key entry.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun LicenseScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+
+    val isActivated by viewModel.isActivated.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
     val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
-    val isBothUnlocked = isOicNwProUnlocked && isGmdssProUnlocked
-    val isAnyUnlocked = isOicNwProUnlocked || isGmdssProUnlocked
-    val isDark = isSystemInDarkTheme()
-
-    val screenBg = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9)
-    val cardSurface = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-    val cardBorder = if (isDark) BorderStroke(1.dp, Color(0xFF334155)) else BorderStroke(1.dp, Color(0xFFCBD5E1))
 
     var keyInput by remember { mutableStateOf("") }
-    var activationError by remember { mutableStateOf<String?>(null) }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
+    var isValidationSuccess by remember { mutableStateOf(false) }
+
+    val requestCode = remember {
+        LicenseManager.getOrGenerateRequestCode(context)
+    }
 
     BackHandler {
         viewModel.navigateBack()
@@ -92,259 +97,227 @@ fun LicenseScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(screenBg)
-            .navigationBarsPadding()
+            .background(colors.background)
     ) {
         MaritimeTopBar(
-            title = "Device Verification & License",
+            title = "TERMINAL VERIFICATION",
+            subtitle = "OFFLINE LICENSE STATUS",
             showBackButton = true,
-            onBackClick = { viewModel.navigateBack() },
-            onMenuClick = { viewModel.openDrawer() },
-            onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+            onBackClick = { viewModel.navigateBack() }
         )
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .imePadding()
+                .verticalScroll(scrollState)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (isAnyUnlocked) {
-                val bannerTitle = when {
-                    isBothUnlocked -> "Hyperion Pro Active"
-                    isOicNwProUnlocked -> "OIC-NW Pro Active"
-                    else -> "GMDSS Pro Active"
-                }
-                val bannerDesc = when {
-                    isBothUnlocked -> "Your all-access license is permanently activated for this device. Full question repository, Intensive Mode recycling drill, and official timed mock exams are completely unlocked offline."
-                    isOicNwProUnlocked -> "Deck Operational Level license is permanently activated. Full 12-competence question bank, Intensive drills, and timed mock exams are unlocked offline."
-                    else -> "GMDSS Radio Operator license is permanently activated. Full GOC subsystems, emergency radio communications, and timed mock exams are unlocked offline."
-                }
+            // Status Card
+            MianRuleCard(
+                ruleColor = if (isActivated) colors.success else colors.accent,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "TERMINAL STATUS",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.foreground
+                        )
 
-                // Activated Status Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardSurface),
-                    border = BorderStroke(1.5.dp, PassGreen),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                        Surface(
+                            shape = RoundedCornerShape(2.dp),
+                            color = colors.surface2
+                        ) {
+                            Text(
+                                text = if (isActivated) "VERIFIED" else "VERIFICATION REQUIRED",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isActivated) colors.success else colors.accent,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isActivated) {
+                            "Full question bank and timed mock examination access active on this terminal."
+                        } else {
+                            "Please activate your terminal license to unlock all question banks and unlimited timed mock exams."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.muted
+                    )
+                }
+            }
+
+            com.example.ui.components.LuminousDeskSupportButton(
+                title = "CONTACT VERIFICATION DESK ↗",
+                subtitle = "Request institutional access or candidate clearance"
+            )
+
+            MianSectionHeader(title = "YOUR TERMINAL REQUEST CODE")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "DEVICE REQUEST CODE:",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        fontSize = 10.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(2.dp),
+                        color = colors.surface2,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = PassGreen,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = bannerTitle,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = PassGreen
-                                )
-                            }
+                            Text(
+                                text = requestCode,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 1.sp
+                                ),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.accent,
+                                modifier = Modifier.weight(1f)
+                            )
 
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = PassGreen.copy(alpha = 0.2f),
-                                border = BorderStroke(0.5.dp, PassGreen)
+                            MianButton(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(requestCode))
+                                    Toast.makeText(context, "Code copied", Toast.LENGTH_SHORT).show()
+                                }
                             ) {
-                                Text(
-                                    text = bannerTitle,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = PassGreen,
-                                    fontSize = 10.sp
+                                Text("COPY", fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            MianSectionHeader(title = "ACTIVATION KEY ENTRY")
+
+            MianRuleCard(
+                ruleColor = colors.accent,
+                containerColor = colors.surface,
+                modifier = Modifier.bringIntoViewRequester(bringIntoViewRequester)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it.uppercase() },
+                        placeholder = {
+                            Text(
+                                text = "XXXX - XXXX - XXXX - XXXX",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                                color = colors.muted
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                val clip = clipboardManager.getText()
+                                if (clip != null) {
+                                    keyInput = clip.text.trim().uppercase()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentPaste,
+                                    contentDescription = "Paste",
+                                    tint = colors.foreground
                                 )
                             }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = bannerDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
-                            lineHeight = 18.sp
-                        )
-                    }
-                }
-            }
-
-            // Standalone Device Verification & Activation Card
-            DeviceVerificationCard(
-                initialTier = com.example.data.util.ProTier.HYPERION_PRO
-            )
-
-            // Key Input & Activation Card
-            if (!isBothUnlocked) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = cardSurface),
-                    border = cardBorder,
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.VpnKey,
-                                contentDescription = null,
-                                tint = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "OFFLINE LICENSE ACTIVATION",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A),
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Enter your activation key to permanently activate Pro features:",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        OutlinedTextField(
-                            value = keyInput,
-                            onValueChange = { input ->
-                                keyInput = input.uppercase().filter { it.isLetterOrDigit() || it == '-' }
-                                activationError = null
-                            },
-                            label = { Text("License Key (e.g. KEY-OIC-XXXX-XXXX-XXXX)") },
-                            placeholder = { Text("KEY-OIC-XXXX-XXXX-XXXX") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Characters,
-                                keyboardType = KeyboardType.Ascii,
-                                imeAction = ImeAction.Done
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("license_key_input_field"),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7),
-                                unfocusedBorderColor = if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1),
-                                focusedTextColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A),
-                                unfocusedTextColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
-                            )
-                        )
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        AnimatedVisibility(visible = activationError != null) {
-                            activationError?.let { err ->
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = FailRed.copy(alpha = 0.15f),
-                                    border = BorderStroke(1.dp, FailRed.copy(alpha = 0.6f)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 12.dp)
-                                ) {
-                                    Text(
-                                        text = "⚠️ $err",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = FailRed,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(10.dp)
-                                    )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            imeAction = ImeAction.Done
+                        ),
+                        shape = RoundedCornerShape(2.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = colors.surface2,
+                            unfocusedContainerColor = colors.surface2,
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.border,
+                            focusedTextColor = colors.foreground,
+                            unfocusedTextColor = colors.foreground
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    coroutineScope.launch {
+                                        delay(150)
+                                        bringIntoViewRequester.bringIntoView()
+                                        scrollState.animateScrollTo(scrollState.maxValue)
+                                    }
                                 }
                             }
-                        }
-
-                        Button(
-                            onClick = {
-                                val result = viewModel.activateLicense(keyInput)
-                                if (result.isSuccess) {
-                                    activationError = null
-                                    Toast.makeText(context, result.toastMessage, Toast.LENGTH_LONG).show()
-                                } else {
-                                    activationError = result.toastMessage
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("activate_license_button"),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaritimeGoldBright,
-                                contentColor = Color(0xFF0F172A)
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.WorkspacePremium,
-                                contentDescription = null,
-                                tint = Color(0xFF0F172A),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Activate Pro",
-                                color = Color(0xFF0F172A),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Offline Cryptographic Assurance Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = cardSurface),
-                border = cardBorder
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = null,
-                        tint = SeaCyan,
-                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+
+                    if (validationMessage != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Offline Cryptographic Security",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SeaCyan
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Hyperion uses on-device SHA-256 validation. No internet connection or tracking server is contacted. Activation persists securely on this device across launches.",
+                            text = validationMessage!!,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp
+                            fontWeight = FontWeight.Bold,
+                            color = if (isValidationSuccess) colors.success else colors.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    MianButton(
+                        onClick = {
+                            val result = viewModel.activateWithKey(keyInput.trim())
+                            validationMessage = result.toastMessage
+                            isValidationSuccess = result.isSuccess
+                            if (result.isSuccess) {
+                                Toast.makeText(context, result.toastMessage, Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        accent = true,
+                        enabled = keyInput.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "VERIFY & UNLOCK",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 12.sp,
+                            letterSpacing = 1.sp
                         )
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

@@ -3,12 +3,10 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,27 +17,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Dangerous
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -52,102 +44,214 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CompetenceScore
 import com.example.data.model.ExamResult
-import com.example.data.model.Question
 import com.example.ui.components.MaritimeTopBar
-import com.example.ui.theme.FailRed
-import com.example.ui.theme.FailRedContainer
-import com.example.ui.theme.MaritimeGold
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.PassGreenContainer
-import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MianButton
+import com.example.ui.components.MianRuleButton
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.components.SpaghettiProgressBar
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
 import com.example.viewmodel.Screen
 
+/**
+ * Editorial MIAN "Spaghetti" Examination Results Screen:
+ * High contrast editorial diagnostics, 3dp top rules, Pass/Fail semantic indicators,
+ * competence-by-competence 70% evaluation, full item review.
+ */
 @Composable
 fun ResultsScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     val examResult by viewModel.lastExamResult.collectAsState()
     val activeQuestions by viewModel.activeQuestions.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) } // 0: Breakdown, 1: Question Review
 
     BackHandler {
-        viewModel.navigateTo(Screen.Home)
+        viewModel.finishExamToHome()
     }
 
     if (examResult == null) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = colors.background
+        ) {
             Box(contentAlignment = Alignment.Center) {
-                Text("No exam results available.", color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    text = "NO EXAM RESULTS AVAILABLE",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.muted
+                )
             }
         }
         return
     }
 
     val result = examResult!!
+    val isPassed = result.isPassed
+    val statusColor = if (isPassed) colors.success else colors.error
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
     ) {
         MaritimeTopBar(
-            title = "Examination Diagnostic",
-            subtitle = result.track.shortName,
+            title = "EXAMINATION RESULTS",
+            subtitle = "${result.track} • MARINA EVALUATION",
             showBackButton = true,
-            onBackClick = { viewModel.navigateTo(Screen.Home) },
-            onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+            onBackClick = { viewModel.finishExamToHome() }
         )
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Big Status Banner
             item {
-                ResultStatusBanner(result = result)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Overall Score Poster Banner
+                MianRuleCard(
+                    ruleColor = statusColor,
+                    containerColor = colors.surface
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(2.dp),
+                                color = colors.surface2
+                            ) {
+                                Text(
+                                    text = if (isPassed) "PASSED • 70% THRESHOLD MET" else "FAILED • BELOW 70% CUTOFF",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = statusColor,
+                                    fontSize = 11.sp,
+                                    letterSpacing = 1.2.sp
+                                )
+                            }
+
+                            Text(
+                                text = "${result.score} / ${result.totalQuestions} ITEMS",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.muted,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Column {
+                                Text(
+                                    text = "${result.percentage.toInt()}%",
+                                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 44.sp),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = statusColor,
+                                    letterSpacing = (-1.5).sp
+                                )
+                                Text(
+                                    text = "WEIGHTED SCORE: ${result.weightedScore.toInt()} / ${result.totalPossibleWeightedScore.toInt()} PTS",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.muted,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = if (isPassed) "COMPETENT" else "NYC",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = statusColor
+                                )
+                                Text(
+                                    text = if (isPassed) "READY FOR LICENSURE" else "NOT YET COMPETENT",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.muted,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        SpaghettiProgressBar(progress = (result.percentage / 100.0).toFloat())
+                    }
+                }
             }
 
-            // Score Overview Card
-            item {
-                ScoreOverviewCard(result = result)
-            }
-
-            // Tabs: Breakdown vs Review
+            // Tabs: Breakdown vs Question Review
             item {
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaritimeGoldBright
+                    containerColor = colors.surface,
+                    contentColor = colors.foreground,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            height = 3.dp,
+                            color = colors.accent
+                        )
+                    },
+                    divider = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(colors.border)
+                        )
+                    }
                 ) {
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
                         text = {
                             Text(
-                                "TOS Breakdown",
-                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                                text = "COMPETENCE BREAKDOWN",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp,
+                                color = if (selectedTab == 0) colors.accent else colors.muted
                             )
                         }
                     )
+
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
                         text = {
                             Text(
-                                "Review Items (${result.totalQuestions})",
-                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                                text = "QUESTION REVIEW (${result.totalQuestions})",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp,
+                                color = if (selectedTab == 1) colors.accent else colors.muted
                             )
                         }
                     )
@@ -155,438 +259,221 @@ fun ResultsScreen(
             }
 
             if (selectedTab == 0) {
-                // Itemized Competence Breakdown Table
+                // TAB 0: COMPETENCE BREAKDOWN
                 item {
-                    Text(
-                        text = "ITEMIZED COMPETENCE SCORES",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
-                        letterSpacing = 1.sp
-                    )
+                    MianSectionHeader(title = "COMPETENCE EVALUATION (70% MARINA CUTOFF)")
                 }
 
-                items(result.competenceScores) { compScore ->
-                    CompetenceResultRow(compScore = compScore)
-                }
+                items(result.competenceBreakdown) { comp ->
+                    val isCompPassed = comp.percentage >= 70.0
+                    val compColor = if (isCompPassed) colors.success else colors.error
 
-                item {
-                    // MARINA Policy Footer
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        modifier = Modifier.fillMaxWidth()
+                    MianRuleCard(
+                        ruleColor = compColor,
+                        containerColor = colors.surface
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "Licensure Assessment Rule:",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Candidates must obtain at least 70.0% in every competence. A failure in any single competence requires remedial resit of that function.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${comp.competenceId} • ${comp.title}".uppercase(),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.foreground,
+                                    letterSpacing = (-0.2).sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Surface(
+                                    shape = RoundedCornerShape(2.dp),
+                                    color = colors.surface2
+                                ) {
+                                    Text(
+                                        text = if (isCompPassed) "PASSED" else "FAILED",
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = compColor,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${comp.score} / ${comp.totalQuestions} items (${comp.percentage.toInt()}%)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.foreground
+                                )
+
+                                Text(
+                                    text = "${comp.weightedScore.toInt()} / ${comp.totalPossibleWeightedScore.toInt()} weighted pts",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.muted
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            SpaghettiProgressBar(progress = (comp.percentage / 100.0).toFloat())
                         }
                     }
                 }
             } else {
-                // Question Review Items
-                items(activeQuestions) { question ->
-                    val userState = result.questionStates[question.id]
-                    QuestionReviewCard(question = question, userSelectedIndex = userState?.selectedIndex)
+                // TAB 1: QUESTION REVIEW
+                item {
+                    MianSectionHeader(title = "FULL ITEM-BY-ITEM AUDIT")
+                }
+
+                items(result.questionResults) { itemResult ->
+                    var isExpanded by remember { mutableStateOf(false) }
+                    val itemColor = if (itemResult.isCorrect) colors.success else colors.error
+
+                    MianRuleCard(
+                        ruleColor = itemColor,
+                        containerColor = colors.surface,
+                        onClick = { isExpanded = !isExpanded }
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(if (itemResult.isCorrect) colors.success else colors.accent),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (itemResult.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                                            contentDescription = null,
+                                            tint = colors.primaryForeground,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Text(
+                                        text = "${itemResult.competenceId} • ITEM ${itemResult.questionId}".uppercase(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.foreground,
+                                        fontSize = 11.sp,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = "Expand",
+                                    tint = colors.muted
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = itemResult.questionText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.foreground,
+                                maxLines = if (isExpanded) Int.MAX_VALUE else 2
+                            )
+
+                            AnimatedVisibility(visible = isExpanded) {
+                                Column(modifier = Modifier.padding(top = 10.dp)) {
+                                    Text(
+                                        text = "YOUR ANSWER: ${itemResult.selectedOptionText ?: "Unanswered"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (itemResult.isCorrect) colors.success else colors.error,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    if (!itemResult.isCorrect) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "CORRECT ANSWER: ${itemResult.correctOptionText}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.success,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    if (!itemResult.rationale.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "RATIONALE: ${itemResult.rationale}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.muted
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             // Bottom Actions
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val missedCount = result.totalQuestions - result.correctCount
-                    if (missedCount > 0) {
-                        Button(
-                            onClick = { viewModel.practiceMissedQuestionsFromExam() },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = FailRed),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = "Practice Missed",
-                                tint = PureWhite
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Practice Missed Questions ($missedCount)", color = PureWhite, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.retakeCurrentExam() },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Retake",
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Retake Exam")
-                        }
-
-                        Button(
-                            onClick = { viewModel.navigateTo(Screen.Home) },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaritimeGoldBright),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home",
-                                tint = Color.Black,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Dashboard", color = Color.Black, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResultStatusBanner(result: ExamResult) {
-    val isPassed = result.isOverallPassed
-    val bannerBg = if (isPassed) PassGreenContainer else FailRedContainer
-    val bannerBorder = if (isPassed) PassGreen else FailRed
-    val bannerIcon = if (isPassed) Icons.Default.CheckCircle else Icons.Default.Dangerous
-    val bannerText = if (isPassed) "PASSED LICENSURE STANDARD" else "FAILED — REMEDIAL REQUIRED"
-    val subText = if (isPassed) {
-        "Candidate satisfied the 70.0% threshold across all tested competences."
-    } else {
-        "Candidate failed to achieve the mandatory 70.0% threshold in one or more competences."
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = bannerBg),
-        border = androidx.compose.foundation.BorderStroke(2.dp, bannerBorder)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = bannerIcon,
-                contentDescription = bannerText,
-                tint = bannerBorder,
-                modifier = Modifier.size(48.dp)
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = bannerText,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = PureWhite
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = subText,
-                style = MaterialTheme.typography.bodySmall,
-                color = PureWhite.copy(alpha = 0.9f),
-                fontSize = 12.sp
-            )
-        }
-    }
-}
-
-@Composable
-private fun ScoreOverviewCard(result: ExamResult) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = String.format("%.1f%%", result.overallPercentage),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = if (result.overallPercentage >= 70.0) PassGreen else FailRed
-                )
-                Text(
-                    text = "Weighted Score",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .height(40.dp)
-                    .width(1.dp)
-                    .background(MaterialTheme.colorScheme.outline)
-            )
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "${result.rawPointsEarned}/${result.maxPointsPossible}",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaritimeGoldBright
-                )
-                Text(
-                    text = "Bloom's Points",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .height(40.dp)
-                    .width(1.dp)
-                    .background(MaterialTheme.colorScheme.outline)
-            )
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "${result.correctCount}/${result.totalQuestions}",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Items Correct",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompetenceResultRow(compScore: CompetenceScore) {
-    val statusColor = if (compScore.isPassed) PassGreen else FailRed
-    val statusText = if (compScore.isPassed) "PASSED" else "FAILED"
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                MianButton(
+                    onClick = { viewModel.startTimedMockExam(viewModel.selectedTrack.value) },
+                    accent = true,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = compScore.competenceId,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaritimeGoldBright,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text(
-                        text = compScore.competenceTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = statusColor.copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = statusText,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Items: ${compScore.correctCount}/${compScore.questionCount}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = "Raw: ${compScore.rawPointsEarned}/${compScore.maxPointsPossible} pts",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = String.format("%.1f%%", compScore.percentage),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Bold,
-                    color = statusColor
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuestionReviewCard(question: Question, userSelectedIndex: Int?) {
-    var expanded by remember { mutableStateOf(false) }
-    val isCorrect = userSelectedIndex == question.correctAnswerIndex
-    val statusColor = if (isCorrect) PassGreen else FailRed
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-    ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Retake",
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "${question.functionId} • ${question.competenceId} (${question.topic})",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaritimeGoldBright,
-                        fontWeight = FontWeight.Bold
+                        text = "RETAKE MOCK EXAM",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        letterSpacing = 1.sp
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = statusColor.copy(alpha = 0.2f)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                MianRuleButton(
+                    onClick = { viewModel.finishExamToHome() },
+                    ruleColor = colors.border,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Home",
+                        tint = colors.foreground,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isCorrect) "CORRECT (+${question.difficulty.points} pts)" else "MISSED",
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "RETURN TO DASHBOARD",
                         fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        color = colors.foreground,
+                        fontSize = 12.sp,
+                        letterSpacing = 1.sp
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = question.questionText,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Show user answer vs correct answer
-            val letters = listOf("A", "B", "C", "D")
-            val userChoiceText = if (userSelectedIndex != null) "${letters[userSelectedIndex]}: ${question.options[userSelectedIndex]}" else "No answer"
-            val correctChoiceText = "${letters[question.correctAnswerIndex]}: ${question.options[question.correctAnswerIndex]}"
-
-            Text(
-                text = "Your Answer: $userChoiceText",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isCorrect) PassGreen else FailRed
-            )
-
-            if (!isCorrect) {
-                Text(
-                    text = "Correct Answer: $correctChoiceText",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = PassGreen,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (expanded) "Hide Rationale" else "Show Explanation & IMO Rationale",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = SeaCyan,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = SeaCyan,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 8.dp)) {
-                    Text(
-                        text = question.explanation,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
     }

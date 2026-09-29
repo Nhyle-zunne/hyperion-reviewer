@@ -6,10 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -18,9 +19,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,12 +37,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.FailRed
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.SeaCyan
+import com.example.ui.theme.LocalSpaghettiColors
 
+/**
+ * Editorial MIAN "Spaghetti" Top App Bar:
+ * Flat surface, 3dp bottom horizontal rule, Heavy Grotesk typography, strict left alignment.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaritimeTopBar(
@@ -62,52 +64,45 @@ fun MaritimeTopBar(
     vaultCount: Int = 0,
     onClearAllClick: (() -> Unit)? = null
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-    val topBarBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFF0F172A)
-    val titleColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color.White
-    val subtitleColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
-    val iconTint = if (isDark) MaterialTheme.colorScheme.primary else Color.White
-    val borderStroke = if (isDark) {
-        androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-    } else {
-        androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
-    }
+    val colors = LocalSpaghettiColors.current
 
-    Surface(
-        color = topBarBg,
-        border = borderStroke
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         TopAppBar(
             title = {
                 Column {
                     Text(
-                        text = title,
+                        text = title.uppercase(),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = titleColor,
-                        letterSpacing = 0.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        letterSpacing = (-0.2).sp,
                         maxLines = 1,
-                        softWrap = false,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (subtitle != null) {
                         Text(
-                            text = subtitle,
+                            text = subtitle.uppercase(),
                             style = MaterialTheme.typography.labelSmall,
-                            color = subtitleColor,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.muted,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp,
                             maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
             },
             navigationIcon = {
                 if (showBackButton) {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier.testTag("topbar_back_button")
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = iconTint
+                            tint = colors.foreground
                         )
                     }
                 } else if (onMenuClick != null) {
@@ -117,8 +112,8 @@ fun MaritimeTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
-                            contentDescription = "Open navigation drawer",
-                            tint = iconTint
+                            contentDescription = "Menu",
+                            tint = colors.foreground
                         )
                     }
                 }
@@ -133,15 +128,15 @@ fun MaritimeTopBar(
                             BadgedBox(
                                 badge = {
                                     Badge(
-                                        containerColor = MaritimeGoldBright,
-                                        contentColor = Color(0xFF0F172A),
-                                        modifier = Modifier.size(14.dp)
+                                        containerColor = colors.accent,
+                                        contentColor = colors.accentForeground,
+                                        modifier = Modifier.size(12.dp).clip(RoundedCornerShape(2.dp))
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Lock,
                                             contentDescription = "Locked",
-                                            modifier = Modifier.size(9.dp),
-                                            tint = Color(0xFF0F172A)
+                                            modifier = Modifier.size(8.dp),
+                                            tint = colors.accentForeground
                                         )
                                     }
                                 }
@@ -149,14 +144,14 @@ fun MaritimeTopBar(
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search (Locked)",
-                                    tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else Color(0xFF94A3B8)
+                                    tint = colors.muted
                                 )
                             }
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = "Search",
-                                tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+                                tint = colors.foreground
                             )
                         }
                     }
@@ -167,7 +162,7 @@ fun MaritimeTopBar(
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = "Session History",
-                            tint = iconTint
+                            tint = colors.foreground
                         )
                     }
                 }
@@ -176,21 +171,61 @@ fun MaritimeTopBar(
                     IconButton(onClick = onBookmarksClick) {
                         if (bookmarkCount > 0) {
                             BadgedBox(badge = {
-                                Badge(containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7), contentColor = Color.White) {
-                                    Text("$bookmarkCount")
+                                Badge(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.accentForeground,
+                                    modifier = Modifier.clip(RoundedCornerShape(2.dp))
+                                ) {
+                                    Text(
+                                        text = "$bookmarkCount",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 10.sp
+                                    )
                                 }
                             }) {
                                 Icon(
                                     imageVector = Icons.Default.Bookmark,
                                     contentDescription = "Bookmarks",
-                                    tint = iconTint
+                                    tint = colors.foreground
                                 )
                             }
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Bookmark,
                                 contentDescription = "Bookmarks",
-                                tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+                                tint = colors.foreground
+                            )
+                        }
+                    }
+                }
+
+                if (onVaultClick != null) {
+                    IconButton(onClick = onVaultClick) {
+                        if (vaultCount > 0) {
+                            BadgedBox(badge = {
+                                Badge(
+                                    containerColor = colors.accent,
+                                    contentColor = colors.accentForeground,
+                                    modifier = Modifier.clip(RoundedCornerShape(2.dp))
+                                ) {
+                                    Text(
+                                        text = "$vaultCount",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Vault",
+                                    tint = colors.foreground
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Vault",
+                                tint = colors.foreground
                             )
                         }
                     }
@@ -200,16 +235,26 @@ fun MaritimeTopBar(
                     IconButton(onClick = onClearAllClick) {
                         Icon(
                             imageVector = Icons.Default.DeleteForever,
-                            contentDescription = "Clear All Sessions",
-                            tint = FailRed
+                            contentDescription = "Clear All",
+                            tint = colors.accent
                         )
                     }
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = topBarBg,
-                titleContentColor = titleColor
+                containerColor = colors.surface,
+                titleContentColor = colors.foreground,
+                navigationIconContentColor = colors.foreground,
+                actionIconContentColor = colors.foreground
             )
+        )
+
+        // 3dp Bottom Rule
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(colors.border)
         )
     }
 }

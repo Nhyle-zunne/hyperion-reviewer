@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -109,6 +111,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun isTrackProUnlocked(track: Track = _selectedTrack.value): Boolean {
         return LicenseManager.isTrackProUnlocked(getApplication(), track)
+    }
+
+    fun hasAccessTo(module: com.example.data.util.LicenseTier): Boolean {
+        return LicenseManager.hasAccessTo(getApplication(), module)
     }
 
     fun activateLicense(enteredKey: String, targetTier: com.example.data.util.ProTier? = null): com.example.data.util.UnlockResult {
@@ -239,8 +245,26 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    private val _searchResults = MutableStateFlow<List<Question>>(emptyList())
-    val searchResults: StateFlow<List<Question>> = _searchResults.asStateFlow()
+    private val _selectedCompetenceFilter = MutableStateFlow<String?>(null)
+    val selectedCompetenceFilter: StateFlow<String?> = _selectedCompetenceFilter.asStateFlow()
+
+    fun setCompetenceFilter(competenceId: String?) {
+        _selectedCompetenceFilter.value = competenceId
+    }
+
+    val searchResults: StateFlow<List<Question>> = combine(
+        _searchQuery
+            .debounce(300L)
+            .distinctUntilChanged(),
+        _selectedTrack,
+        isActivated
+    ) { query, track, proUnlocked ->
+        MaritimeQuestionBank.searchQuestions(query, track, isProUnlocked = proUnlocked)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Lazily,
+        initialValue = emptyList()
+    )
 
     // Flows from Room Database
     val bookmarkedIds: StateFlow<Set<String>> = repository.observeBookmarkIds()
@@ -344,40 +368,119 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _currentScreen.value = screen
     }
 
-    fun navigateBack() {
-        if (backStack.isNotEmpty()) {
+    /**
+     * Purges all active exam and drill session screens from the back stack
+     * to prevent navigation back stack leaks when returning to the track screen or dashboard.
+     */
+    fun purgeExamSessionFromBackStack() {
+        backStack.removeAll { screen ->
+            screen is Screen.Quiz ||
+            screen is Screen.MockHub ||
+            screen is Screen.MockCompetence ||
+            screen is Screen.Results ||
+            screen is Screen.PracticeConfig ||
+            screen is Screen.PracticeCompetenceSelect ||
+            screen is Screen.FreePractice
+        }
+    }
+
+    fun navigateBack(): Boolean {
+        // When on Home (OIC-NW or GMDSS Track menu), back MUST always return directly to Dashboard
+        if (_currentScreen.value is Screen.Home) {
+            backStack.clear()
+            _currentScreen.value = Screen.TrackSelection
+            return true
+        }
+
+        while (backStack.isNotEmpty()) {
             val prev = backStack.removeLast()
-            _currentScreen.value = prev
-        } else {
-            when (_currentScreen.value) {
-                is Screen.ExamGuidelines,
-                is Screen.TermsAndDisclaimer,
-                is Screen.Activation,
-                is Screen.License,
-                is Screen.About -> _currentScreen.value = Screen.Home
-                is Screen.PracticeConfig -> {
-                    val crp = (_currentScreen.value as Screen.PracticeConfig).isCrpMode
-                    _currentScreen.value = Screen.PracticeCompetenceSelect(isCrpMode = crp)
-                }
-                is Screen.PracticeCompetenceSelect,
-                is Screen.MockHub,
-                is Screen.Flashcards,
-                is Screen.Vault,
-                is Screen.Bookmarks,
-                is Screen.Search,
-                is Screen.History,
-                is Screen.Topics -> _currentScreen.value = Screen.Home
-                is Screen.MockCompetence -> _currentScreen.value = Screen.MockHub
-                is Screen.Quiz -> exitQuiz()
-                is Screen.FreePractice,
-                is Screen.Home -> _currentScreen.value = Screen.TrackSelection
-                else -> _currentScreen.value = Screen.TrackSelection
+            if (prev != _currentScreen.value &&
+                prev !is Screen.Quiz &&
+                prev !is Screen.MockCompetence &&
+                prev !is Screen.Results &&
+                prev !is Screen.FreePractice
+            ) {
+                _currentScreen.value = prev
+                return true
             }
         }
+
+        if (_currentScreen.value !is Screen.TrackSelection) {
+            _currentScreen.value = Screen.TrackSelection
+            return true
+        }
+        return false
+    }
+
+    fun popBackStack(): Boolean = navigateBack()
+
+    fun navigateToDashboard() {
+        backStack.clear()
+        _currentScreen.value = Screen.TrackSelection
     }
 
     fun setTrack(track: Track) {
         _selectedTrack.value = track
+    }
+
+    fun selectTrack(track: Track) {
+        _selectedTrack.value = track
+    }
+
+    fun activateWithKey(key: String, targetTier: com.example.data.util.ProTier? = null) = activateLicense(key, targetTier)
+
+    fun clearAllBookmarks() {
+        viewModelScope.launch {
+            repository.clearAllBookmarks()
+        }
+    }
+
+    fun startQuiz(questions: List<Question>, mode: QuizMode = QuizMode.PRACTICE) {
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        _activeQuizMode.value = mode
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _currentQuestionIndex.value = 0
+        _timeRemainingSeconds.value = 0
+        _currentScreen.value = Screen.Quiz
+    }
+
+    fun startPracticeQuizForCompetence(competenceId: String, isCrpMode: Boolean = false) {
+        startConfiguredPractice(competenceId = competenceId, isCrpMode = isCrpMode)
+    }
+
+    fun startTimedMockExam(track: Track = _selectedTrack.value) {
+        _selectedTrack.value = track
+        startQuizSession(QuizMode.MOCK_EXAM)
+    }
+
+    fun openQuestionPalette() {
+        _isPaletteOpen.value = true
+    }
+
+    fun closeQuestionPalette() {
+        _isPaletteOpen.value = false
+    }
+
+    fun openSubmitDialog() {
+        _showSubmitDialog.value = true
+    }
+
+    fun closeSubmitDialog() {
+        _showSubmitDialog.value = false
+    }
+
+    fun goToQuestion(index: Int) {
+        jumpToQuestion(index)
+    }
+
+    fun updateSearchQuery(query: String) {
+        setSearchQuery(query)
+    }
+
+    fun deleteExamRecords(recordIds: List<String>) {
+        deleteExamRecordsByIds(recordIds)
     }
 
     fun selectTrackAndOpenDashboard(track: Track) {
@@ -389,6 +492,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun startVaultDrill() {
         timerJob?.cancel()
+        purgeExamSessionFromBackStack()
         _activeQuizMode.value = QuizMode.VAULT_DRILL
         _activeFunctionId.value = null
         _activeCompetenceId.value = null
@@ -408,11 +512,38 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _currentScreen.value = Screen.Quiz
     }
 
+    fun exitQuizToHome() {
+        timerJob?.cancel()
+        refreshMistakes()
+        purgeExamSessionFromBackStack()
+        _currentScreen.value = Screen.Home
+    }
+
+    fun finishExamToHome() {
+        timerJob?.cancel()
+        refreshMistakes()
+        purgeExamSessionFromBackStack()
+        _currentScreen.value = Screen.Home
+    }
+
+    fun resetIntensiveDrill() {
+        timerJob?.cancel()
+        _intensiveQueue.value = emptyList()
+        _intensiveCurrentQuestionState.value = null
+        _intensiveClearedCount.value = 0
+        _intensiveCompleted.value = false
+        purgeExamSessionFromBackStack()
+        _currentScreen.value = Screen.Home
+    }
+
     fun exitQuiz() {
         refreshMistakes()
-        if (_activeQuizMode.value == QuizMode.VAULT_DRILL) {
+        timerJob?.cancel()
+        val mode = _activeQuizMode.value
+        purgeExamSessionFromBackStack()
+        if (mode == QuizMode.VAULT_DRILL) {
             _currentScreen.value = Screen.Vault
-        } else if (_activeQuizMode.value == QuizMode.BOOKMARKS_DRILL) {
+        } else if (mode == QuizMode.BOOKMARKS_DRILL) {
             _currentScreen.value = Screen.Bookmarks
         } else {
             _currentScreen.value = Screen.Home
@@ -568,16 +699,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _intensiveCurrentQuestionState.value = null
     }
 
-    fun resetIntensiveDrill() {
-        _intensiveCompleted.value = false
-        _intensiveClearedCount.value = 0
-        _intensiveCurrentQuestionState.value = null
-        _currentScreen.value = Screen.Home
-    }
-
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
-        _searchResults.value = MaritimeQuestionBank.searchQuestions(query, _selectedTrack.value, isProUnlocked = isActivated.value)
     }
 
     fun setPaletteOpen(open: Boolean) {

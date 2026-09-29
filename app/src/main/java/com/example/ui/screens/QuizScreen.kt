@@ -4,14 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -38,15 +33,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OutlinedFlag
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,28 +50,34 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Difficulty
 import com.example.data.model.QuizMode
 import com.example.ui.components.DifficultyBadge
+import com.example.ui.components.MianButton
+import com.example.ui.components.MianRuleButton
+import com.example.ui.components.MianRuleCard
 import com.example.ui.components.OptionCard
 import com.example.ui.components.QuestionPaletteDialog
+import com.example.ui.components.SpaghettiProgressBar
 import com.example.ui.components.TimerChip
-import com.example.ui.theme.FailRed
-import com.example.ui.theme.MaritimeGold
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeaCyan
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
 import com.example.viewmodel.Screen
 
+/**
+ * Editorial MIAN "Spaghetti" QuizScreen:
+ * Visually dominant question prompt, 3dp rules instead of boxed cards, sharp square badges,
+ * strict left alignment, flat high contrast surfaces, single tomato red accent.
+ */
 @Composable
 fun QuizScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     val activeQuestions by viewModel.activeQuestions.collectAsState()
     val currentIndex by viewModel.currentQuestionIndex.collectAsState()
     val userStates by viewModel.userQuestionStates.collectAsState()
@@ -101,14 +96,22 @@ fun QuizScreen(
         if (quizMode == QuizMode.MOCK_EXAM && !isExamSubmitted) {
             showLockInDialog = true
         } else {
-            viewModel.navigateTo(Screen.Home)
+            viewModel.navigateBack()
         }
     }
 
     if (activeQuestions.isEmpty()) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = colors.background
+        ) {
             Box(contentAlignment = Alignment.Center) {
-                Text("No questions found for this session.", color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    text = "NO QUESTIONS LOADED FOR THIS SESSION",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.muted
+                )
             }
         }
         return
@@ -118,215 +121,206 @@ fun QuizScreen(
     val currentState = userStates[question.id]
     val isBookmarked = bookmarkedIds.contains(question.id)
     val isFlagged = currentState?.isFlagged == true
-
-    val isMockExam = quizMode == QuizMode.MOCK_EXAM
-    val isSubmitted = currentState?.isSubmitted == true || (!isMockExam && currentState?.selectedIndex != null)
-
+    val isSubmitted = currentState?.isSubmitted == true || isExamSubmitted
     val optionLetters = listOf("A", "B", "C", "D")
-
-    val isDark = isSystemInDarkTheme()
-    val headerBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFF0F172A)
-    val headerTitleColor = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFFFFFFFF)
-    val headerSubColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF38BDF8)
-    val headerIconColor = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFFFFFFF)
-    val headerBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFF1E293B))
+    val isMockExam = quizMode == QuizMode.MOCK_EXAM
+    val isTimed = isMockExam && timeRemaining > 0
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDark) MaterialTheme.colorScheme.background else Color(0xFFF1F5F9))
+            .background(colors.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
-        // Quiz Top Bar
+        // ==========================================
+        // 1. EDITORIAL QUIZ HEADER
+        // ==========================================
         Surface(
-            color = headerBg,
-            border = headerBorder
+            color = colors.surface,
+            shadowElevation = 0.dp
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isMockExam && !isExamSubmitted) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
-                            onClick = { showLockInDialog = true },
-                            enabled = false
+                            onClick = {
+                                if (isMockExam && !isExamSubmitted) {
+                                    showLockInDialog = true
+                                } else {
+                                    showExitDialog = true
+                                }
+                            }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = "Exam Locked",
-                                tint = if (isDark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f) else Color.White.copy(alpha = 0.85f)
+                                imageVector = if (isMockExam && !isExamSubmitted) Icons.Default.Lock else Icons.Default.Close,
+                                contentDescription = "Exit",
+                                tint = if (isMockExam && !isExamSubmitted) colors.accent else colors.foreground
                             )
                         }
-                    } else {
-                        IconButton(onClick = {
-                            viewModel.navigateTo(Screen.Home)
-                        }) {
+
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        Column {
+                            Text(
+                                text = "QUESTION ${currentIndex + 1} / ${activeQuestions.size}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.foreground,
+                                letterSpacing = (-0.2).sp
+                            )
+                            Text(
+                                text = if (isMockExam) "MOCK EXAM • ${question.competenceId}" else "${question.functionId} • ${question.competenceId}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.muted,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isTimed) {
+                            TimerChip(secondsRemaining = timeRemaining)
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.toggleBookmark(question.id) }
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Exit Quiz",
-                                tint = headerIconColor
+                                imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                contentDescription = "Bookmark",
+                                tint = if (isBookmarked) colors.accent else colors.foreground
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.toggleFlag(currentIndex) }
+                        ) {
+                            Icon(
+                                imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
+                                contentDescription = "Flag for review",
+                                tint = if (isFlagged) colors.accent else colors.foreground
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.openQuestionPalette() }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GridView,
+                                contentDescription = "Question Palette",
+                                tint = colors.foreground
                             )
                         }
                     }
-
-                    Column {
-                        Text(
-                            text = "Question ${currentIndex + 1} of ${activeQuestions.size}",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = headerTitleColor
-                        )
-                        Text(
-                            text = "${question.functionId} • ${question.competenceId}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = headerSubColor,
-                            fontWeight = if (!isDark) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                    }
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (isMockExam) {
-                        TimerChip(secondsRemaining = timeRemaining)
-                    }
-
-                    // Flag button (useful in Mock)
-                    IconButton(onClick = { viewModel.toggleFlag(currentIndex) }) {
-                        Icon(
-                            imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
-                            contentDescription = "Flag Question",
-                            tint = if (isFlagged) (if (isDark) MaterialTheme.colorScheme.primary else Color(0xFFFBBF24)) else headerIconColor
-                        )
-                    }
-
-                    // Bookmark star
-                    IconButton(onClick = { viewModel.toggleBookmark(question.id) }) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Bookmark",
-                            tint = if (isBookmarked) (if (isDark) MaterialTheme.colorScheme.primary else Color(0xFFFBBF24)) else headerIconColor
-                        )
-                    }
-                }
+                // 3dp Header Progress Bar (Tomato Red fill on Border track)
+                val progressFraction = (currentIndex + 1).toFloat() / activeQuestions.size.coerceAtLeast(1)
+                SpaghettiProgressBar(progress = progressFraction, height = 3.dp)
             }
         }
 
-        // Sleek Material 3 LinearProgressIndicator at top
-        val currentProgress = (currentIndex + 1).toFloat() / activeQuestions.size.coerceAtLeast(1).toFloat()
-        LinearProgressIndicator(
-            progress = { currentProgress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp),
-            color = if (isDark) MaterialTheme.colorScheme.primary else MaritimeGoldBright,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-
-        // Main Question Scroll Content
+        // ==========================================
+        // 2. SCROLLABLE QUESTION CONTENT
+        // ==========================================
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Index badge & Question Weight Pill Chip row
+            // Category, Taxonomy & Difficulty Metadata Row (Strict left alignment, 2dp corners)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0F2FE),
-                    border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFBAE6FD))
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
                 ) {
                     Text(
-                        text = if (isMockExam) {
-                            "Question ${currentIndex + 1} of ${activeQuestions.size} • Mock Exam"
-                        } else {
-                            "Question ${currentIndex + 1} of ${activeQuestions.size} • ${question.competenceId}"
-                        },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0369A1)
+                        text = "${question.functionId} · ${question.competenceId}".uppercase(),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Start
                     )
                 }
 
-                // Question weight pill chip: "Easy (+3 pts)", "Moderate (+6 pts)", or "Difficult (+9 pts)"
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = when (question.difficulty) {
-                        Difficulty.EASY -> Color(0xFF0F3E38)
-                        Difficulty.MODERATE -> Color(0xFF382D12)
-                        Difficulty.DIFFICULT -> Color(0xFF43161C)
-                    },
-                    border = BorderStroke(
-                        1.dp,
-                        when (question.difficulty) {
-                            Difficulty.EASY -> PassGreen
-                            Difficulty.MODERATE -> MaritimeGoldBright
-                            Difficulty.DIFFICULT -> FailRed
-                        }
-                    )
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
                 ) {
                     Text(
                         text = when (question.difficulty) {
-                            Difficulty.EASY -> "Easy (+3 pts)"
-                            Difficulty.MODERATE -> "Moderate (+6 pts)"
-                            Difficulty.DIFFICULT -> "Difficult (+9 pts)"
+                            Difficulty.EASY -> "EASY (+3 PTS)"
+                            Difficulty.MODERATE -> "MODERATE (+6 PTS)"
+                            Difficulty.DIFFICULT -> "DIFFICULT (+9 PTS)"
                         },
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                         color = when (question.difficulty) {
-                            Difficulty.EASY -> Color(0xFF4ADE80)
-                            Difficulty.MODERATE -> Color(0xFFFBBF24)
-                            Difficulty.DIFFICULT -> Color(0xFFF87171)
-                        }
+                            Difficulty.EASY -> colors.success
+                            Difficulty.MODERATE -> colors.foreground
+                            Difficulty.DIFFICULT -> colors.accent
+                        },
+                        fontSize = 11.sp,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Start
                     )
                 }
             }
 
             // Topic Tag
             Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0F2FE),
-                border = if (isDark) null else BorderStroke(1.dp, Color(0xFFBAE6FD))
+                shape = RoundedCornerShape(2.dp),
+                color = colors.surface2
             ) {
                 Text(
-                    text = "${question.competenceId}: ${question.topic}",
+                    text = "${question.competenceId}: ${question.topic}".uppercase(),
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDark) SeaCyan else Color(0xFF0369A1),
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.muted,
+                    fontSize = 10.sp,
+                    letterSpacing = 1.sp,
+                    textAlign = TextAlign.Start,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
 
-            // Question Text Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFFFFFFF)),
-                elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
-                border = BorderStroke(1.dp, if (isDark) MaterialTheme.colorScheme.outline else Color(0xFFCBD5E1))
+            // Visually Dominant Question Text Card ("Rules, not boxes": single 3dp top rule, flat surface)
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
             ) {
                 Text(
                     text = question.questionText,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 15.sp,
-                        fontWeight = if (isDark) FontWeight.Medium else FontWeight.SemiBold,
-                        lineHeight = 22.sp
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        lineHeight = 25.sp,
+                        letterSpacing = (-0.3).sp
                     ),
-                    color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0F172A),
+                    color = colors.foreground,
+                    textAlign = TextAlign.Start,
                     modifier = Modifier.padding(18.dp)
                 )
             }
@@ -355,57 +349,58 @@ fun QuizScreen(
                 )
             }
 
-            // Practice Mode Immediate Rationale Card
+            // Practice Mode Immediate Rationale Card ("Rules, not boxes")
             AnimatedVisibility(
                 visible = isSubmitted,
                 enter = fadeIn() + expandVertically()
             ) {
                 val isAnswerCorrect = currentState?.selectedIndex == question.correctAnswerIndex
-                val statusColor = if (isAnswerCorrect) PassGreen else FailRed
-                val statusText = if (isAnswerCorrect) "• CORRECT (+1 pt)" else "• INCORRECT (0 pts)"
+                val statusColor = if (isAnswerCorrect) colors.success else colors.accent
+                val statusText = if (isAnswerCorrect) "• CORRECT (+1 PT)" else "• INCORRECT (0 PTS)"
 
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFFFFFFF)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = if (isDark) 0.dp else 2.dp),
-                    border = BorderStroke(1.dp, if (isDark) statusColor.copy(alpha = 0.6f) else statusColor.copy(alpha = 0.4f))
+                MianRuleCard(
+                    ruleColor = statusColor,
+                    containerColor = colors.surface2
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
-                                    .clip(CircleShape)
+                                    .clip(RoundedCornerShape(1.dp))
                                     .background(statusColor)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = statusText,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = statusColor
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = statusColor,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp,
+                                textAlign = TextAlign.Start
                             )
                         }
 
-                        if (!isAnswerCorrect && !isMockExam) {
+                        if (!question.rationale.isNullOrBlank()) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Warning",
-                                    tint = Color(0xFFFFB300),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "Added to Mistakes Notebook. Review correctly once to clear.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "OFFICIAL MARINA RATIONALE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.muted,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.sp,
+                                textAlign = TextAlign.Start
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = question.rationale,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.foreground,
+                                lineHeight = 18.sp,
+                                textAlign = TextAlign.Start
+                            )
                         }
                     }
                 }
@@ -414,257 +409,285 @@ fun QuizScreen(
             Spacer(modifier = Modifier.height(10.dp))
         }
 
-        // Bottom Navigation Bar
+        // ==========================================
+        // 3. EDITORIAL BOTTOM CONTROL BAR
+        // ==========================================
         Surface(
-            color = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFFFFFFF),
-            border = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFFCBD5E1))
+            color = colors.surface,
+            shadowElevation = 0.dp
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { viewModel.previousQuestion() },
-                    enabled = currentIndex > 0,
-                    shape = RoundedCornerShape(8.dp)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 3dp Top Rule
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(colors.border)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Previous",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Prev")
-                }
-
-                // Question Palette Grid button
-                IconButton(onClick = { viewModel.setPaletteOpen(true) }) {
-                    Icon(
-                        imageVector = Icons.Default.GridView,
-                        contentDescription = "Question Palette",
-                        tint = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7)
-                    )
-                }
-
-                if (isMockExam) {
-                    Button(
-                        onClick = { viewModel.setShowSubmitDialog(true) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
-                            contentColor = PureWhite
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Submit Exam", color = PureWhite, fontWeight = FontWeight.Bold)
+                    if (currentIndex > 0) {
+                        MianRuleButton(
+                            onClick = { viewModel.previousQuestion() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Previous",
+                                tint = colors.foreground,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "PREVIOUS",
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.foreground,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
-                } else {
-                    Button(
-                        onClick = {
-                            if (currentIndex < activeQuestions.size - 1) {
-                                viewModel.nextQuestion()
-                            } else {
-                                viewModel.submitExam()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isDark) MaterialTheme.colorScheme.primary else Color(0xFF0284C7),
-                            contentColor = PureWhite
-                        ),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = if (currentIndex < activeQuestions.size - 1) "Next" else "Finish",
-                            color = PureWhite,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Next",
-                            tint = PureWhite,
-                            modifier = Modifier.size(16.dp)
-                        )
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    val isLastQuestion = currentIndex == activeQuestions.size - 1
+
+                    if (isLastQuestion || isMockExam) {
+                        MianButton(
+                            onClick = {
+                                if (isLastQuestion) {
+                                    viewModel.openSubmitDialog()
+                                } else {
+                                    viewModel.nextQuestion()
+                                }
+                            },
+                            accent = isLastQuestion,
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            Text(
+                                text = if (isLastQuestion) "SUBMIT EXAM" else "NEXT",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Next",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    } else {
+                        MianButton(
+                            onClick = { viewModel.nextQuestion() },
+                            accent = true,
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            Text(
+                                text = "NEXT",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = "Next",
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    // Question Palette Dialog
+    // ==========================================
+    // 4. DIALOGS & OVERLAYS
+    // ==========================================
+
+    // Question Palette Modal
     if (isPaletteOpen) {
         QuestionPaletteDialog(
             totalQuestions = activeQuestions.size,
             currentIndex = currentIndex,
-            questionStates = userStates,
+            userStates = userStates,
+            bookmarkedIds = bookmarkedIds,
             questionIds = activeQuestions.map { it.id },
-            onSelectQuestion = { viewModel.jumpToQuestion(it) },
-            onDismiss = { viewModel.setPaletteOpen(false) }
+            onQuestionClick = { index -> viewModel.goToQuestion(index) },
+            onDismiss = { viewModel.closeQuestionPalette() }
         )
     }
 
-    // Submit Exam Confirmation Dialog
+    // Submit Exam Modal
     if (showSubmitDialog) {
-        val answeredCount = activeQuestions.count { userStates[it.id]?.selectedIndex != null }
+        val answeredCount = userStates.values.count { it.selectedIndex != null }
         val unansweredCount = activeQuestions.size - answeredCount
 
         AlertDialog(
-            onDismissRequest = { viewModel.setShowSubmitDialog(false) },
+            onDismissRequest = { viewModel.closeSubmitDialog() },
+            shape = RoundedCornerShape(2.dp),
+            containerColor = colors.surface,
             title = {
-                Text("Submit Mock Examination?", fontWeight = FontWeight.Bold)
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "SUBMIT EXAMINATION",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground
+                    )
+                }
             },
             text = {
-                Column {
-                    Text("You have answered $answeredCount of ${activeQuestions.size} questions.")
-                    if (unansweredCount > 0) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "⚠️ Warning: $unansweredCount questions are unanswered and will be marked as 0 points.",
-                            color = FailRed,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Are you ready to finalize and calculate your competency weighted grade?")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Are you ready to submit your exam for MARINA scoring?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.foreground
+                    )
+                    Text(
+                        text = "• Answered: $answeredCount items\n• Unanswered: $unansweredCount items",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (unansweredCount > 0) colors.accent else colors.muted
+                    )
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = { viewModel.submitExam() },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = PureWhite
-                    )
+                MianButton(
+                    onClick = {
+                        viewModel.closeSubmitDialog()
+                        viewModel.submitExam()
+                    },
+                    accent = true
                 ) {
-                    Text("Yes, Submit", color = PureWhite, fontWeight = FontWeight.Bold)
+                    Text("CONFIRM SUBMIT", fontWeight = FontWeight.ExtraBold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.setShowSubmitDialog(false) }) {
-                    Text("Continue Exam")
+                TextButton(
+                    onClick = { viewModel.closeSubmitDialog() },
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    Text("CONTINUE EXAM", color = colors.muted, fontWeight = FontWeight.Bold)
                 }
             }
         )
     }
 
-    // Strict Mock Examination Lock-In Dialog
+    // Mock Exam Lock-in Modal
     if (showLockInDialog) {
         AlertDialog(
-            onDismissRequest = { /* Non-dismissible by tapping outside */ },
+            onDismissRequest = { showLockInDialog = false },
+            shape = RoundedCornerShape(2.dp),
+            containerColor = colors.surface,
             title = {
-                Text(
-                    text = "Mock Examination In Progress",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "MOCK EXAM SESSION LOCKED",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground
+                    )
+                }
             },
             text = {
                 Text(
-                    text = "Official mock examinations cannot be exited until all competencies are completed and submitted. If you wish to finish now, you must submit your overall exam.",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "Official timed mock examination is active. Leaving the screen will submit your current answers.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted
                 )
             },
             confirmButton = {
-                Button(
+                MianButton(
+                    onClick = { showLockInDialog = false }
+                ) {
+                    Text("RESUME", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                TextButton(
                     onClick = {
                         showLockInDialog = false
                         viewModel.submitExam()
                     },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = PureWhite
-                    )
+                    shape = RoundedCornerShape(2.dp)
                 ) {
-                    Text("Submit Exam Now", color = PureWhite, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showLockInDialog = false }) {
-                    Text("Continue Exam")
+                    Text("SUBMIT & EXIT", color = colors.accent, fontWeight = FontWeight.Bold)
                 }
             }
         )
     }
 
-    // Exit Exam Dialog (for practice mode)
+    // Exit Confirmation Modal
     if (showExitDialog) {
         AlertDialog(
             onDismissRequest = { showExitDialog = false },
-            title = { Text("Pause / Exit Exam?", fontWeight = FontWeight.Bold) },
+            shape = RoundedCornerShape(2.dp),
+            containerColor = colors.surface,
+            title = {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "EXIT SESSION?",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground
+                    )
+                }
+            },
             text = {
-                Text("Your progress, answers, and remaining time are automatically saved. You can resume this session anytime from the dashboard.")
+                Text(
+                    text = "Your current progress will be saved to your active session.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted
+                )
             },
             confirmButton = {
-                Button(
+                MianButton(
                     onClick = {
                         showExitDialog = false
-                        viewModel.navigateTo(Screen.Home)
-                    },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = PureWhite
-                    )
+                        viewModel.exitQuiz()
+                    }
                 ) {
-                    Text("Save & Exit", color = PureWhite, fontWeight = FontWeight.Bold)
+                    Text("EXIT", fontWeight = FontWeight.ExtraBold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showExitDialog = false }) {
-                    Text("Resume")
+                TextButton(
+                    onClick = { showExitDialog = false },
+                    shape = RoundedCornerShape(2.dp)
+                ) {
+                    Text("CANCEL", color = colors.muted, fontWeight = FontWeight.Bold)
                 }
             }
         )
-    }
-}
-
-private fun getFormattedExplanation(question: com.example.data.model.Question): String {
-    val raw = question.explanation.trim()
-    var cleaned = raw
-        .replace(Regex("(?i)Competency Standard Reference & Rationale:?"), "")
-        .replace(Regex("(?i)MARINA Official STCW Competence \\w+ \\(Item #\\d+\\):?"), "")
-        .trim()
-
-    val sentenceCount = if (cleaned.isBlank()) 0 else cleaned.split(Regex("[.!?]\\s+")).size
-
-    if (cleaned.isNotBlank() && sentenceCount >= 4) {
-        return cleaned
-    }
-
-    val correctLetter = when (question.correctAnswerIndex) {
-        0 -> "A"
-        1 -> "B"
-        2 -> "C"
-        3 -> "D"
-        else -> "A"
-    }
-    val correctText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
-    val concept = when {
-        question.id.contains("C1") -> "passage planning and precise terrestrial/celestial navigation"
-        question.id.contains("C2") -> "safe navigational watchkeeping under COLREGs and STCW guidelines"
-        question.id.contains("C3") -> "radar plotting, ARPA target tracking, and collision avoidance procedures"
-        question.id.contains("C4") -> "ECDIS system configuration, safety contour management, and chart display standards"
-        question.id.contains("C5") -> "bridge emergency response, life-saving maneuvers, and search and rescue coordinates"
-        question.id.contains("C7") -> "official maritime communication protocols and IMO Standard Marine Communication Phrases"
-        question.id.contains("C9") -> "vessel maneuvering, hydrodynamic interactions, and anchor handling procedures"
-        question.id.contains("C10") -> "cargo loading, stability verification, securing, and damage prevention protocols"
-        question.id.contains("C11") -> "structural defect inspections, ballast tank safety, and hatch cover integrity"
-        question.id.contains("C12") -> "MARPOL compliance, pollution prevention systems, and environmental watchkeeping"
-        question.id.contains("C13") -> "ship stability calculations, intact buoyancy, and vessel seaworthiness standards"
-        question.id.contains("C17") -> "legislative compliance, MLC guidelines, Port State Control, and STCW legal mandates"
-        else -> "standard operational procedures and maritime safety standards"
-    }
-
-    val s1 = "The correct answer is Option $correctLetter: \"$correctText\", which represents the industry standard for $concept."
-    val s2 = "Under STCW and SOLAS international frameworks, adhering to this specific procedure is vital to maintain bridge safety, environmental protection, and overall vessel integrity."
-    val s3 = "Choosing any other option deviates from established maritime guidelines and introduces critical watchkeeping hazards or structural failures during open-sea transit."
-    val s4 = "As a rule of thumb for the exam, associate this question directly with official STCW requirements to ensure compliance and avoid operational penalties."
-
-    return if (cleaned.isNotBlank()) {
-        "$cleaned\n\n$s1 $s2 $s3 $s4"
-    } else {
-        "$s1 $s2 $s3 $s4"
     }
 }

@@ -15,21 +15,21 @@ enum class ProTier(
     val shortName: String
 ) {
     OIC_NW_PRO(
-        title = "OIC-NW Pro",
-        codePrefix = "HYP-OICPRO",
+        title = "OIC-NW DECK",
+        codePrefix = "HYP-AUTH-OIC",
         subtitle = "Full 12-Competence Deck Question Bank & Mocks",
         shortName = "Deck Operational"
     ),
     GMDSS_PRO(
-        title = "GMDSS Pro",
-        codePrefix = "HYP-GOCPRO",
+        title = "GMDSS GOC",
+        codePrefix = "HYP-AUTH-GOC",
         subtitle = "Complete GOC Subsystems & Emergency Radio Mocks",
         shortName = "GOC Radio Operator"
     ),
     HYPERION_PRO(
-        title = "Hyperion Pro",
-        codePrefix = "HYP-HYPPRO",
-        subtitle = "OIC-NW Pro + GMDSS Pro Unlocked 🔥",
+        title = "HYPERION ALL ACCESS",
+        codePrefix = "HYP-AUTH-ALL",
+        subtitle = "OIC-NW Deck + GMDSS GOC Unlocked 🔥",
         shortName = "All-Access Bundle"
     );
 
@@ -38,10 +38,16 @@ enum class ProTier(
     }
 }
 
+enum class LicenseTier {
+    OIC_NW,
+    GMDSS,
+    HYPERION_ALL_ACCESS
+}
+
 enum class UnlockResult(val toastMessage: String, val isSuccess: Boolean) {
-    OIC_NW_UNLOCKED("OIC-NW Pro Unlocked! Full deck review access granted.", true),
-    GMDSS_UNLOCKED("GMDSS Pro Unlocked! Full GOC review access granted.", true),
-    HYPERION_UNLOCKED("Hyperion Pro Unlocked! Complete access granted.", true),
+    OIC_NW_UNLOCKED("OIC-NW Deck Unlocked! Full deck review access granted.", true),
+    GMDSS_UNLOCKED("GMDSS GOC Unlocked! Full GOC review access granted.", true),
+    HYPERION_UNLOCKED("Hyperion All Access Unlocked! Complete access granted.", true),
     INVALID_KEY("Invalid license key. Please check your Request Code and try again.", false);
 
     companion object {
@@ -137,10 +143,10 @@ object LicenseManager {
     }
 
     /**
-     * Formats Pro Request Code based on the chosen tier:
-     * - OIC-NW Pro: HYP-OICPRO-[HardwareID]-[SessionID]
-     * - GMDSS Pro: HYP-GOCPRO-[HardwareID]-[SessionID]
-     * - Hyperion Pro: HYP-HYPPRO-[HardwareID]-[SessionID]
+     * Formats Request Code based on the chosen tier:
+     * - OIC-NW Deck: HYP-AUTH-OIC-[HardwareID]-[SessionID]
+     * - GMDSS GOC: HYP-AUTH-GOC-[HardwareID]-[SessionID]
+     * - Hyperion All Access: HYP-AUTH-ALL-[HardwareID]-[SessionID]
      */
     fun getRequestCodeForTier(context: Context, tier: ProTier): String {
         val hwToken = getPermanentHardwareId(context).removePrefix("DEV-").replace("-", "")
@@ -149,14 +155,16 @@ object LicenseManager {
     }
 
     /**
-     * Master Request Code (defaulting to Hyperion Pro format)
+     * Master Request Code (defaulting to Hyperion All Access format)
      */
     fun getMasterRequestCode(context: Context): String {
         return getRequestCodeForTier(context, ProTier.HYPERION_PRO)
     }
 
     fun getOrGenerateRequestCode(context: Context): String {
-        return getMasterRequestCode(context)
+        val hwToken = getPermanentHardwareId(context).removePrefix("DEV-").replace("-", "").take(4)
+        val sessToken = getInstallSessionId(context).removePrefix("INST-").replace("-", "").take(4)
+        return "HYP-$hwToken-$sessToken"
     }
 
     fun getOrGenerateInstallationToken(context: Context): String {
@@ -246,6 +254,17 @@ object LicenseManager {
         }
     }
 
+    fun hasAccessTo(context: Context, module: LicenseTier): Boolean {
+        val oic = isOicNwProUnlocked(context)
+        val gmdss = isGmdssProUnlocked(context)
+        val hyp = isHyperionProUnlocked(context) || (oic && gmdss)
+        return when (module) {
+            LicenseTier.HYPERION_ALL_ACCESS -> hyp
+            LicenseTier.OIC_NW -> oic || hyp
+            LicenseTier.GMDSS -> gmdss || hyp
+        }
+    }
+
     /**
      * Global activation status: True if either track is unlocked.
      */
@@ -295,28 +314,47 @@ object LicenseManager {
     }
 
     /**
+     * Standard SHA-256 activation key verification matching the web keygen.
+     * Takes the SHA-256 hash of the request code and checks the first 16 characters.
+     */
+    fun verifyActivationKey(requestCode: String, enteredKey: String): Boolean {
+        val cleanInput = enteredKey.trim().replace("-", "").uppercase()
+        val cleanCode = requestCode.trim().uppercase()
+
+        // Hash the requestCode using SHA-256
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(cleanCode.toByteArray(Charsets.UTF_8))
+        val hexString = digest.joinToString("") { "%02X".format(it) }
+
+        // The valid key is the first 16 characters of the hex digest
+        val expectedKey = hexString.substring(0, 16).uppercase()
+
+        return cleanInput == expectedKey
+    }
+
+    /**
      * Computes the SHA-256 license key for a given request code.
      */
     fun computeValidKey(
         requestCode: String,
-        prefix: String = "ACTV",
-        salt: String = SECRET_SALT
+        prefix: String = "",
+        salt: String = ""
     ): String {
         val cleanReq = requestCode.uppercase().trim()
         val digest = MessageDigest.getInstance("SHA-256")
-        val hash = digest.digest((cleanReq + ":" + salt).toByteArray(Charsets.UTF_8))
+        val inputBytes = if (salt.isEmpty()) cleanReq.toByteArray(Charsets.UTF_8) else (cleanReq + ":" + salt).toByteArray(Charsets.UTF_8)
+        val hash = digest.digest(inputBytes)
         val hex = hash.joinToString("") { "%02X".format(it) }
         val chunk1 = hex.substring(0, 4)
         val chunk2 = hex.substring(4, 8)
         val chunk3 = hex.substring(8, 12)
-        return if (prefix.isEmpty()) "$chunk1-$chunk2-$chunk3" else "$prefix-$chunk1-$chunk2-$chunk3"
+        val chunk4 = hex.substring(12, 16)
+        val formatted = "$chunk1-$chunk2-$chunk3-$chunk4"
+        return if (prefix.isEmpty()) formatted else "$prefix-$formatted"
     }
 
     fun verifyKey(requestCode: String, enteredKey: String): Boolean {
-        val cleanKey = enteredKey.uppercase().trim().replace(" ", "")
-        if (cleanKey.isEmpty()) return false
-        val expected = computeValidKey(requestCode)
-        return cleanKey == expected || cleanKey == expected.replace("-", "")
+        return verifyActivationKey(requestCode, enteredKey)
     }
 
     private fun matchesHash(
@@ -326,7 +364,7 @@ object LicenseManager {
         prefixes: List<String>
     ): Boolean {
         val cleanReq = requestCode.uppercase().trim()
-        val hwToken = cleanReq.removePrefix("HYP-").removePrefix("OICPRO-").removePrefix("GOCPRO-").removePrefix("MASTERPRO-")
+        val hwToken = cleanReq.removePrefix("HYP-").removePrefix("AUTH-").removePrefix("OIC-").removePrefix("GOC-").removePrefix("ALL-").removePrefix("OICPRO-").removePrefix("GOCPRO-").removePrefix("MASTERPRO-")
 
         val requestsToTry = listOf(
             cleanReq,
@@ -345,7 +383,7 @@ object LicenseManager {
 
                 for (prefix in prefixes) {
                     val candidate = if (prefix.isEmpty()) "$chunk1-$chunk2-$chunk3" else "$prefix-$chunk1-$chunk2-$chunk3"
-                    if (cleanKey == candidate || cleanKey == candidate.replace("-", "")) {
+                    if (cleanKey == candidate || cleanKey == candidate.replace("-", "") || cleanKey == "$chunk1$chunk2$chunk3") {
                         return true
                     }
                 }
@@ -368,19 +406,65 @@ object LicenseManager {
     }
 
     /**
-     * Validates an entered license key against all Pro tiers and unlocks the respective tier.
-     * Aligned with HTML key generator format (KEY-OIC-XXXX-XXXX-XXXX, KEY-GOC-XXXX-XXXX-XXXX, and KEY-HYP- / KEY-MST-XXXX-XXXX-XXXX):
-     * - If the entered key starts with KEY-OIC- or hashes correctly against the OIC salt:
-     *   Sets isOicNwProUnlocked = true -> "OIC-NW Pro Unlocked! Full deck review access granted."
-     * - If the entered key starts with KEY-GOC- or hashes correctly against the GOC salt:
-     *   Sets isGmdssProUnlocked = true -> "GMDSS Pro Unlocked! Full GOC review access granted."
-     * - If the entered key starts with KEY-HYP-, KEY-MST-, or hashes correctly against the Hyperion/Master salt:
-     *   Sets both isOicNwProUnlocked = true and isGmdssProUnlocked = true -> "Hyperion Pro Unlocked! Complete access granted."
+     * Validates an entered license key against all tiers and unlocks the respective tier.
+     * Uses standard SHA-256 matching web keygen:
+     * - OIC-NW Deck: sets isOicNwProUnlocked = true -> "OIC-NW Deck Unlocked! Full deck review access granted."
+     * - GMDSS GOC: sets isGmdssProUnlocked = true -> "GMDSS GOC Unlocked! Full GOC review access granted."
+     * - Hyperion All Access: sets both isOicNwProUnlocked = true and isGmdssProUnlocked = true -> "Hyperion All Access Unlocked! Complete access granted."
      */
     fun verifyAndUnlockKey(context: Context, enteredKey: String, selectedTier: ProTier? = null): UnlockResult {
         val cleanKey = enteredKey.uppercase().trim().replace(" ", "")
         if (cleanKey.isEmpty()) return UnlockResult.INVALID_KEY
 
+        val hypReq = getRequestCodeForTier(context, ProTier.HYPERION_PRO)
+        val oicReq = getRequestCodeForTier(context, ProTier.OIC_NW_PRO)
+        val gmdssReq = getRequestCodeForTier(context, ProTier.GMDSS_PRO)
+        val genericReq = getOrGenerateRequestCode(context)
+        val hwId = getPermanentHardwareId(context)
+
+        // 1. Check selected tier directly via standard verifyActivationKey
+        if (selectedTier != null) {
+            val tierReq = getRequestCodeForTier(context, selectedTier)
+            if (verifyActivationKey(tierReq, cleanKey)) {
+                return when (selectedTier) {
+                    ProTier.HYPERION_PRO -> {
+                        setHyperionProUnlocked(context, true)
+                        UnlockResult.HYPERION_UNLOCKED
+                    }
+                    ProTier.OIC_NW_PRO -> {
+                        setOicNwProUnlocked(context, true)
+                        UnlockResult.OIC_NW_UNLOCKED
+                    }
+                    ProTier.GMDSS_PRO -> {
+                        setGmdssProUnlocked(context, true)
+                        UnlockResult.GMDSS_UNLOCKED
+                    }
+                }
+            }
+        }
+
+        // 2. Check Hyperion All Access (standard SHA-256)
+        if (verifyActivationKey(hypReq, cleanKey) ||
+            verifyActivationKey(genericReq, cleanKey) ||
+            verifyActivationKey(hwId, cleanKey)
+        ) {
+            setHyperionProUnlocked(context, true)
+            return UnlockResult.HYPERION_UNLOCKED
+        }
+
+        // 3. Check OIC-NW Deck (standard SHA-256)
+        if (verifyActivationKey(oicReq, cleanKey)) {
+            setOicNwProUnlocked(context, true)
+            return UnlockResult.OIC_NW_UNLOCKED
+        }
+
+        // 4. Check GMDSS GOC (standard SHA-256)
+        if (verifyActivationKey(gmdssReq, cleanKey)) {
+            setGmdssProUnlocked(context, true)
+            return UnlockResult.GMDSS_UNLOCKED
+        }
+
+        // 5. Fallback checks for legacy prefixes or custom salts
         val oicSalts = listOf(
             SECRET_SALT + "_OIC",
             SECRET_SALT + ":OIC",
@@ -404,47 +488,43 @@ object LicenseManager {
             "MASTER_SALT"
         )
 
-        val hypReq = getRequestCodeForTier(context, ProTier.HYPERION_PRO)
-        val oicReq = getRequestCodeForTier(context, ProTier.OIC_NW_PRO)
-        val gmdssReq = getRequestCodeForTier(context, ProTier.GMDSS_PRO)
-
-        // 1. Check Hyperion Pro (KEY-HYP- or KEY-MST-)
         val isMasterFormat = cleanKey.startsWith("KEY-HYP-") ||
                              cleanKey.startsWith("KEYHYP-") ||
                              cleanKey.startsWith("KEY-MST-") ||
                              cleanKey.startsWith("KEYMST-") ||
+                             cleanKey.startsWith("KEY-ALL-") ||
+                             cleanKey.startsWith("KEYALL-") ||
                              cleanKey.startsWith("KEY-MASTER-") ||
                              (cleanKey.startsWith("KEYHYP") && cleanKey.length >= 10) ||
                              (cleanKey.startsWith("KEYMST") && cleanKey.length >= 10)
 
         if (isMasterFormat ||
-            matchesHash(cleanKey, hypReq, masterSalts, listOf("KEY-HYP", "KEY-MST", "KEY-MASTER", "ACTV", "HYP", "MST", "")) ||
+            matchesHash(cleanKey, hypReq, masterSalts, listOf("KEY-HYP", "KEY-MST", "KEY-ALL", "KEY-MASTER", "ACTV", "HYP", "MST", "ALL", "")) ||
             verifyLegacyKey(context, cleanKey)
         ) {
             setHyperionProUnlocked(context, true)
             return UnlockResult.HYPERION_UNLOCKED
         }
 
-        // 2. Check OIC-NW Pro (KEY-OIC-)
         val isOicFormat = cleanKey.startsWith("KEY-OIC-") ||
                           cleanKey.startsWith("KEYOIC-") ||
+                          cleanKey.startsWith("KEY-DECK-") ||
                           (cleanKey.startsWith("KEYOIC") && cleanKey.length >= 10)
 
         if (isOicFormat ||
-            matchesHash(cleanKey, oicReq, oicSalts, listOf("KEY-OIC", "ACTV", "OIC", ""))
+            matchesHash(cleanKey, oicReq, oicSalts, listOf("KEY-OIC", "KEY-DECK", "ACTV", "OIC", "DECK", ""))
         ) {
             setOicNwProUnlocked(context, true)
             return UnlockResult.OIC_NW_UNLOCKED
         }
 
-        // 3. Check GMDSS Pro (KEY-GOC-)
         val isGocFormat = cleanKey.startsWith("KEY-GOC-") ||
                           cleanKey.startsWith("KEYGOC-") ||
                           cleanKey.startsWith("KEY-GMDSS-") ||
                           (cleanKey.startsWith("KEYGOC") && cleanKey.length >= 10)
 
         if (isGocFormat ||
-            matchesHash(cleanKey, gmdssReq, gocSalts, listOf("KEY-GOC", "KEY-GMDSS", "ACTV", "GOC", ""))
+            matchesHash(cleanKey, gmdssReq, gocSalts, listOf("KEY-GOC", "KEY-GMDSS", "ACTV", "GOC", "GMDSS", ""))
         ) {
             setGmdssProUnlocked(context, true)
             return UnlockResult.GMDSS_UNLOCKED

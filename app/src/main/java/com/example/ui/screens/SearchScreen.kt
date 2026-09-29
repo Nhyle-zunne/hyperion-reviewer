@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,8 +25,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,169 +40,214 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.Question
 import com.example.ui.components.MaritimeTopBar
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
 import com.example.viewmodel.Screen
 
+/**
+ * Editorial MIAN "Spaghetti" Search Screen:
+ * High contrast search input, square competence filter chips, 3dp top rules.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     val searchQuery by viewModel.searchQuery.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
-    val selectedTrack by viewModel.selectedTrack.collectAsState()
+    val selectedCompetenceFilter by viewModel.selectedCompetenceFilter.collectAsState()
+    val allDeckCompetencies = listOf("ALL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12")
 
     BackHandler {
         viewModel.navigateBack()
     }
 
-    val quickTerms = listOf(
-        "Rule 14", "Rule 10", "ARPA", "ECDIS", "2182 kHz", "Channel 70",
-        "MAYDAY", "MARPOL Annex I", "EPIRB", "SART", "Squat", "MLC 2006"
-    )
-
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
     ) {
         MaritimeTopBar(
-            title = "Maritime Rule & Term Search",
-            subtitle = selectedTrack.shortName,
+            title = "SEARCH QUESTION BANK",
+            subtitle = if (searchQuery.isNotBlank()) "${searchResults.size} MATCHING ITEMS" else "KEYWORD & TOPIC INDEX",
             showBackButton = true,
             onBackClick = { viewModel.navigateBack() }
         )
-
-        Column(modifier = Modifier.padding(16.dp)) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search by rule, term, or frequency (e.g., Rule 10, ARPA, MAYDAY)...") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MaritimeGoldBright
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Clear")
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaritimeGoldBright,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                )
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Quick suggestion chips
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                quickTerms.forEach { term ->
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline),
-                        modifier = Modifier.clickable { viewModel.setSearchQuery(term) }
-                    ) {
-                        Text(
-                            text = term,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = SeaCyan,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-            }
-        }
 
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            if (searchQuery.isNotEmpty()) {
-                item {
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Editorial Search Input Field
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { viewModel.updateSearchQuery(it) },
+                    placeholder = {
+                        Text(
+                            text = "SEARCH BY KEYWORD, TOPIC, OR ITEM #...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.muted,
+                            fontSize = 12.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = colors.foreground,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Clear",
+                                    tint = colors.foreground,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(2.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = colors.surface,
+                        unfocusedContainerColor = colors.surface,
+                        focusedBorderColor = colors.accent,
+                        unfocusedBorderColor = colors.border,
+                        focusedTextColor = colors.foreground,
+                        unfocusedTextColor = colors.foreground,
+                        cursorColor = colors.accent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Competence Filter Chips
+            item {
+                Column {
                     Text(
-                        text = "SEARCH RESULTS (${searchResults.size})",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
+                        text = "FILTER BY COMPETENCE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        fontSize = 10.sp,
                         letterSpacing = 1.sp
                     )
-                }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        allDeckCompetencies.forEach { comp ->
+                            val isSelected = (comp == "ALL" && selectedCompetenceFilter == null) ||
+                                    (selectedCompetenceFilter == comp)
 
-                if (searchResults.isEmpty()) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                            Surface(
+                                shape = RoundedCornerShape(2.dp),
+                                color = if (isSelected) colors.accent else colors.surface,
+                                modifier = Modifier.clickable {
+                                    if (comp == "ALL") {
+                                        viewModel.setCompetenceFilter(null)
+                                    } else {
+                                        viewModel.setCompetenceFilter(comp)
+                                    }
+                                }
                             ) {
-                                Text("No matching questions found.", fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    "Try searching for abbreviations like 'SART', 'EPIRB', 'TSS', or 'FSE'.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = comp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isSelected) colors.accentForeground else colors.foreground,
+                                    fontSize = 11.sp,
+                                    letterSpacing = 0.5.sp
                                 )
                             }
                         }
                     }
-                } else {
-                    items(searchResults) { question ->
-                        SearchResultCard(question = question)
+                }
+            }
+
+            if (searchQuery.isBlank() && searchResults.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "ENTER SEARCH KEYWORDS",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.foreground
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Type at least 2 characters to search across 6,400+ maritime questions.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.muted,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            } else if (searchResults.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "NO MATCHING QUESTIONS FOUND",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.foreground
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Try adjusting your search terms or clearing the competency filter.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.muted,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             } else {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-                    ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text(
-                                text = "Instant Offline Knowledge Base",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaritimeGoldBright
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Search across Licensure Question Bank items, STCW conventions, IMO regulations, and GMDSS frequencies with immediate full explanation and rationale.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    MianSectionHeader(title = "MATCHING QUESTIONS (${searchResults.size})")
+                }
+
+                items(searchResults) { question ->
+                    SearchResultCard(question = question)
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
             }
         }
@@ -213,46 +255,43 @@ fun SearchScreen(
 }
 
 @Composable
-private fun SearchResultCard(question: Question) {
-    var expanded by remember { mutableStateOf(false) }
+private fun SearchResultCard(
+    question: Question
+) {
+    val colors = LocalSpaghettiColors.current
+    var isExpanded by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    MianRuleCard(
+        ruleColor = colors.border,
+        containerColor = colors.surface,
+        onClick = { isExpanded = !isExpanded }
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
                 ) {
                     Text(
-                        text = "${question.functionId} • ${question.competenceId} (${question.topic})",
+                        text = "${question.functionId} · ${question.competenceId} • ITEM ${question.id}".uppercase(),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = SeaCyan,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.sp
                     )
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaritimeGoldBright.copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = "${question.difficulty.label}",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaritimeGoldBright,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = "Expand",
+                    tint = colors.muted
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -260,48 +299,57 @@ private fun SearchResultCard(question: Question) {
             Text(
                 text = question.questionText,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Bold,
+                color = colors.foreground,
+                maxLines = if (isExpanded) Int.MAX_VALUE else 2
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            AnimatedVisibility(visible = isExpanded) {
+                Column(modifier = Modifier.padding(top = 10.dp)) {
+                    val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+                    val correctOptLetter = listOf("A", "B", "C", "D").getOrElse(question.correctAnswerIndex) { "?" }
 
-            Text(
-                text = "Correct Answer: ${question.options[question.correctAnswerIndex]}",
-                style = MaterialTheme.typography.bodySmall,
-                color = PassGreen,
-                fontWeight = FontWeight.Bold
-            )
+                    Surface(
+                        shape = RoundedCornerShape(2.dp),
+                        color = colors.surface2,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(colors.success),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = correctOptLetter,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = colors.primaryForeground
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = correctOptText,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.success
+                            )
+                        }
+                    }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (expanded) "Hide Rationale" else "Show Explanation & Regulatory Reference",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaritimeGoldBright,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    tint = MaritimeGoldBright,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(modifier = Modifier.padding(top = 6.dp)) {
-                    Text(
-                        text = question.explanation,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (!question.rationale.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "RATIONALE: ${question.rationale}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.muted
+                        )
+                    }
                 }
             }
         }

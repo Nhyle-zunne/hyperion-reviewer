@@ -92,7 +92,7 @@ fun MockCompetenceScreen(
 
     // When competence is finished/submitted, navigating back returns to MockHub
     BackHandler(enabled = isCompetenceFinished) {
-        viewModel.navigateTo(Screen.MockHub)
+        viewModel.navigateBack()
     }
 
     val compInfo = MaritimeCompetenceRegistry.getCompetenceById(competenceId, selectedTrack)

@@ -27,7 +27,9 @@ data class CompetenceInfo(
     val title: String,
     val officialTOSItems: Int,
     val description: String
-)
+) {
+    val id: String get() = competenceId
+}
 
 data class Question(
     val id: String,
@@ -42,7 +44,9 @@ data class Question(
     val difficulty: Difficulty,
     val isBookmarked: Boolean = false,
     val isWrongInVault: Boolean = false
-)
+) {
+    val rationale: String get() = explanation
+}
 
 enum class QuizMode {
     PRACTICE,        // Instant feedback, explanations immediately shown
@@ -59,6 +63,18 @@ data class UserQuestionState(
     val isSubmitted: Boolean = false
 )
 
+data class QuestionResult(
+    val questionId: String,
+    val competenceId: String,
+    val questionText: String,
+    val selectedOptionIndex: Int? = null,
+    val selectedOptionText: String? = null,
+    val correctOptionIndex: Int = 0,
+    val correctOptionText: String = "",
+    val isCorrect: Boolean = false,
+    val rationale: String? = null
+)
+
 data class CompetenceScore(
     val competenceId: String,
     val competenceTitle: String,
@@ -69,7 +85,13 @@ data class CompetenceScore(
     val maxPointsPossible: Int,
     val percentage: Double,
     val isPassed: Boolean // >= 70.0%
-)
+) {
+    val title: String get() = competenceTitle
+    val totalQuestions: Int get() = questionCount
+    val score: Int get() = correctCount
+    val weightedScore: Double get() = rawPointsEarned.toDouble()
+    val totalPossibleWeightedScore: Double get() = maxPointsPossible.toDouble()
+}
 
 data class FunctionScore(
     val functionId: String,
@@ -94,7 +116,15 @@ data class ExamResult(
     val isOverallPassed: Boolean, // Candidate passes ONLY if >= 70.0% in EVERY competence
     val functionScores: List<FunctionScore>,
     val competenceScores: List<CompetenceScore>,
-    val questionStates: Map<String, UserQuestionState>
-)
+    val questionStates: Map<String, UserQuestionState>,
+    val questionResults: List<QuestionResult> = emptyList()
+) {
+    val isPassed: Boolean get() = isOverallPassed
+    val score: Int get() = correctCount
+    val percentage: Double get() = overallPercentage
+    val weightedScore: Double get() = rawPointsEarned.toDouble()
+    val totalPossibleWeightedScore: Double get() = maxPointsPossible.toDouble()
+    val competenceBreakdown: List<CompetenceScore> get() = competenceScores
+}
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

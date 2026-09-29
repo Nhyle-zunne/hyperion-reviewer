@@ -979,9 +979,10 @@ private fun StandardDrillScreen(
         QuestionPaletteDialog(
             totalQuestions = activeQuestions.size,
             currentIndex = currentIndex,
-            questionStates = userStates,
+            userStates = userStates,
+            bookmarkedIds = bookmarkedIds,
             questionIds = activeQuestions.map { it.id },
-            onSelectQuestion = { index ->
+            onQuestionClick = { index ->
                 viewModel.jumpToQuestion(index)
             },
             onDismiss = {

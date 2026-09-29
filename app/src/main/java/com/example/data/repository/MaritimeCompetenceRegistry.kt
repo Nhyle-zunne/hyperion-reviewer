@@ -5,6 +5,9 @@ import com.example.data.model.Track
 
 object MaritimeCompetenceRegistry {
 
+    val ALL_DECK_COMPETENCES get() = DECK_COMPETENCES
+    val ALL_GMDSS_COMPETENCES get() = GMDSS_COMPETENCES
+
     val DECK_COMPETENCES = listOf(
         CompetenceInfo(
             competenceId = "C1",
@@ -13,7 +16,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C1",
             title = "Plan and conduct a passage and determine position",
-            officialTOSItems = 833,
+            officialTOSItems = 420,
             description = "Terrestrial & celestial navigation, voyage planning, chart work, gyro & magnetic compass errors, tides & currents."
         ),
         CompetenceInfo(
@@ -23,7 +26,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C2",
             title = "Maintain a safe navigational watch",
-            officialTOSItems = 570,
+            officialTOSItems = 221,
             description = "COLREGs 1972 (Rules 1-38), STCW Watchkeeping Section A-VIII/2, bridge procedures, lookout duties."
         ),
         CompetenceInfo(
@@ -33,7 +36,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C3",
             title = "Use of Radar and ARPA for the safety of navigation",
-            officialTOSItems = 442,
+            officialTOSItems = 258,
             description = "Radar plotting, CPA/TCPA calculation, true vs relative motion, ARPA trial manoeuvres, clutter suppression."
         ),
         CompetenceInfo(
@@ -43,7 +46,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C4",
             title = "Use of ECDIS for the safety of navigation",
-            officialTOSItems = 307,
+            officialTOSItems = 160,
             description = "Electronic navigational charts (ENC), safety contours, display categories, sensors integration, over-reliance prevention."
         ),
         CompetenceInfo(
@@ -53,7 +56,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C5",
             title = "Respond to emergencies",
-            officialTOSItems = 358,
+            officialTOSItems = 100,
             description = "Man overboard maneuvers (Williamson, Scharnow), search & rescue (IAMSAR), collision, grounding, damage control."
         ),
         CompetenceInfo(
@@ -63,7 +66,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C7",
             title = "Use the IMO SMCP and use English in written and oral form",
-            officialTOSItems = 533,
+            officialTOSItems = 196,
             description = "Transmit and receive information by visual signalling / Morse & Flags."
         ),
         CompetenceInfo(
@@ -73,7 +76,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C9",
             title = "Manoeuvre the ship",
-            officialTOSItems = 507,
+            officialTOSItems = 176,
             description = "Ship handling, pivot point, turning circles, squat and shallow water effects, bank suction, anchoring."
         ),
         CompetenceInfo(
@@ -83,7 +86,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C10",
             title = "Monitor the loading, stowage, securing, care during the voyage and the unloading of cargoes",
-            officialTOSItems = 610,
+            officialTOSItems = 109,
             description = "IMDG Code hazard classes, cargo securing manual (CSM), bulk grain regulations, dangerous goods segregation."
         ),
         CompetenceInfo(
@@ -93,7 +96,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C11",
             title = "Inspect and report defects and damage to cargo spaces, hatch covers and ballast tanks",
-            officialTOSItems = 421,
+            officialTOSItems = 96,
             description = "Ultrasonic hatch testing, corrosion detection, Enhanced Survey Programme (ESP), structural deformation."
         ),
         CompetenceInfo(
@@ -103,7 +106,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C12",
             title = "Ensure compliance with pollution-prevention requirements",
-            officialTOSItems = 351,
+            officialTOSItems = 110,
             description = "MARPOL Annexes I to VI (Oily water separator 15ppm, sewage, garbage special areas, SOx/NOx ECA emissions)."
         ),
         CompetenceInfo(
@@ -113,7 +116,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C13",
             title = "Maintain seaworthiness of the ship",
-            officialTOSItems = 888,
+            officialTOSItems = 122,
             description = "Ship stability, transverse metacentric height (GM), free surface effect, load lines, damage stability."
         ),
         CompetenceInfo(
@@ -123,7 +126,7 @@ object MaritimeCompetenceRegistry {
             track = Track.DECK_OIC_NW,
             code = "C17",
             title = "Monitor compliance with legislative requirements",
-            officialTOSItems = 628,
+            officialTOSItems = 97,
             description = "Maritime Labour Convention (MLC 2006) rest hours, STCW compliance, Port State Control inspections, ISM Code."
         )
     )
@@ -136,7 +139,7 @@ object MaritimeCompetenceRegistry {
             track = Track.GMDSS_GOC,
             code = "C1",
             title = "Transmit and receive information using GMDSS subsystems and equipment",
-            officialTOSItems = 85,
+            officialTOSItems = 1000,
             description = "Digital Selective Calling (DSC), NAVTEX (518 kHz), EPIRB (406 MHz), SART (9 GHz), Inmarsat-C, VHF/MF/HF."
         ),
         CompetenceInfo(
@@ -146,7 +149,7 @@ object MaritimeCompetenceRegistry {
             track = Track.GMDSS_GOC,
             code = "C2",
             title = "Provide radio services in emergencies",
-            officialTOSItems = 15,
+            officialTOSItems = 200,
             description = "Distress alerting protocols (MAYDAY, PAN PAN, SECURITE), false distress cancellations, SAR on-scene communications."
         )
     )
@@ -251,5 +254,18 @@ object MaritimeCompetenceRegistry {
         } else {
             100
         }
+    }
+
+    fun getOfficialCrpQuestionCount(competenceId: String, track: Track): Int {
+        return if (track == Track.DECK_OIC_NW) {
+            PIETRO_CRP_DECK_DISTRIBUTION[competenceId] ?: 100
+        } else {
+            PIETRO_CRP_GMDSS_DISTRIBUTION[competenceId] ?: 200
+        }
+    }
+
+    fun getFormattedOfficialCrpQuestionCount(competenceId: String, track: Track): String {
+        val count = getOfficialCrpQuestionCount(competenceId, track)
+        return if (count >= 1000) "%,d".format(count) else count.toString()
     }
 }

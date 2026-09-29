@@ -36,6 +36,10 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         }
     }
 
+    suspend fun clearAllBookmarks() {
+        bookmarkDao.clearAll()
+    }
+
     fun observeMistakes(): Flow<List<MistakeEntity>> {
         return mistakeDao.getAllMistakes()
     }

@@ -1,9 +1,7 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,35 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Assignment
-import androidx.compose.material.icons.filled.Calculate
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
@@ -59,97 +40,63 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.FailRed
-import com.example.ui.theme.MaritimeGold
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MaritimeTopBar
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.theme.LocalSpaghettiColors
 import com.example.viewmodel.ReviewerViewModel
-import com.example.viewmodel.Screen
 
+/**
+ * Editorial MIAN "Spaghetti" MARINA Examination Guidelines Screen:
+ * Official Table of Specifications (TOS), passing criteria, weighted scoring, dress code & permit guidelines.
+ */
 @Composable
 fun ExamGuidelinesScreen(
     viewModel: ReviewerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalSpaghettiColors.current
     var selectedTab by remember { mutableIntStateOf(0) }
-    val isDark = isSystemInDarkTheme()
 
     BackHandler {
         viewModel.navigateBack()
     }
 
-    val deepNavy = Color(0xFF0F172A)
-    val cardSurface = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFFFF)
-    val cardBorder = if (isDark) BorderStroke(1.dp, Color(0xFF334155)) else BorderStroke(1.dp, Color(0xFFE2E8F0))
-    val primaryTextColor = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0F172A)
-    val secondaryTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
-
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .navigationBarsPadding()
+            .background(colors.background)
     ) {
-        // Official Deep Navy Top Bar with Back Navigation
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = deepNavy,
-            shadowElevation = 4.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = { viewModel.navigateBack() },
-                    modifier = Modifier.testTag("exam_guidelines_back_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = PureWhite
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                Column {
-                    Text(
-                        text = "MARINA Examination Guidelines",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite
-                    )
-                    Text(
-                        text = "STCW Theoretical Assessment Rules & TOS Benchmark",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaritimeGoldBright
-                    )
-                }
-            }
-        }
+        MaritimeTopBar(
+            title = "MARINA EXAM GUIDELINES",
+            subtitle = "STCW THEORETICAL ASSESSMENT RULES & TOS BENCHMARK",
+            showBackButton = true,
+            onBackClick = { viewModel.navigateBack() }
+        )
 
         // Segmented Track Tabs
         ScrollableTabRow(
             selectedTabIndex = selectedTab,
-            containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFF1E293B),
-            contentColor = PureWhite,
+            containerColor = colors.surface,
+            contentColor = colors.foreground,
             edgePadding = 16.dp,
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                    color = MaritimeGoldBright,
+                    color = colors.accent,
                     height = 3.dp
+                )
+            },
+            divider = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(colors.border)
                 )
             }
         ) {
@@ -162,13 +109,15 @@ fun ExamGuidelinesScreen(
                             imageVector = Icons.Default.Navigation,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = if (selectedTab == 0) MaritimeGoldBright else Color(0xFF94A3B8)
+                            tint = if (selectedTab == 0) colors.accent else colors.muted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "OIC-NW Deck Operational",
-                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 0) PureWhite else Color(0xFF94A3B8)
+                            text = "OIC-NW DECK OPERATIONAL",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.8.sp,
+                            color = if (selectedTab == 0) colors.accent else colors.muted
                         )
                     }
                 }
@@ -183,13 +132,15 @@ fun ExamGuidelinesScreen(
                             imageVector = Icons.Default.Radio,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = if (selectedTab == 1) MaritimeGoldBright else Color(0xFF94A3B8)
+                            tint = if (selectedTab == 1) colors.accent else colors.muted
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "GMDSS Radio Operator (GOC)",
-                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedTab == 1) PureWhite else Color(0xFF94A3B8)
+                            text = "GMDSS RADIO OPERATOR (GOC)",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp,
+                            letterSpacing = 0.8.sp,
+                            color = if (selectedTab == 1) colors.accent else colors.muted
                         )
                     }
                 }
@@ -201,28 +152,27 @@ fun ExamGuidelinesScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (selectedTab == 0) {
                 // Deck OIC-NW Specifications
                 item {
                     TrackHeaderCard(
-                        title = "OIC-NW Deck Operational Level",
+                        title = "OIC-NW DECK OPERATIONAL LEVEL",
                         timeWindow = "8:00 AM – 12:00 NN (4 Hours / 200 items in 200 mins)",
-                        cutoff = "Strictly 70% in each individual competence",
-                        totalItems = "200 Items Total",
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                        cutoff = "Strictly 70.0% in each individual competence",
+                        totalItems = "200 ITEMS TOTAL"
                     )
                 }
 
                 item {
+                    MianSectionHeader(title = "FUNCTION 1: NAVIGATION AT THE OPERATIONAL LEVEL (125 ITEMS)")
+                }
+
+                item {
                     CompetencyBreakdownCard(
-                        functionTitle = "Function 1: Navigation at the Operational Level",
+                        functionTitle = "FUNCTION 1: NAVIGATION",
                         itemCount = "125 items total",
-                        accentColor = SeaCyan,
                         competencies = listOf(
                             "Competence 1: Plan and conduct a passage and determine position" to "35 items",
                             "Competence 2: Maintain a safe navigational watch" to "20 items",
@@ -231,318 +181,119 @@ fun ExamGuidelinesScreen(
                             "Competence 5: Respond to emergencies" to "10 items",
                             "Competence 7: Use IMO SMCP & English in written and oral form" to "20 items",
                             "Competence 9: Manoeuvre the ship" to "15 items"
-                        ),
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                        )
                     )
                 }
 
                 item {
+                    MianSectionHeader(title = "FUNCTION 2: CARGO HANDLING AND STOWAGE (30 ITEMS)")
+                }
+
+                item {
                     CompetencyBreakdownCard(
-                        functionTitle = "Function 2: Cargo Handling and Stowage",
+                        functionTitle = "FUNCTION 2: CARGO HANDLING & STOWAGE",
                         itemCount = "30 items total",
-                        accentColor = MaritimeGoldBright,
                         competencies = listOf(
                             "Competence 10: Monitor loading, stowage, securing, and unloading of cargoes" to "15 items",
                             "Competence 11: Inspect and report defects/damage to cargo spaces, hatch covers, and ballast tanks" to "15 items"
-                        ),
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                        )
                     )
                 }
 
                 item {
+                    MianSectionHeader(title = "FUNCTION 3: SHIP OPERATION & CARE FOR PERSONS (45 ITEMS)")
+                }
+
+                item {
                     CompetencyBreakdownCard(
-                        functionTitle = "Function 3: Ship Operation & Care for Persons on Board",
+                        functionTitle = "FUNCTION 3: CONTROLLING SHIP OPERATION",
                         itemCount = "45 items total",
-                        accentColor = PassGreen,
                         competencies = listOf(
-                            "Competence 12: Ensure compliance with pollution-prevention requirements" to "15 items",
+                            "Competence 12: Ensure compliance with pollution prevention requirements" to "15 items",
                             "Competence 13: Maintain seaworthiness of the ship" to "15 items",
-                            "Competence 17: Monitor compliance with legislative requirements" to "15 items"
-                        ),
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                            "Competence 17: Apply leadership and teamworking skills" to "15 items"
+                        )
                     )
                 }
             } else {
-                // GMDSS GOC Specifications
+                // GMDSS Specifications
                 item {
                     TrackHeaderCard(
-                        title = "GMDSS Radio Operator (GOC)",
-                        timeWindow = "8:00 AM – 10:00 AM (2 Hours / 100 items in 100 mins)",
-                        cutoff = "Strictly 70% in each individual competence",
-                        totalItems = "100 Items Total",
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                        title = "GMDSS GENERAL OPERATOR'S CERTIFICATE (GOC)",
+                        timeWindow = "8:00 AM – 10:00 AM (2 Hours / 100 items in 120 mins)",
+                        cutoff = "Strictly 70.0% in each individual competence",
+                        totalItems = "100 ITEMS TOTAL"
                     )
+                }
+
+                item {
+                    MianSectionHeader(title = "COMPETENCE 1: RADIO REGULATIONS & SUBSYSTEMS (85 ITEMS)")
                 }
 
                 item {
                     CompetencyBreakdownCard(
-                        functionTitle = "GMDSS Radio Communications Competencies",
-                        itemCount = "100 items total",
-                        accentColor = MaritimeGoldBright,
+                        functionTitle = "COMPETENCE 1: RADIO SUBSYSTEMS",
+                        itemCount = "85 items total",
                         competencies = listOf(
-                            "Competence 1: Transmit and receive information using GMDSS subsystems and equipment" to "85 items",
-                            "Competence 2: Provide radio services in emergencies" to "15 items"
-                        ),
-                        cardSurface = cardSurface,
-                        cardBorder = cardBorder,
-                        primaryText = primaryTextColor,
-                        secondaryText = secondaryTextColor
+                            "VHF/MF/HF Radio Communications & Digital Selective Calling (DSC)" to "30 items",
+                            "Satellite Systems: Inmarsat-C, FleetBroadband, Iridium GMDSS" to "25 items",
+                            "Search and Rescue Locating Devices: EPIRB, SART, AIS-SART" to "15 items",
+                            "Maritime Safety Information (MSI): NAVTEX, SafetyNET, Enhanced Group Call" to "15 items"
+                        )
+                    )
+                }
+
+                item {
+                    MianSectionHeader(title = "COMPETENCE 2: DISTRESS & SAFETY PROCEDURES (15 ITEMS)")
+                }
+
+                item {
+                    CompetencyBreakdownCard(
+                        functionTitle = "COMPETENCE 2: DISTRESS PROCEDURES",
+                        itemCount = "15 items total",
+                        competencies = listOf(
+                            "GMDSS Distress, Urgency and Safety Communications Protocols" to "8 items",
+                            "Search and Rescue (SAR) Procedures & On-Scene Coordination" to "7 items"
+                        )
                     )
                 }
             }
 
-            // Shared Official MARINA Rules & Guidance Cards
+            // General Exam Rules & Requirements (Both Tracks)
             item {
-                Text(
-                    text = "OFFICIAL MARINA EXAMINATION RULES",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    letterSpacing = 1.sp
-                )
+                MianSectionHeader(title = "OFFICIAL MARINA EXAMINATION POLICIES")
             }
 
-            // 1. Policy & Timelines
             item {
-                GuidanceCard(
-                    icon = Icons.Default.Gavel,
-                    iconColor = SeaCyan,
-                    title = "Policy & Examination Timelines",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GuidanceBullet(
-                                title = "Single Sitting Rule:",
-                                text = "All functions of the theoretical examination must be taken in a single scheduled sitting.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "70% Passing Cutoff:",
-                                text = "An examinee must attain a minimum score of 70% in EACH individual competence to pass.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "3-Year Completion Limit:",
-                                text = "Pursuant to STCW Circular 2018-08, candidates have a maximum of 3 years to complete all competencies.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Remedial & Retake Intervals:",
-                                text = "Remedial examination may be taken after 1 month up to 1 year; removal examination between 12 and 18 months; full retake after 6 months if failed.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                        }
-                    }
-                )
+                EvaluationSummaryCard()
             }
 
-            // 2. Bloom's Taxonomy Weighted Scoring
             item {
-                GuidanceCard(
-                    icon = Icons.Default.Calculate,
-                    iconColor = MaritimeGoldBright,
-                    title = "Bloom's Taxonomy Weighted Scoring",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                text = "Items are weighted according to cognitive depth:",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = secondaryTextColor
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                WeightTag("Easy (K/U)", "3 Points", SeaCyan)
-                                WeightTag("Moderate (App)", "6 Points", MaritimeGoldBright)
-                                WeightTag("Difficult (Ana)", "9 Points", FailRed)
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9),
-                                border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        text = "Official Formula:",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = primaryTextColor
-                                    )
-                                    Text(
-                                        text = "Final Score (%) = (Total Raw Score Earned / Total Maximum Score) × 100%",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                                        fontWeight = FontWeight.Bold,
-                                        color = SeaCyan
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Example: 10 items (3 Easy @3, 5 Mod @6, 2 Diff @9) = 57 Max Pts.\n• 36 / 57 pts = 63.16% (FAILED)\n• 48 / 57 pts = 84.21% (PASSED)",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = secondaryTextColor,
-                                        fontSize = 11.5.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-                )
-            }
-
-            // 3. Reporting & Forfeiture
-            item {
-                GuidanceCard(
-                    icon = Icons.Default.AccessTime,
-                    iconColor = FailRed,
-                    title = "Reporting & Forfeiture Protocol",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GuidanceBullet(
-                                title = "30-Minute Early Reporting:",
-                                text = "Examinees must report strictly 30 minutes prior to scheduled exam time. Late examinees will be barred and slot forfeited.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Excused Absences:",
-                                text = "Only accepted with documented proof: Force majeure, death of immediate family member, severe medical condition, or immediate vessel deployment.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                        }
-                    }
-                )
-            }
-
-            // 4. Permit & Documents Required
-            item {
-                GuidanceCard(
-                    icon = Icons.Default.Description,
-                    iconColor = SeaCyan,
-                    title = "Permit & Valid Identification",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GuidanceBullet(
-                                title = "Long Size Bond Paper:",
-                                text = "Examination Permit MUST be printed strictly on LONG SIZE (8.5 × 13 inches) bond paper.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Identification:",
-                                text = "Original Seafarer's Record Book (SRB), Seafarer's Identity Document (SID), or MARINA ID (or 2 valid government IDs). Photocopies strictly rejected.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Exam Tools:",
-                                text = "Black or blue ballpoint pen, standard basic non-programmable calculator.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                        }
-                    }
-                )
-            }
-
-            // 5. Attire & Grooming
-            item {
-                GuidanceCard(
-                    icon = Icons.Default.Face,
-                    iconColor = MaritimeGoldBright,
-                    title = "Prescribed Uniform & Grooming",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GuidanceBullet(
-                                title = "Type B Marine Uniform:",
-                                text = "White short-sleeved polo with epaulets, black slacks, black socks, and polished black leather shoes.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Epaulet Stripes:",
-                                text = "NO STRIPES on shoulder boards for OIC examinees (2 stripes for licensed OIC, 3 for Chief Mate/2E).",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Grooming Standard:",
-                                text = "Plain white undershirt (no prints). Standard 2x3 barber haircut, cleanly shaven (strictly NO beards, moustaches, or goatees).",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                        }
-                    }
-                )
-            }
-
-            // 6. Results & MARINA Support
-            item {
-                GuidanceCard(
-                    icon = Icons.Default.Email,
-                    iconColor = PassGreen,
-                    title = "Results Release & Inquiries",
-                    cardSurface = cardSurface,
-                    cardBorder = cardBorder,
-                    primaryText = primaryTextColor,
-                    secondaryText = secondaryTextColor,
-                    content = {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            GuidanceBullet(
-                                title = "MISMO Portal:",
-                                text = "Official results are posted to your MISMO account under the Assessment tab within 1 working day.",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                            GuidanceBullet(
-                                title = "Official Support Contact:",
-                                text = "For exam discrepancies or schedule issues, email: stcwo_ead@marina.gov.ph",
-                                primaryText = primaryTextColor,
-                                secondaryText = secondaryTextColor
-                            )
-                        }
-                    }
+                GeneralRuleCard(
+                    title = "PASSING THRESHOLD & CUTOFF POLICY",
+                    content = "To pass the examination, a candidate MUST obtain at least 70.0% in EVERY competence within the function. Scoring 100% in C1 and 65% in C2 results in an overall FAILURE for the function. All competencies are equally mandatory.",
+                    icon = Icons.Default.Security
                 )
             }
 
             item {
-                Spacer(modifier = Modifier.height(24.dp))
+                GeneralRuleCard(
+                    title = "EXAM PERMIT & IDENTIFICATION",
+                    content = "Examinees must present their official MARINA Examination Permit (printed) along with their valid Seafarer's Identification and Record Book (SIRB) or National ID. Digital permits on mobile phones are strictly prohibited in the exam hall.",
+                    icon = Icons.Default.Gavel
+                )
+            }
+
+            item {
+                GeneralRuleCard(
+                    title = "DRESS CODE & CONDUCT",
+                    content = "Standard Maritime Uniform or White Polo/Barong with dark slacks and black formal leather shoes is mandatory. Electronic devices, smartwatches, and programmable calculators are strictly forbidden.",
+                    icon = Icons.Default.Info
+                )
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -553,77 +304,73 @@ private fun TrackHeaderCard(
     title: String,
     timeWindow: String,
     cutoff: String,
-    totalItems: String,
-    cardSurface: Color,
-    cardBorder: BorderStroke,
-    primaryText: Color,
-    secondaryText: Color
+    totalItems: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = cardSurface),
-        border = cardBorder
+    val colors = LocalSpaghettiColors.current
+
+    MianRuleCard(
+        ruleColor = colors.accent,
+        containerColor = colors.surface
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = primaryText
-                )
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = PassGreen.copy(alpha = 0.15f),
-                    border = BorderStroke(0.5.dp, PassGreen)
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
+                ) {
+                    Text(
+                        text = "TABLE OF SPECIFICATIONS (TOS)",
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        fontSize = 10.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
                 ) {
                     Text(
                         text = totalItems,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = PassGreen
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.accent,
+                        fontSize = 10.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.AccessTime,
-                    contentDescription = null,
-                    tint = SeaCyan,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.foreground,
+                letterSpacing = (-0.2).sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = timeWindow,
+                    text = "• Time Window: $timeWindow",
                     style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = primaryText
+                    color = colors.foreground
                 )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaritimeGoldBright,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Passing Standard: $cutoff",
+                    text = "• Passing Requirement: $cutoff",
                     style = MaterialTheme.typography.bodySmall,
-                    color = secondaryText
+                    color = colors.success,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -634,18 +381,13 @@ private fun TrackHeaderCard(
 private fun CompetencyBreakdownCard(
     functionTitle: String,
     itemCount: String,
-    accentColor: Color,
-    competencies: List<Pair<String, String>>,
-    cardSurface: Color,
-    cardBorder: BorderStroke,
-    primaryText: Color,
-    secondaryText: Color
+    competencies: List<Pair<String, String>>
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = cardSurface),
-        border = cardBorder
+    val colors = LocalSpaghettiColors.current
+
+    MianRuleCard(
+        ruleColor = colors.border,
+        containerColor = colors.surface
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -654,50 +396,55 @@ private fun CompetencyBreakdownCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = functionTitle,
+                    text = functionTitle.uppercase(),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = primaryText,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.foreground,
+                    letterSpacing = (-0.1).sp,
                     modifier = Modifier.weight(1f)
                 )
+
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = accentColor.copy(alpha = 0.15f)
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2
                 ) {
                     Text(
-                        text = itemCount,
+                        text = itemCount.uppercase(),
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = accentColor
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        fontSize = 9.sp
                     )
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 10.dp),
-                color = cardBorder.brush?.let { Color.Transparent } ?: Color(0xFF334155).copy(alpha = 0.3f)
-            )
+            Spacer(modifier = Modifier.height(10.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                competencies.forEach { (comp, items) ->
+                competencies.forEach { (compName, quota) ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(colors.surface2)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = comp,
+                            text = compName,
                             style = MaterialTheme.typography.bodySmall,
-                            color = primaryText,
-                            modifier = Modifier.weight(1f)
+                            color = colors.foreground,
+                            modifier = Modifier.weight(1f),
+                            lineHeight = 16.sp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = items,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                            fontWeight = FontWeight.Bold,
-                            color = accentColor
+                            text = quota.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.accent,
+                            fontSize = 10.sp
                         )
                     }
                 }
@@ -707,115 +454,125 @@ private fun CompetencyBreakdownCard(
 }
 
 @Composable
-private fun GuidanceCard(
-    icon: ImageVector,
-    iconColor: Color,
-    title: String,
-    cardSurface: Color,
-    cardBorder: BorderStroke,
-    primaryText: Color,
-    secondaryText: Color,
-    content: @Composable () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = cardSurface),
-        border = cardBorder
+private fun EvaluationSummaryCard() {
+    val colors = LocalSpaghettiColors.current
+
+    MianRuleCard(
+        ruleColor = colors.accent,
+        containerColor = colors.surface
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "BLOOM'S TAXONOMY WEIGHTED SCORING",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.foreground,
+                letterSpacing = (-0.1).sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Official MARINA theoretical examinations evaluate questions across three cognitive difficulty levels with weighted scoring points:",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(iconColor.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = iconColor,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(text = "EASY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = colors.success)
+                        Text(text = "3 PTS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, color = colors.foreground)
+                        Text(text = "Knowledge & Recall", style = MaterialTheme.typography.bodySmall, fontSize = 9.sp, color = colors.muted)
+                    }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = primaryText
-                )
+
+                Surface(
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(text = "MODERATE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = colors.foreground)
+                        Text(text = "6 PTS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, color = colors.foreground)
+                        Text(text = "Understanding & App", style = MaterialTheme.typography.bodySmall, fontSize = 9.sp, color = colors.muted)
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(2.dp),
+                    color = colors.surface2,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(text = "DIFFICULT", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = colors.accent)
+                        Text(text = "9 PTS", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, color = colors.foreground)
+                        Text(text = "Analysis & Eval", style = MaterialTheme.typography.bodySmall, fontSize = 9.sp, color = colors.muted)
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            content()
         }
     }
 }
 
 @Composable
-private fun GuidanceBullet(
+private fun GeneralRuleCard(
     title: String,
-    text: String,
-    primaryText: Color,
-    secondaryText: Color
+    content: String,
+    icon: ImageVector
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
-        Text(
-            text = "• ",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Bold,
-            color = MaritimeGoldBright
-        )
-        Text(
-            text = buildString {
-                append(title)
-                append(" ")
-                append(text)
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = secondaryText,
-            lineHeight = 18.sp
-        )
-    }
-}
+    val colors = LocalSpaghettiColors.current
 
-@Composable
-private fun WeightTag(
-    label: String,
-    pts: String,
-    color: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = color.copy(alpha = 0.12f),
-        border = BorderStroke(0.5.dp, color)
+    MianRuleCard(
+        ruleColor = colors.border,
+        containerColor = colors.surface
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = color,
-                fontSize = 10.sp
-            )
-            Text(
-                text = pts,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = color,
-                fontSize = 11.sp
-            )
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(colors.surface2),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.foreground,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.foreground,
+                    letterSpacing = (-0.1).sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.muted,
+                    lineHeight = 18.sp
+                )
+            }
         }
     }
 }

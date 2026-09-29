@@ -2,9 +2,7 @@ package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,20 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -50,543 +39,350 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.LegalAgreementText
-import com.example.ui.components.HyperionEmblem
 import com.example.ui.components.MaritimeTopBar
-import com.example.ui.theme.MaritimeGold
-import com.example.ui.theme.MaritimeGoldBright
-import com.example.ui.theme.PassGreen
-import com.example.ui.theme.PureWhite
-import com.example.ui.theme.SeaCyan
+import com.example.ui.components.MianButton
+import com.example.ui.components.MianRuleCard
+import com.example.ui.components.MianSectionHeader
+import com.example.ui.theme.LocalSpaghettiColors
+import com.example.viewmodel.ReviewerViewModel
 
 /**
- * First-launch mandatory terms and academic disclaimer gate.
- * The examinee must scroll completely to the bottom of the formal agreement
- * before the acceptance checkbox is enabled.
+ * Editorial MIAN "Spaghetti" Terms & Academic Disclaimer Screen:
+ * Independent developer disclaimer, STCW/MARINA compliance notice, mandatory acceptance modal.
  */
 @Composable
 fun TermsOnboardingScreen(
     onAcceptTerms: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
-    var hasScrolledToBottom by remember { mutableStateOf(false) }
-    var isAccepted by remember { mutableStateOf(false) }
-
-    // Scroll-to-bottom enforcement
-    LaunchedEffect(scrollState.value, scrollState.maxValue) {
-        if (scrollState.maxValue > 0 && scrollState.value >= (scrollState.maxValue - 24)) {
-            hasScrolledToBottom = true
-        } else if (scrollState.maxValue == 0) {
-            hasScrolledToBottom = true
-        }
-    }
-
-    Column(
+    TermsAndDisclaimerScreenContent(
+        isMandatoryOnboarding = true,
+        onBackClick = {},
+        onAccepted = onAcceptTerms,
         modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // Formal Header Banner
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    HyperionEmblem(size = 28.dp)
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "HYPERION",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 2.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = "Terms of Service & Academic Disclaimer",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Text(
-                    text = "Mandatory First-Launch Compliance Review",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = SeaCyan
-                )
-            }
-        }
-
-        // Compliance Highlights Banner
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shield,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Independent study reviewer • Not affiliated with MARINA or IMO • Synthetic practice questions only",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
-                )
-            }
-        }
-
-        // Scrollable Legal Text Container
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-                    .testTag("terms_scroll_container")
-            ) {
-                Text(
-                    text = LegalAgreementText.TITLE,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = LegalAgreementText.LAST_REVISED,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = SeaCyan,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = LegalAgreementText.FULL_AGREEMENT_TEXT,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            lineHeight = 20.sp,
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = PassGreen,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "End of Legal Agreement",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PassGreen
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-
-        // Sticky Bottom Acceptance Panel
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            shadowElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                // Scroll helper notice
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = if (hasScrolledToBottom) PassGreen.copy(alpha = 0.15f) else MaritimeGold.copy(alpha = 0.15f),
-                    border = BorderStroke(
-                        1.dp,
-                        if (hasScrolledToBottom) PassGreen.copy(alpha = 0.5f) else MaritimeGoldBright.copy(alpha = 0.4f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (hasScrolledToBottom) Icons.Default.CheckCircle else Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            tint = if (hasScrolledToBottom) PassGreen else MaritimeGoldBright,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (hasScrolledToBottom) {
-                                "✓ Document read to bottom. You may now acknowledge acceptance."
-                            } else {
-                                "↓ Scroll to the very end of the agreement to enable acknowledgment"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = if (hasScrolledToBottom) PassGreen else MaritimeGoldBright,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Checkbox: strictly disabled until scrolled to the very end
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = hasScrolledToBottom) {
-                            if (hasScrolledToBottom) {
-                                isAccepted = !isAccepted
-                            }
-                        }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = isAccepted,
-                        onCheckedChange = { if (hasScrolledToBottom) isAccepted = it },
-                        enabled = hasScrolledToBottom,
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaritimeGoldBright,
-                            checkmarkColor = Color.Black,
-                            uncheckedColor = if (hasScrolledToBottom) MaritimeGoldBright else Color.Gray,
-                            disabledCheckedColor = MaritimeGoldBright.copy(alpha = 0.5f),
-                            disabledUncheckedColor = Color.Gray.copy(alpha = 0.3f)
-                        ),
-                        modifier = Modifier.testTag("terms_acceptance_checkbox")
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "I have read, understood, and accept the Terms & Conditions and Academic Disclaimer",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (hasScrolledToBottom) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        fontWeight = if (isAccepted) FontWeight.Bold else FontWeight.Normal,
-                        lineHeight = 18.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Continue button
-                Button(
-                    onClick = onAcceptTerms,
-                    enabled = hasScrolledToBottom && isAccepted,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("continue_to_hyperion_button"),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaritimeGoldBright,
-                        contentColor = Color(0xFF0F172A),
-                        disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = null,
-                        tint = if (hasScrolledToBottom && isAccepted) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Continue to Hyperion",
-                        color = if (hasScrolledToBottom && isAccepted) Color(0xFF0F172A) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }
+    )
 }
 
-/**
- * Permanent Read-Only Viewer for Terms & Conditions, Academic Disclaimer, and Data Privacy.
- * Accessible anytime from the top bar or home screen footer without demanding re-acceptance.
- */
+@Composable
+fun TermsOnboardingScreen(
+    viewModel: ReviewerViewModel,
+    modifier: Modifier = Modifier
+) {
+    TermsOnboardingScreen(
+        onAcceptTerms = { viewModel.acceptTerms() },
+        modifier = modifier
+    )
+}
+
+@Composable
+fun TermsAndDisclaimerScreen(
+    viewModel: ReviewerViewModel,
+    modifier: Modifier = Modifier
+) {
+    TermsAndDisclaimerScreenContent(
+        isMandatoryOnboarding = false,
+        onBackClick = { viewModel.navigateBack() },
+        onAccepted = {},
+        modifier = modifier
+    )
+}
+
 @Composable
 fun TermsAndDisclaimerScreen(
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    BackHandler(onBack = onBackClick)
+    TermsAndDisclaimerScreenContent(
+        isMandatoryOnboarding = false,
+        onBackClick = onBackClick,
+        onAccepted = {},
+        modifier = modifier
+    )
+}
 
+@Composable
+fun TermsAndDisclaimerScreen(
+    viewModel: ReviewerViewModel,
+    isMandatoryOnboarding: Boolean = false,
+    onAccepted: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    TermsAndDisclaimerScreenContent(
+        isMandatoryOnboarding = isMandatoryOnboarding,
+        onBackClick = { viewModel.navigateBack() },
+        onAccepted = onAccepted,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun TermsAndDisclaimerScreenContent(
+    isMandatoryOnboarding: Boolean = false,
+    onBackClick: () -> Unit = {},
+    onAccepted: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalSpaghettiColors.current
+    var isAccepted by remember { mutableStateOf(!isMandatoryOnboarding) }
+    var hasScrolledToBottom by remember { mutableStateOf(!isMandatoryOnboarding) }
     val scrollState = rememberScrollState()
+
+    LaunchedEffect(scrollState.value, scrollState.maxValue) {
+        if (scrollState.maxValue > 0 && scrollState.value >= (scrollState.maxValue - 80)) {
+            hasScrolledToBottom = true
+        }
+    }
+
+    BackHandler(enabled = !isMandatoryOnboarding) {
+        onBackClick()
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(colors.background)
+            .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        MaritimeTopBar(
-            title = "Terms & Disclaimer",
-            subtitle = "Legal Agreement & Privacy",
-            showBackButton = true,
-            onBackClick = onBackClick
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Header card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        if (!isMandatoryOnboarding) {
+            MaritimeTopBar(
+                title = "TERMS & DISCLAIMER",
+                subtitle = "INDEPENDENT ACADEMIC COMPLIANCE",
+                showBackButton = true,
+                onBackClick = onBackClick
+            )
+        } else {
+            // Mandatory Onboarding Top Header
+            Surface(
+                color = colors.surface,
+                shadowElevation = 0.dp
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        HyperionEmblem(size = 32.dp)
-                        Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 20.dp)
+                    ) {
                         Column {
                             Text(
                                 text = "HYPERION",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                letterSpacing = 2.sp
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.foreground,
+                                letterSpacing = (-0.5).sp
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Maritime Licensure Reviewer",
+                                text = "TERMS OF USE & ACADEMIC DISCLAIMER",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontWeight = FontWeight.ExtraBold,
+                                color = colors.accent,
+                                fontSize = 10.sp,
+                                letterSpacing = 1.2.sp
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+                }
+            }
+        }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = SeaCyan.copy(alpha = 0.15f)
-                    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Prominent Non-Affiliation Disclaimer
+            MianRuleCard(
+                ruleColor = colors.accent,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(colors.surface2),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Gavel,
+                                contentDescription = null,
+                                tint = colors.accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Aligned with MARINA & STCW Competency Standards",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = SeaCyan,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            text = "OFFICIAL NON-AFFILIATION NOTICE",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.accent,
+                            letterSpacing = 0.5.sp
                         )
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "This document sets forth the formal terms of service, academic disclaimer, non-affiliation declaration, and data privacy policy for users of Hyperion.",
+                        text = LegalAgreementText.DISCLAIMER_SUMMARY,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
+                        color = colors.foreground,
                         lineHeight = 18.sp
                     )
                 }
             }
 
-            // Key Regulatory Declarations
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            MianSectionHeader(title = "1. PURPOSE & INDEPENDENT NATURE")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "KEY COMPLIANCE PRINCIPLES",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary,
+                        text = LegalAgreementText.SECTION_1_PURPOSE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "2. INTELLECTUAL PROPERTY & STCW REFERENCES")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_2_IP,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "3. LIMITATION OF LIABILITY & PRIVACY")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_3_LIABILITY,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            if (isMandatoryOnboarding && !hasScrolledToBottom) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDownward,
+                        contentDescription = "Scroll down",
+                        tint = colors.muted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "PLEASE SCROLL TO BOTTOM TO ACCEPT",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        fontSize = 10.sp,
                         letterSpacing = 1.sp
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    ComplianceBulletItem(
-                        icon = Icons.Default.Shield,
-                        title = "Independent Status",
-                        description = "Not affiliated with, endorsed by, or authorized by MARINA, IMO, PRC, or CHED."
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    ComplianceBulletItem(
-                        icon = Icons.Default.Info,
-                        title = "Synthetic Study Content",
-                        description = "All questions, problems, and keys are synthetic educational exercises formulated solely for theoretical self-evaluation."
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    ComplianceBulletItem(
-                        icon = Icons.Default.Lock,
-                        title = "Privacy First",
-                        description = "Offline-first architecture. Personal identifiers and examination records are stored strictly on-device."
-                    )
                 }
-            }
-
-            // Full Unabridged Text
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.TITLE,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-
-                    Text(
-                        text = LegalAgreementText.LAST_REVISED,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = SeaCyan
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = LegalAgreementText.FULL_AGREEMENT_TEXT,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 21.sp,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-
-            // Return Button
-            Button(
-                onClick = onBackClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaritimeGoldBright,
-                    contentColor = Color(0xFF0F172A)
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "Return to Application",
-                    color = Color(0xFF0F172A),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
         }
-    }
-}
 
-@Composable
-private fun ComplianceBulletItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String
-) {
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .padding(top = 2.dp)
-                .size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 11.sp
-            )
+        // Bottom Acceptance Bar (Mandatory Onboarding Mode)
+        if (isMandatoryOnboarding) {
+            Surface(
+                color = colors.surface,
+                shadowElevation = 0.dp
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.border)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Checkbox(
+                                checked = isAccepted,
+                                onCheckedChange = { isAccepted = it },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = colors.accent,
+                                    checkmarkColor = colors.accentForeground
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "I understand and accept that Hyperion is an independent supplementary reviewer and is not affiliated with MARINA.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.foreground,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        MianButton(
+                            onClick = onAccepted,
+                            enabled = isAccepted && hasScrolledToBottom,
+                            accent = true,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "ACCEPT & ENTER REVIEWER",
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 12.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

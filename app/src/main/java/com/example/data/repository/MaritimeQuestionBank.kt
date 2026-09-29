@@ -155,10 +155,10 @@ object MaritimeQuestionBank {
         val list = ALL_QUESTIONS.filter { item ->
             (track == null || item.track == track) && (
                 item.questionText.lowercase().contains(q) ||
-                item.topic.lowercase().contains(q) ||
+                item.options.any { it.lowercase().contains(q) } ||
                 item.explanation.lowercase().contains(q) ||
-                item.competenceId.lowercase().contains(q) ||
-                item.options.any { it.lowercase().contains(q) }
+                item.topic.lowercase().contains(q) ||
+                item.competenceId.lowercase().contains(q)
             )
         }
         return if (isProUnlocked) list else list.take(5)

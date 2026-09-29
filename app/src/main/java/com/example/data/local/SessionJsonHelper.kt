@@ -86,4 +86,6 @@ object SessionJsonHelper {
         } catch (_: Exception) {}
         return list
     }
+
+    fun deserializeCompetenceBreakdown(jsonStr: String): List<CompetenceScore> = deserializeCompetenceScores(jsonStr)
 }

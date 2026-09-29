@@ -57,3 +57,12 @@ data class ExamRecordEntity(
     val answersJson: String = "",
     val competenceBreakdownJson: String = ""
 )
+
+val ExamRecordEntity.score: Int
+    get() = correctCount
+
+val ExamRecordEntity.dateFormatted: String
+    get() {
+        val sdf = java.text.SimpleDateFormat("MMM dd, yyyy • HH:mm", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date(timestamp))
+    }
