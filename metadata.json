@@ -1,6 +1,6 @@
 {
-  "name": "Hyperion Maritime Reviewer",
-  "description": "Maritime Licensure Reviewer",
+  "name": "Hyperion",
+  "description": "Hyperion: Maritime Licensure Reviewer for Deck OIC-NW, GMDSS, and Engine OIC-EW",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

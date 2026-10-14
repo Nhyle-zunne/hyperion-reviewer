@@ -25,7 +25,7 @@ Built using an industrial, high-contrast bridge terminal interface ("Spaghetti U
 ## Technical Architecture
 
 ```text
-com.nhyle.hyperionmaritime
+com.example
 ├── data
 │   ├── local        # Room Database, SQLite DAOs, pre-seeded JSON engines
 │   └── repository   # Offline-first repositories with reactive Kotlin Flow
