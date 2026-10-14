@@ -1,20 +1,30 @@
-# Implementation Plan - Restore Intensive Mode Layout & Mastery Card
+# Implementation Plan - MARINA Exam Target Date & Countdown HUD Widget
 
-Restore `QuizScreen.kt` Intensive Mode layout and UI components to precisely match the user's reference screenshots, including the top app bar, queue telemetry strip, feedback card placement, full-width bottom action button, and the ITEM MASTERY & ATTEMPTS card.
+Implement the MARINA Exam Target Date and Countdown HUD widget on the dashboard.
 
 ## Proposed Changes
 
-### `QuizScreen.kt`
-- **Intensive Mode Top Bar**: Ensure title `"Intensive Drill"` is accompanied by the green `"[RECYCLING]"` tag, subtitle `"F[#] • C[#]"`, back arrow on left, and single bookmark icon on right (removing grid icon).
-- **Queue Telemetry Strip**: Display `"Cleared: X / Y"` on left and `"In Queue: Z"` with status dot on right.
-- **Feedback Card**: Positioned below answer options and above the Mastery card after answer evaluation (Green for Correct, Red for Incorrect).
-- **ITEM MASTERY & ATTEMPTS Card**: Fully restore the mastery card showing accuracy percentage, correct/incorrect counts, progress bar, and chronological attempts history.
-- **Bottom Action Button**: Full width (`fillMaxWidth`) displaying `"Select an answer to proceed"` when unanswered and solid vibrant green `"Next Question →"` when evaluated.
+### 1. Dashboard UI & Composable: `MarinaExamCountdownStrip`
+- Add `MarinaExamCountdownStrip` composable placed horizontally across the full width directly between the Summary/Streak Strip and the 2x2 Licensure Grid.
+- **Styling**:
+  - Strict 0dp corner radius on container and badge.
+  - 1dp border (`#212E3C`), dark slate background (`#121922`), height ~44dp-48dp, 16dp horizontal screen padding.
+- **State A (Target Date SET)**:
+  - Left side: Calendar icon (`Icons.Outlined.CalendarMonth` in `#00FF66`) + Monospace text: `"TARGET EXAM: [MMM dd, yyyy]"`.
+  - Right side: High-contrast rectangular badge (0dp corners, 1dp green border) with text: `"T-MINUS [X] DAYS"` (or `"TODAY!"` if 0 days, or `"[X] DAYS AGO"` if passed).
+- **State B (Target Date NOT SET)**:
+  - Left side: Calendar icon + `"SET MARINA EXAM TARGET DATE"` (muted grey text `#8B949E`).
+  - Right side: Green badge with text: `"SET DATE →"`.
+
+### 2. SharedPreferences Persistence & DatePicker Interaction
+- **Key**: `"marina_exam_target_millis"`, default `0L`.
+- **Interaction**:
+  - Tapping the strip opens Android `DatePickerDialog` initialized to current date or saved target date.
+  - Minimum selectable date: today's date (`Calendar.getInstance().timeInMillis`).
+  - Upon selecting a date: save epoch timestamp in SharedPreferences and update state immediately.
+  - Long-pressing the strip resets/clears target date back to unset (`0L`).
 
 ## Verification Plan
-
-### Automated Tests
-- Run `gradle :app:testDebugUnitTest` to ensure all tests pass successfully.
-
-### Manual Verification
-- Compile applet via `compile_applet` and verify screen preview.
+- Compile with `compile_applet`.
+- Verify state rendering (Unset state vs Set state with days remaining calculation).
+- Verify date picker opens, saves correctly, and long-press clears target date.

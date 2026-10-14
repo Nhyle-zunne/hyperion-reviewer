@@ -342,7 +342,7 @@ private fun IntensiveDrillScreen(
             color = MaterialTheme.colorScheme.surfaceVariant,
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline)
         ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -350,25 +350,25 @@ private fun IntensiveDrillScreen(
                 ) {
                     Text(
                         text = "Cleared: $clearedCount / $initialTotal",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = PassGreen
                     )
                     Text(
                         text = "In Queue: ${intensiveQueue.size}",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 LinearProgressIndicator(
                     progress = { progressFraction.coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp),
+                        .height(4.dp),
                     color = PassGreen,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant
                 )

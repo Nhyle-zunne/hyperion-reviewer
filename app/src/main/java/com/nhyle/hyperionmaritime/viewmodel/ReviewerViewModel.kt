@@ -132,6 +132,19 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val repository = ReviewerRepository(database)
     private val prefs = application.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
 
+    private val _marinaExamTargetMillis = MutableStateFlow(prefs.getLong("marina_exam_target_millis", 0L))
+    val marinaExamTargetMillis: StateFlow<Long> = _marinaExamTargetMillis.asStateFlow()
+
+    fun setMarinaExamTargetMillis(millis: Long) {
+        prefs.edit().putLong("marina_exam_target_millis", millis).apply()
+        _marinaExamTargetMillis.value = millis
+    }
+
+    fun clearMarinaExamTarget() {
+        prefs.edit().remove("marina_exam_target_millis").apply()
+        _marinaExamTargetMillis.value = 0L
+    }
+
     val studyTimeTracker = com.nhyle.hyperionmaritime.data.studytime.StudyTimeTracker(
         scope = viewModelScope,
         saveSegmentCallback = { segments ->
@@ -170,6 +183,24 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             drillFormat = drillFormat,
             initialAccumulatedMs = savedElapsed
         )
+    }
+
+    fun startQuickScanStudyTracking(competenceId: String, track: Track) {
+        val sessionId = "quick_scan_${track.name}_$competenceId"
+        val savedElapsed = prefs.getLong("study_elapsed_$sessionId", 0L)
+        studyTimeTracker.startSession(
+            sessionId = sessionId,
+            trackId = track.name,
+            competence = competenceId,
+            part = null,
+            mode = "QUICK_SCAN",
+            drillFormat = null,
+            initialAccumulatedMs = savedElapsed
+        )
+    }
+
+    fun pauseQuickScanStudyTracking() {
+        studyTimeTracker.pauseTimer()
     }
 
     data class DeviceRegistrationUiState(
@@ -2442,6 +2473,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             _intensiveClearedCount.value += 1
             if (newQueue.isEmpty()) {
                 _intensiveCompleted.value = true
+                completeIntensiveDrill()
             }
         } else {
             // Push wrong question to the very end of the queue
@@ -2452,6 +2484,60 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _selectedChoiceIndex.value = null
         _isAnswerEvaluated.value = false
         autoSaveCurrentSession()
+    }
+
+    private fun completeIntensiveDrill() {
+        val questions = _activeQuestions.value
+        val answers = _userQuestionStates.value
+        val effectiveComp = _activeCompetenceId.value ?: sessionCompetenceCache[currentActiveSessionId]
+        val effectivePart = _activePartLabel.value ?: sessionPartCache[currentActiveSessionId]
+
+        val drillLabel = buildString {
+            if (effectiveComp != null && effectivePart != null) {
+                append("$effectiveComp ${effectivePart.uppercase()} • INTENSIVE")
+            } else if (effectiveComp != null) {
+                append("$effectiveComp DRILL • INTENSIVE")
+            } else {
+                append("ALL QUESTIONS • INTENSIVE")
+            }
+        }
+
+        val totalCount = _intensiveInitialTotal.value.takeIf { it > 0 } ?: questions.size
+        val correctCount = totalCount
+        val percentage = 100.0
+
+        val result = ExamResult(
+            examId = resumingRecordId ?: currentActiveSessionId,
+            timestamp = System.currentTimeMillis(),
+            track = _selectedTrack.value,
+            mode = QuizMode.PRACTICE,
+            totalQuestions = totalCount,
+            correctCount = correctCount,
+            rawPointsEarned = correctCount,
+            maxPointsPossible = totalCount,
+            overallPercentage = percentage,
+            isOverallPassed = true,
+            functionScores = emptyList(),
+            competenceScores = emptyList(),
+            questionStates = answers,
+            drillTitle = drillLabel,
+            competence = effectiveComp,
+            part = effectivePart
+        )
+
+        viewModelScope.launch {
+            for (q in questions) {
+                markQuestionSeen(_selectedTrack.value, q.id)
+                repository.recordQuestionAttempt(q.id, true)
+                MistakesVaultManager.recordAttempt(getApplication(), q.id, true)
+            }
+            refreshMistakes()
+            repository.saveExamRecord(result, questions.map { it.id })
+            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), _selectedTrack.value.name)
+            notifySnapshotChanged()
+            repository.clearActiveSession(_selectedTrack.value)
+            repository.markDrillSessionCompleted(currentActiveSessionId)
+        }
     }
 
     fun setSearchQuery(query: String) {

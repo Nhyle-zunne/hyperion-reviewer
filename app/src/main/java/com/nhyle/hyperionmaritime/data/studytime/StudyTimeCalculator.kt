@@ -6,6 +6,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.nhyle.hyperionmaritime.data.model.Track
 
 data class TrackStudyStats(
     val trackId: String,
@@ -170,11 +171,21 @@ object StudyTimeCalculator {
         return grouped.map { (trackId, trackSegs) ->
             val trackTotal = trackSegs.sumOf { it.durationMs }
             val fraction = (trackTotal.toDouble() / totalMs.toDouble()).toFloat()
-            val entry = TrackRegistry.getEntry(trackId)
+            val trackEnum = try {
+                Track.valueOf(trackId)
+            } catch (e: Exception) {
+                Track.DECK_OIC_NW
+            }
+            val displayName = trackEnum.shortName
+            val color = when (trackEnum) {
+                Track.DECK_OIC_NW -> Color(0xFF00FF66)
+                Track.GMDSS_GOC -> Color(0xFF00E5FF)
+                Track.ENGINE_OIC_EW -> Color(0xFFFFB300)
+            }
             TrackStudyStats(
                 trackId = trackId,
-                displayName = entry.displayName,
-                color = entry.accentColor,
+                displayName = displayName,
+                color = color,
                 totalDurationMs = trackTotal,
                 percentage = fraction * 100f
             )

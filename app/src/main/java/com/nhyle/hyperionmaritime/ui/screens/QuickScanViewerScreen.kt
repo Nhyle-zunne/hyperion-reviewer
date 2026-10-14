@@ -62,10 +62,14 @@ import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
+import com.nhyle.hyperionmaritime.ui.components.SessionTimerBox
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 
 /**
  * Screen 2: Quick Scan Question Viewer
@@ -116,12 +120,34 @@ fun QuickScanViewerScreen(
         }
     }
 
+    val showIdleDialog by viewModel.studyTimeTracker.showIdleDialog.collectAsState()
+
+    LaunchedEffect(competenceId, activeTrack) {
+        viewModel.startQuickScanStudyTracking(competenceId, activeTrack)
+    }
+
+    LaunchedEffect(currentIndex) {
+        if (questions.isNotEmpty() && currentIndex in questions.indices) {
+            viewModel.saveQuickScanProgress(activeTrack, competenceId, currentIndex)
+        }
+    }
+
+    val interactionModifier = modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                awaitPointerEvent()
+                viewModel.studyTimeTracker.recordUserInteraction()
+            }
+        }
+    }
+
     BackHandler {
+        viewModel.pauseQuickScanStudyTracking()
         viewModel.navigateBack()
     }
 
     Column(
-        modifier = modifier
+        modifier = interactionModifier
             .fillMaxSize()
             .background(colors.background)
     ) {
@@ -130,8 +156,81 @@ fun QuickScanViewerScreen(
             title = "QUICK SCAN • ${competenceId.uppercase()}",
             subtitle = competenceInfo?.title?.uppercase() ?: "COMPETENCE REFERENCE REVIEW",
             showBackButton = true,
-            onBackClick = { viewModel.navigateBack() }
+            onBackClick = {
+                viewModel.pauseQuickScanStudyTracking()
+                viewModel.navigateBack()
+            }
         )
+
+        if (questions.isNotEmpty() && currentQuestion != null) {
+            // HUD Sub-Bar Row (Directly underneath top bar divider line, matching Standard Drill)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RectangleShape,
+                        color = colors.surface2,
+                        border = BorderStroke(1.dp, colors.border)
+                    ) {
+                        Text(
+                            text = "ITEM ${currentIndex + 1}/$totalQuestions · $competenceId".uppercase(),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            letterSpacing = 1.sp,
+                            color = colors.foreground,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                    SessionTimerBox(studyTimeTracker = viewModel.studyTimeTracker)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = "TOPIC: ${currentQuestion.topic.uppercase()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.5.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                            .padding(top = 4.dp),
+                        maxLines = 2,
+                        softWrap = true,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (showIdleDialog) {
+            AreYouStillThereDialog(
+                onStillHere = { viewModel.studyTimeTracker.onUserConfirmedStillHere() },
+                onSaveAndExit = {
+                    viewModel.pauseQuickScanStudyTracking()
+                    viewModel.navigateBack()
+                }
+            )
+        }
 
         if (questions.isEmpty()) {
             Box(

@@ -231,6 +231,8 @@ class ReviewerRepository(private val database: HyperionDatabase) {
     }
 
     suspend fun saveExamRecord(result: ExamResult, questionIds: List<String>) {
+        examRecordDao.deleteSessionById(result.examId)
+        examRecordDao.deleteInprogressSessionsForTrackAndScope(result.track.name, result.competence, result.part)
         val existing = examRecordDao.getExamRecordById(result.examId)
         val finalComp = result.competence?.takeIf { it.isNotBlank() } ?: existing?.competence
         val finalPart = result.part?.takeIf { it.isNotBlank() } ?: existing?.part

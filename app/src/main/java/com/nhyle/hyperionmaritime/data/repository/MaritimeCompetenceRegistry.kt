@@ -327,6 +327,9 @@ object MaritimeCompetenceRegistry {
         if (isCrpMode) {
             return if (track == Track.DECK_OIC_NW) 2065 else 1150
         }
+        if (track == Track.DECK_OIC_NW) {
+            return 6445
+        }
         val count = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
         return if (count > 0) count else 6444
     }
