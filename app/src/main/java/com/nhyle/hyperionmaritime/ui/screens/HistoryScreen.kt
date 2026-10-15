@@ -16,8 +16,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextStyle
+import com.nhyle.hyperionmaritime.data.local.DeletedSession
+import com.nhyle.hyperionmaritime.data.local.expirationLabel
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
@@ -59,6 +66,7 @@ import com.nhyle.hyperionmaritime.data.local.ExamRecordEntity
 import com.nhyle.hyperionmaritime.data.local.SessionJsonHelper
 import com.nhyle.hyperionmaritime.data.local.dateFormatted
 import com.nhyle.hyperionmaritime.data.local.score
+import com.nhyle.hyperionmaritime.ui.components.DeleteSessionLogConfirmationDialog
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleButton
@@ -82,14 +90,20 @@ fun HistoryScreen(
     val colors = LocalSpaghettiColors.current
     val examRecords by viewModel.examRecords.collectAsState()
     val studyStreak by viewModel.studyStreak.collectAsState()
+    val deletedSessionsState by viewModel.deletedSessions.collectAsState(initial = emptyList())
 
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedRecordIds by remember { mutableStateOf(setOf<String>()) }
     var recordToView by remember { mutableStateOf<ExamRecordEntity?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var sessionPendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var showRecentlyDeletedDialog by remember { mutableStateOf(false) }
+    var sessionToPermanentlyDelete by remember { mutableStateOf<DeletedSession?>(null) }
 
     BackHandler {
-        if (isSelectionMode) {
+        if (sessionPendingDeleteId != null) {
+            sessionPendingDeleteId = null
+        } else if (isSelectionMode) {
             isSelectionMode = false
             selectedRecordIds = emptySet()
         } else {
@@ -189,6 +203,41 @@ fun HistoryScreen(
                     { viewModel.clearHistory() }
                 } else null
             )
+        }
+
+        // Persistent RECENTLY DELETED Action Bar directly below top app bar
+        OutlinedButton(
+            onClick = { showRecentlyDeletedDialog = true },
+            shape = RectangleShape,
+            border = BorderStroke(1.dp, colors.border),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = colors.surface
+            ),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .testTag("history_recently_deleted_bar")
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = colors.accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "RECENTLY DELETED",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.foreground
+                )
+            }
         }
 
         if (examRecords.isEmpty()) {
@@ -450,19 +499,24 @@ fun HistoryScreen(
                         else -> colors.error
                     }
 
-                    val titleText = buildString {
-                        val scope = com.nhyle.hyperionmaritime.data.local.DrillSessionFormatter.formatScopeLabel(record.competence, record.part, record.track)
-                        if (scope.isNotBlank() && scope != record.track.replace('_', '-')) {
-                            append(scope)
-                        } else {
-                            append(record.track.replace('_', ' '))
-                            if (!record.drillTitle.isNullOrBlank()) {
-                                append(" • ${record.drillTitle}")
+                    val isMistakes = record.mode.equals("MISTAKES", ignoreCase = true) || record.competence.equals("MISTAKES", ignoreCase = true)
+                    val titleText = if (isMistakes) {
+                        "Mistakes"
+                    } else {
+                        buildString {
+                            val scope = com.nhyle.hyperionmaritime.data.local.DrillSessionFormatter.formatScopeLabel(record.competence, record.part, record.track)
+                            if (scope.isNotBlank() && scope != record.track.replace('_', '-')) {
+                                append(scope)
                             } else {
-                                append(" • ${record.mode}")
+                                append(record.track.replace('_', ' '))
+                                if (!record.drillTitle.isNullOrBlank()) {
+                                    append(" • ${record.drillTitle}")
+                                } else {
+                                    append(" • ${record.mode}")
+                                }
                             }
-                        }
-                    }.uppercase()
+                        }.uppercase()
+                    }
 
                     MianRuleCard(
                         ruleColor = statusColor,
@@ -553,7 +607,9 @@ fun HistoryScreen(
 
                                         IconButton(
                                             onClick = {
-                                                viewModel.deleteExamRecord(record.id)
+                                                if (sessionPendingDeleteId == null) {
+                                                    sessionPendingDeleteId = record.id
+                                                }
                                             },
                                             modifier = Modifier
                                                 .size(32.dp)
@@ -796,6 +852,227 @@ fun HistoryScreen(
             dismissButton = {
                 OutlinedButton(
                     onClick = { showDeleteConfirmDialog = false },
+                    shape = RectangleShape,
+                    border = BorderStroke(1.dp, colors.border)
+                ) {
+                    Text("CANCEL", color = colors.foreground, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Individual Session Log Delete Confirmation Dialog
+    sessionPendingDeleteId?.let { targetId ->
+        DeleteSessionLogConfirmationDialog(
+            sessionId = targetId,
+            onConfirmDelete = { idToDelete ->
+                sessionPendingDeleteId = null
+                viewModel.deleteExamRecord(idToDelete)
+            },
+            onDismiss = {
+                sessionPendingDeleteId = null
+            }
+        )
+    }
+
+    // Recently Deleted Sessions Dialog
+    if (showRecentlyDeletedDialog) {
+        AlertDialog(
+            onDismissRequest = { showRecentlyDeletedDialog = false },
+            modifier = Modifier
+                .border(BorderStroke(1.5.dp, colors.border), RectangleShape)
+                .testTag("recently_deleted_dialog"),
+            shape = RectangleShape,
+            containerColor = colors.surface,
+            title = {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent, RectangleShape)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Recently Deleted Sessions",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        modifier = Modifier.testTag("recently_deleted_dialog_title")
+                    )
+                }
+            },
+            text = {
+                if (deletedSessionsState.isEmpty()) {
+                    Text(
+                        text = "No recently deleted sessions.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.muted,
+                        modifier = Modifier.testTag("recently_deleted_empty_text")
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(deletedSessionsState, key = { ds -> ds.sessionId }) { ds ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, colors.border, RectangleShape)
+                                    .background(colors.surface2)
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = ds.label,
+                                        style = TextStyle(
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = colors.foreground
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "${ds.date} • Progress: ${ds.progress}",
+                                        style = TextStyle(
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = colors.muted
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = ds.expirationLabel,
+                                        style = TextStyle(
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = colors.warning
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    TextButton(
+                                        onClick = { sessionToPermanentlyDelete = ds },
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = null,
+                                                tint = colors.error,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "PERMANENTLY DELETE",
+                                                style = TextStyle(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontFamily = FontFamily.Monospace,
+                                                    color = colors.error
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(
+                                    onClick = {
+                                        viewModel.restoreDeletedSession(ds)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = colors.primary,
+                                        contentColor = colors.primaryForeground
+                                    ),
+                                    shape = RectangleShape,
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.testTag("restore_session_${ds.sessionId}")
+                                ) {
+                                    Text(
+                                        text = "RESTORE",
+                                        style = TextStyle(
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showRecentlyDeletedDialog = false },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.primary,
+                        contentColor = colors.primaryForeground
+                    ),
+                    shape = RectangleShape,
+                    modifier = Modifier.testTag("recently_deleted_close_button")
+                ) {
+                    Text("CLOSE", fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+            }
+        )
+    }
+
+    // Permanent Delete Confirmation Dialog
+    sessionToPermanentlyDelete?.let { targetSession ->
+        AlertDialog(
+            onDismissRequest = { sessionToPermanentlyDelete = null },
+            modifier = Modifier
+                .border(BorderStroke(1.5.dp, colors.border), RectangleShape)
+                .testTag("permanent_delete_dialog"),
+            shape = RectangleShape,
+            containerColor = colors.surface,
+            title = {
+                Text(
+                    text = "Permanently Delete Session Log?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.foreground
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to permanently delete this session log? This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.muted
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.permanentlyDeleteSession(targetSession)
+                        sessionToPermanentlyDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.error,
+                        contentColor = PureWhite
+                    ),
+                    shape = RectangleShape,
+                    modifier = Modifier.testTag("permanent_delete_confirm_button")
+                ) {
+                    Text("PERMANENTLY DELETE", color = PureWhite, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { sessionToPermanentlyDelete = null },
                     shape = RectangleShape,
                     border = BorderStroke(1.dp, colors.border)
                 ) {

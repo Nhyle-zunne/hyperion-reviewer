@@ -98,7 +98,16 @@ interface ExamRecordDao {
     @Query("DELETE FROM exam_records WHERE track = :trackId AND (id LIKE 'inc_%' OR detailsSummary LIKE 'INCOMPLETE%')")
     suspend fun deleteIncompleteSessionsByTrack(trackId: String)
 
-    @Query("DELETE FROM exam_records WHERE track = :track AND detailsSummary LIKE 'IN_PROGRESS%' AND (:competence IS NULL OR competence = :competence) AND (:part IS NULL OR part = :part)")
+    @Query("""
+        DELETE FROM exam_records 
+        WHERE track = :track 
+        AND detailsSummary LIKE 'IN_PROGRESS%' 
+        AND (
+            (:competence = 'MISTAKES' AND (competence = 'MISTAKES' OR mode = 'MISTAKES'))
+            OR
+            ((:competence IS NULL OR :competence != 'MISTAKES') AND (competence IS NULL OR competence != 'MISTAKES') AND mode != 'MISTAKES' AND (:competence IS NULL OR competence = :competence) AND (:part IS NULL OR part = :part))
+        )
+    """)
     suspend fun deleteInprogressSessionsForTrackAndScope(track: String, competence: String?, part: String?)
 
     @Query("DELETE FROM exam_records WHERE id IN (:ids)")

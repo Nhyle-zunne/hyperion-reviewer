@@ -169,10 +169,11 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         answers: Map<String, UserQuestionState>,
         completedCompetences: Set<String> = emptySet()
     ) {
+        val isMistakes = mode == QuizMode.MISTAKES || competenceId == "MISTAKES"
         val answeredCount = answers.values.count { it.selectedIndex != null }
         val session = ActiveSessionEntity(
-            id = "session_${track.name}",
-            track = track.name,
+            id = if (isMistakes) "session_${track.name}_MISTAKES" else "session_${track.name}",
+            track = if (isMistakes) "${track.name}_MISTAKES" else track.name,
             mode = mode.name,
             functionId = functionId,
             competenceId = competenceId,
@@ -190,6 +191,10 @@ class ReviewerRepository(private val database: HyperionDatabase) {
 
     suspend fun clearActiveSession(track: Track) {
         activeSessionDao.clearActiveSessionForTrack(track.name)
+    }
+
+    suspend fun clearActiveMistakesSession(track: Track) {
+        activeSessionDao.clearActiveSessionForTrack("${track.name}_MISTAKES")
     }
 
     suspend fun getActiveSessionForTrackOnce(trackName: String): ActiveSessionEntity? {
@@ -444,7 +449,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
                     pool.shuffled()
                 }
             }
-            QuizMode.VAULT_DRILL -> {
+            QuizMode.VAULT_DRILL, QuizMode.MISTAKES -> {
                 MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in vaultQuestionIds }.shuffled()
             }
             QuizMode.BOOKMARKS_DRILL -> {

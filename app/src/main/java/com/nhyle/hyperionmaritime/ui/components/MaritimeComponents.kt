@@ -30,11 +30,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
@@ -49,6 +51,9 @@ import com.nhyle.hyperionmaritime.ui.theme.FailRed
 import com.nhyle.hyperionmaritime.ui.theme.PassGreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -827,5 +832,93 @@ fun QuestionAttemptStatsCard(
             }
         }
     }
+}
+
+/**
+ * Shared confirmation dialog before deleting a session log.
+ * Enforces 0dp corners (RectangleShape), theme tokens, rectangular buttons (no pill shapes),
+ * and strictly locks the session ID it was opened for so it can never delete a different one.
+ */
+@Composable
+fun DeleteSessionLogConfirmationDialog(
+    sessionId: String,
+    onConfirmDelete: (sessionId: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalSpaghettiColors.current
+    // Remembers which session it was opened for, ensuring it can never delete a different one
+    val lockedSessionId = remember(sessionId) { sessionId }
+    var hasTriggeredDelete by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier
+            .border(BorderStroke(1.5.dp, colors.border), RectangleShape)
+            .testTag("delete_session_log_dialog"),
+        shape = RectangleShape,
+        containerColor = colors.surface,
+        title = {
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(colors.accent, RectangleShape)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Delete Session Log?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.foreground,
+                    modifier = Modifier.testTag("delete_session_dialog_title")
+                )
+            }
+        },
+        text = {
+            Text(
+                text = "Are you sure you want to delete this session log?",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.muted,
+                modifier = Modifier.testTag("delete_session_dialog_message")
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!hasTriggeredDelete) {
+                        hasTriggeredDelete = true
+                        onConfirmDelete(lockedSessionId)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.error,
+                    contentColor = Color.White
+                ),
+                shape = RectangleShape,
+                modifier = Modifier.testTag("delete_session_confirm_button")
+            ) {
+                Text(
+                    text = "DELETE",
+                    color = Color.White,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RectangleShape,
+                border = BorderStroke(1.dp, colors.border),
+                modifier = Modifier.testTag("delete_session_cancel_button")
+            ) {
+                Text(
+                    text = "CANCEL",
+                    color = colors.foreground,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    )
 }
 

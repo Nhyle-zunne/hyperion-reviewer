@@ -214,10 +214,7 @@ fun VaultScreen(
                             MianButton(
                                 onClick = {
                                     if (questionsToRedeem.isNotEmpty()) {
-                                        viewModel.startQuiz(
-                                            questions = questionsToRedeem,
-                                            mode = QuizMode.PRACTICE
-                                        )
+                                        viewModel.startMistakesVaultPractice(questionsToRedeem)
                                     }
                                 },
                                 accent = true,

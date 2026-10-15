@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
@@ -147,11 +148,6 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
         }
     }
 
-    // Back handling: close drawer if open, else delegate to ViewModel
-    BackHandler(enabled = drawerState.isOpen) {
-        scope.launch { drawerState.close() }
-    }
-
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = currentScreen !is Screen.TermsOnboarding && currentScreen !is Screen.Quiz,
@@ -271,6 +267,18 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                     viewModel = viewModel,
                     onOpenDrawer = { viewModel.openDrawer() }
                 )
+            }
+        }
+    }
+
+    // Back handling: close drawer if open.
+    // Wrapped in key(drawerState.isOpen) so when the drawer opens, a fresh BackHandler
+    // is composed and registered at the top of OnBackPressedDispatcher's callback stack,
+    // guaranteeing it intercepts the back press before any underlying screen BackHandler.
+    key(drawerState.isOpen) {
+        if (drawerState.isOpen) {
+            BackHandler(enabled = true) {
+                scope.launch { drawerState.close() }
             }
         }
     }

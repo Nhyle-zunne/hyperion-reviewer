@@ -121,7 +121,7 @@ fun ResultsScreen(
         !result.drillTitle.isNullOrBlank() -> "${result.track} • ${result.drillTitle}"
         compId != null && partLabel != null -> "${result.track} • $compId ${partLabel.uppercase()}"
         compId != null -> "${result.track} • $compId DRILL"
-        result.mode == QuizMode.VAULT_DRILL -> "${result.track} • MISTAKES NOTEBOOK"
+        result.mode == QuizMode.VAULT_DRILL || result.mode == QuizMode.MISTAKES -> "${result.track} • Mistakes"
         result.mode == QuizMode.BOOKMARKS_DRILL -> "${result.track} • BOOKMARKS DRILL"
         else -> "${result.track} • PRACTICE DRILL"
     }
@@ -457,7 +457,7 @@ fun ResultsScreen(
                     !result.drillTitle.isNullOrBlank() -> "RETAKE ${result.drillTitle}"
                     compId != null && partLabel != null -> "RETAKE $compId ${partLabel.uppercase()}"
                     compId != null -> "RETAKE $compId DRILL"
-                    result.mode == QuizMode.VAULT_DRILL -> "RETAKE MISTAKES DRILL"
+                    result.mode == QuizMode.VAULT_DRILL || result.mode == QuizMode.MISTAKES -> "RETAKE MISTAKES DRILL"
                     result.mode == QuizMode.BOOKMARKS_DRILL -> "RETAKE BOOKMARKS DRILL"
                     else -> "RETAKE PRACTICE DRILL"
                 }

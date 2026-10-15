@@ -81,7 +81,10 @@ object ActiveSessionSnapshotManager {
             }
             val jsonStr = json.toString()
             file.writeText(jsonStr)
-            val trackFile = File(context.filesDir, "active_session_${snapshot.track}.json")
+            val isMistakes = snapshot.mode.equals("MISTAKES", ignoreCase = true) ||
+                snapshot.competenceOrPart.equals("MISTAKES", ignoreCase = true)
+            val trackFileSuffix = if (isMistakes) "${snapshot.track}_MISTAKES" else snapshot.track
+            val trackFile = File(context.filesDir, "active_session_$trackFileSuffix.json")
             trackFile.writeText(jsonStr)
         } catch (_: Exception) {}
     }
@@ -112,13 +115,35 @@ object ActiveSessionSnapshotManager {
             }
         } catch (_: Exception) {}
         val all = loadAllSnapshots(context)
-        val found = all.firstOrNull { it.track.equals(trackName, ignoreCase = true) || it.sessionId.equals(trackName, ignoreCase = true) }
+        val found = all.firstOrNull { 
+            (it.track.equals(trackName, ignoreCase = true) || it.sessionId.equals(trackName, ignoreCase = true)) &&
+            !it.mode.equals("MISTAKES", ignoreCase = true) &&
+            !it.competenceOrPart.equals("MISTAKES", ignoreCase = true)
+        }
         if (found != null && found.mode.contains("MOCK", ignoreCase = true) && found.totalQuestions > 200) {
             deleteSnapshot(context, found.sessionId)
             deleteSnapshot(context, trackName)
             return null
         }
         return found
+    }
+
+    fun loadMistakesSnapshot(context: Context, trackName: String): ActiveSessionSnapshot? {
+        try {
+            val trackFile = File(context.filesDir, "active_session_${trackName}_MISTAKES.json")
+            if (trackFile.exists()) {
+                val snap = parseSnapshotFile(trackFile)
+                if (snap != null && !snap.isCompleted) {
+                    return snap
+                }
+            }
+        } catch (_: Exception) {}
+        val all = loadAllSnapshots(context)
+        return all.firstOrNull {
+            it.track.equals(trackName, ignoreCase = true) &&
+            (it.mode.equals("MISTAKES", ignoreCase = true) || it.competenceOrPart.equals("MISTAKES", ignoreCase = true)) &&
+            !it.isCompleted
+        }
     }
 
     fun purgeObsoleteMockSnapshots(context: Context) {
@@ -268,6 +293,15 @@ object ActiveSessionSnapshotManager {
             }
             // Also check legacy track file name
             val trackFile = File(context.filesDir, "active_session_$sessionId.json")
+            if (trackFile.exists()) {
+                trackFile.delete()
+            }
+        } catch (_: Exception) {}
+    }
+
+    fun deleteMistakesSnapshot(context: Context, trackName: String) {
+        try {
+            val trackFile = File(context.filesDir, "active_session_${trackName}_MISTAKES.json")
             if (trackFile.exists()) {
                 trackFile.delete()
             }

@@ -7,13 +7,17 @@ import androidx.lifecycle.viewModelScope
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionSnapshot
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionSnapshotManager
+import com.nhyle.hyperionmaritime.data.local.DeletedSession
+import com.nhyle.hyperionmaritime.data.local.DeletedSessionManager
 import com.nhyle.hyperionmaritime.data.local.ExamRecordEntity
+import com.nhyle.hyperionmaritime.data.local.dateFormatted
 import com.nhyle.hyperionmaritime.data.local.HyperionDatabase
 import com.nhyle.hyperionmaritime.data.local.MistakeEntity
 import com.nhyle.hyperionmaritime.data.local.MistakeEntry
 import com.nhyle.hyperionmaritime.data.local.MistakesVaultManager
 import com.nhyle.hyperionmaritime.data.local.QuestionAttemptHistoryManager
 import com.nhyle.hyperionmaritime.data.local.SessionJsonHelper
+import kotlinx.coroutines.flow.asStateFlow
 import com.nhyle.hyperionmaritime.data.model.CurrentQuestionStats
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.ExamResult
@@ -1667,6 +1671,50 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         streak.coerceAtLeast(if (records.isNotEmpty()) 1 else 0)
     }.stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
+    private val _deletedSessions = MutableStateFlow<List<DeletedSession>>(emptyList())
+    val deletedSessions: StateFlow<List<DeletedSession>> = _deletedSessions.asStateFlow()
+
+    init {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                _deletedSessions.value = DeletedSessionManager.loadDeletedSessions(getApplication())
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun restoreDeletedSession(deletedSession: DeletedSession) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val examRecord = DeletedSessionManager.deserializeExamRecord(deletedSession.examRecordJson)
+            if (examRecord != null) {
+                repository.insertOrUpdateExamRecord(examRecord)
+            }
+            val drillSession = DeletedSessionManager.deserializeDrillSession(deletedSession.drillSessionJson)
+            if (drillSession != null) {
+                repository.saveDrillSession(drillSession)
+            }
+            if (!deletedSession.snapshotJson.isNullOrBlank()) {
+                val snapshotFile = ActiveSessionSnapshotManager.getSnapshotFile(context, deletedSession.sessionId)
+                snapshotFile.writeText(deletedSession.snapshotJson)
+                val snap = ActiveSessionSnapshotManager.loadSnapshotById(context, deletedSession.sessionId)
+                if (snap != null) {
+                    ActiveSessionSnapshotManager.saveSnapshot(context, snap)
+                }
+            }
+            DeletedSessionManager.removeDeletedSession(context, deletedSession.sessionId)
+            _deletedSessions.value = DeletedSessionManager.loadDeletedSessions(context)
+            notifySnapshotChanged()
+        }
+    }
+
+    fun permanentlyDeleteSession(deletedSession: DeletedSession) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val context = getApplication<Application>()
+            DeletedSessionManager.permanentlyDeleteSession(context, deletedSession.sessionId)
+            _deletedSessions.value = DeletedSessionManager.loadDeletedSessions(context)
+        }
+    }
+
     private val _activeSessionOverride = MutableStateFlow<Map<String, ActiveSessionEntity?>>(emptyMap())
 
     val activeSession: StateFlow<ActiveSessionEntity?> = combine(
@@ -1677,7 +1725,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         if (overrides.containsKey(track.name)) {
             overrides[track.name]
         } else {
-            val snapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)
+            val regSnapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)
+            val mistakesSnapshot = ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), track.name)
+            val snapshot = when {
+                regSnapshot != null && !regSnapshot.isCompleted && mistakesSnapshot != null && !mistakesSnapshot.isCompleted -> {
+                    if (mistakesSnapshot.timestamp > regSnapshot.timestamp) mistakesSnapshot else regSnapshot
+                }
+                mistakesSnapshot != null && !mistakesSnapshot.isCompleted -> mistakesSnapshot
+                regSnapshot != null && !regSnapshot.isCompleted -> regSnapshot
+                else -> null
+            }
             if (snapshot != null && !snapshot.isCompleted) {
                 if (snapshot.mode.contains("MOCK", ignoreCase = true) && snapshot.totalQuestions > 200) {
                     ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), track.name)
@@ -1984,6 +2041,36 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _currentScreen.value = Screen.Quiz
     }
 
+    fun startMistakesVaultPractice(questions: List<Question>) {
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        currentActiveSessionId = java.util.UUID.randomUUID().toString()
+        resumingRecordId = null
+        _isExamSubmitted.value = false
+        _isCrpMode.value = false
+        _activeDrillDeliveryMode.value = DrillDeliveryMode.STANDARD
+        _activeQuizMode.value = QuizMode.MISTAKES
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = "MISTAKES"
+        _activePartLabel.value = null
+        _currentQuestionIndex.value = 0
+        _showSubmitDialog.value = false
+        _isPaletteOpen.value = false
+        _isShuffled.value = false
+        activeEvaluationAttemptCommittedId = null
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _firstAttemptStatus.value = emptyMap()
+        _timeRemainingSeconds.value = 0
+        _selectedChoiceIndex.value = null
+        _isAnswerEvaluated.value = false
+
+        autoSaveCurrentSession()
+        _currentScreen.value = Screen.Quiz
+        startStudyTrackingForCurrentSession()
+    }
+
     fun exitQuizToHome() {
         timerJob?.cancel()
         studyTimeTracker.pauseTimer()
@@ -2024,7 +2111,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         autoSaveCurrentSession()
         val mode = _activeQuizMode.value
         purgeExamSessionFromBackStack()
-        if (mode == QuizMode.VAULT_DRILL) {
+        if (mode == QuizMode.VAULT_DRILL || mode == QuizMode.MISTAKES) {
             _currentScreen.value = Screen.Vault
         } else if (mode == QuizMode.BOOKMARKS_DRILL) {
             _currentScreen.value = Screen.Bookmarks
@@ -2737,9 +2824,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun resumeSession(trackName: String, sessionId: String? = null) {
+        val cleanTrackName = trackName.removeSuffix("_MISTAKES")
         val targetTrack = try {
-            Track.values().find { it.name.equals(trackName, ignoreCase = true) || it.shortName.equals(trackName, ignoreCase = true) }
-                ?: Track.valueOf(trackName)
+            Track.values().find { it.name.equals(cleanTrackName, ignoreCase = true) || it.shortName.equals(cleanTrackName, ignoreCase = true) }
+                ?: Track.valueOf(cleanTrackName)
         } catch (_: Exception) {
             _selectedTrack.value
         }
@@ -2748,7 +2836,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         // 1. Try loading full snapshot first (preserves exact questions, options, shuffled state, and intensive queue)
         val snapshot = if (sessionId != null) {
             ActiveSessionSnapshotManager.loadSnapshotById(getApplication(), sessionId)
-                ?: ActiveSessionSnapshotManager.loadSnapshot(getApplication(), targetTrack.name)
+                ?: if (trackName.endsWith("_MISTAKES")) {
+                    ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), targetTrack.name)
+                } else {
+                    ActiveSessionSnapshotManager.loadSnapshot(getApplication(), targetTrack.name)
+                }
+        } else if (trackName.endsWith("_MISTAKES")) {
+            ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), targetTrack.name)
         } else {
             ActiveSessionSnapshotManager.loadSnapshot(getApplication(), targetTrack.name)
         }
@@ -2763,11 +2857,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             _isExamSubmitted.value = false
             currentActiveSessionId = snapshot.sessionId
             resumingRecordId = snapshot.sessionId
-            val trackEnum = try { Track.valueOf(snapshot.track) } catch (_: Exception) { targetTrack }
+            val cleanSnapTrack = snapshot.track.removeSuffix("_MISTAKES")
+            val trackEnum = try { Track.valueOf(cleanSnapTrack) } catch (_: Exception) { targetTrack }
             _selectedTrack.value = trackEnum
-            val isMock = snapshot.mode.equals("MOCK", ignoreCase = true)
-            _activeQuizMode.value = if (isMock) QuizMode.MOCK_EXAM else QuizMode.PRACTICE
-            _activeCompetenceId.value = snapshot.competenceOrPart.ifBlank { null }
+            val isMock = snapshot.mode.equals("MOCK", ignoreCase = true) || snapshot.mode.equals("MOCK_EXAM", ignoreCase = true)
+            val isMistakes = snapshot.mode.equals("MISTAKES", ignoreCase = true) || snapshot.competenceOrPart.equals("MISTAKES", ignoreCase = true)
+            _activeQuizMode.value = when {
+                isMock -> QuizMode.MOCK_EXAM
+                isMistakes -> QuizMode.MISTAKES
+                else -> QuizMode.PRACTICE
+            }
+            _activeCompetenceId.value = if (isMistakes) "MISTAKES" else snapshot.competenceOrPart.ifBlank { null }
 
             val isIntensive = snapshot.deliveryMode.equals("INTENSIVE", ignoreCase = true)
             _activeDrillDeliveryMode.value = if (isIntensive) DrillDeliveryMode.INTENSIVE else DrillDeliveryMode.STANDARD
@@ -2881,24 +2981,43 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun discardActiveSession() {
-        timerJob?.cancel()
-        val trackName = _selectedTrack.value.name
-        ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), trackName)
-        
-        // Set local UI state activeSession = null immediately on Main dispatcher
-        _activeSessionOverride.value = _activeSessionOverride.value + (trackName to null)
-        notifySnapshotChanged()
-        
-        discardActiveSession(trackName)
+        discardActiveSession(null, null)
     }
 
-    fun discardActiveSession(trackId: String) {
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            // 1. Delete active session pointer and active session row
-            repository.deleteActiveSessionByTrack(trackId)
-            // 2. If it was pre-inserted into session_logs, purge it
-            repository.deleteIncompleteSessionsByTrack(trackId)
+    fun discardActiveSession(sessionId: String? = null, trackId: String? = null) {
+        timerJob?.cancel()
+        val targetTrackName = trackId ?: _selectedTrack.value.name
+        val isMistakes = targetTrackName.endsWith("_MISTAKES") || 
+            (sessionId != null && ActiveSessionSnapshotManager.loadSnapshotById(getApplication(), sessionId)?.mode == "MISTAKES")
+
+        if (isMistakes) {
+            val baseTrack = targetTrackName.removeSuffix("_MISTAKES")
+            ActiveSessionSnapshotManager.deleteMistakesSnapshot(getApplication(), baseTrack)
+            if (sessionId != null) {
+                ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), sessionId)
+            }
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val trackEnum = try { Track.valueOf(baseTrack) } catch (_: Exception) { _selectedTrack.value }
+                repository.clearActiveMistakesSession(trackEnum)
+                if (sessionId != null) {
+                    repository.deleteDrillSession(sessionId)
+                }
+            }
+        } else {
+            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), targetTrackName)
+            if (sessionId != null) {
+                ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), sessionId)
+            }
+            _activeSessionOverride.value = _activeSessionOverride.value + (targetTrackName to null)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                repository.deleteActiveSessionByTrack(targetTrackName)
+                repository.deleteIncompleteSessionsByTrack(targetTrackName)
+                if (sessionId != null) {
+                    repository.deleteDrillSession(sessionId)
+                }
+            }
         }
+        notifySnapshotChanged()
     }
 
     private var currentActiveSessionId: String = java.util.UUID.randomUUID().toString()
@@ -2982,7 +3101,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             val part = effectivePart
             when {
                 comp != null && part != null -> "$comp ${part.uppercase()}"
-                comp != null -> "$comp DRILL"
+                comp != null -> if (comp.equals("MISTAKES", ignoreCase = true)) "Mistakes" else "$comp DRILL"
+                mode == QuizMode.MISTAKES -> "Mistakes"
                 mode == QuizMode.VAULT_DRILL -> "MISTAKES NOTEBOOK"
                 mode == QuizMode.BOOKMARKS_DRILL -> "BOOKMARKS DRILL"
                 else -> "ALL QUESTIONS DRILL"
@@ -2993,7 +3113,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             id = currentActiveSessionId,
             timestamp = System.currentTimeMillis(),
             track = track.name,
-            mode = mode.name,
+            mode = if (mode == QuizMode.MISTAKES) "MISTAKES" else mode.name,
             rawScore = if (isIntensive) clearedCount else correctCount,
             maxScore = questions.size,
             percentage = if (questions.isNotEmpty()) ((if (isIntensive) clearedCount else correctCount).toDouble() / questions.size) * 100.0 else 0.0,
@@ -3024,7 +3144,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             answersJson = SessionJsonHelper.serializeAnswersWithQueue(answers, queueIds),
             isShuffled = _isShuffled.value,
             deliveryMode = if (isIntensive) "INTENSIVE" else "STANDARD",
-            mode = if (_isCrpMode.value) "CRP_PRACTICE" else mode.name
+            mode = if (_isCrpMode.value) "CRP_PRACTICE" else if (mode == QuizMode.MISTAKES) "MISTAKES" else mode.name
         )
 
         return viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -3053,9 +3173,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         currentActiveSessionId = session.id
         resumingRecordId = session.id
         _isExamSubmitted.value = session.isCompleted
-        val track = try { Track.valueOf(session.track) } catch (_: Exception) { _selectedTrack.value }
+        val cleanTrack = session.track.removeSuffix("_MISTAKES")
+        val track = try { Track.valueOf(cleanTrack) } catch (_: Exception) { _selectedTrack.value }
         _selectedTrack.value = track
-        _activeQuizMode.value = QuizMode.PRACTICE
+        val isMistakes = session.mode.equals("MISTAKES", ignoreCase = true) || session.competence.equals("MISTAKES", ignoreCase = true)
+        _activeQuizMode.value = if (isMistakes) QuizMode.MISTAKES else QuizMode.PRACTICE
         _activeCompetenceId.value = session.competence
         _activePartLabel.value = session.part
         session.competence?.let { sessionCompetenceCache[session.id] = it }
@@ -3069,7 +3191,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         // Check if snapshot exists for this session
         val snapshot = ActiveSessionSnapshotManager.loadSnapshotById(getApplication(), session.id)
-            ?: ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)?.takeIf { it.sessionId == session.id }
+            ?: (if (isMistakes) ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), track.name) else ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name))?.takeIf { it.sessionId == session.id }
 
         val questions: List<Question> = if (snapshot != null && snapshot.questions.isNotEmpty()) {
             snapshot.questions
@@ -3416,13 +3538,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     private fun resumeIncompleteExamRecordInternal(record: ExamRecordEntity) {
         timerJob?.cancel()
-        val track = try { Track.valueOf(record.track) } catch (_: Exception) { Track.DECK_OIC_NW }
+        val cleanTrack = record.track.removeSuffix("_MISTAKES")
+        val track = try { Track.valueOf(cleanTrack) } catch (_: Exception) { Track.DECK_OIC_NW }
         val mode = try { QuizMode.valueOf(record.mode) } catch (_: Exception) { QuizMode.MOCK_EXAM }
         _selectedTrack.value = track
         _activeQuizMode.value = mode
+        val isMistakes = mode == QuizMode.MISTAKES || record.competence.equals("MISTAKES", ignoreCase = true)
+        _activeCompetenceId.value = if (isMistakes) "MISTAKES" else record.competence
 
         val snapshot = ActiveSessionSnapshotManager.loadSnapshotById(getApplication(), record.id)
-            ?: ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name)?.takeIf { it.sessionId == record.id }
+            ?: (if (isMistakes) ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), track.name) else ActiveSessionSnapshotManager.loadSnapshot(getApplication(), track.name))?.takeIf { it.sessionId == record.id }
 
         val questions = if (snapshot != null && snapshot.questions.isNotEmpty()) {
             snapshot.questions
@@ -3566,7 +3691,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             val part = effectivePart
             when {
                 comp != null && part != null -> "$comp ${part.uppercase()}"
-                comp != null -> "$comp DRILL"
+                comp != null -> if (comp.equals("MISTAKES", ignoreCase = true)) "Mistakes" else "$comp DRILL"
+                _activeQuizMode.value == QuizMode.MISTAKES -> "Mistakes"
                 _activeQuizMode.value == QuizMode.VAULT_DRILL -> "MISTAKES NOTEBOOK"
                 _activeQuizMode.value == QuizMode.BOOKMARKS_DRILL -> "BOOKMARKS DRILL"
                 else -> "ALL QUESTIONS DRILL"
@@ -3584,12 +3710,36 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         _lastExamResult.value = result
 
-        // Record all questions in repo and clear active session
+        val sessionToClearId = currentActiveSessionId
+        val trackToClear = _selectedTrack.value
+        val isMistakesSession = (_activeQuizMode.value == QuizMode.MISTAKES) ||
+            (_activeCompetenceId.value.equals("MISTAKES", ignoreCase = true)) ||
+            (result.mode == QuizMode.MISTAKES) ||
+            (result.competence.equals("MISTAKES", ignoreCase = true))
+
+        if (isMistakesSession) {
+            val currentSnapshot = ActiveSessionSnapshotManager.loadMistakesSnapshot(getApplication(), trackToClear.name)
+            if (currentSnapshot != null) {
+                ActiveSessionSnapshotManager.saveSnapshot(getApplication(), currentSnapshot.copy(isCompleted = true))
+            }
+            ActiveSessionSnapshotManager.deleteMistakesSnapshot(getApplication(), trackToClear.name)
+            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), sessionToClearId)
+        } else {
+            val currentSnapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), trackToClear.name)
+            if (currentSnapshot != null) {
+                ActiveSessionSnapshotManager.saveSnapshot(getApplication(), currentSnapshot.copy(isCompleted = true))
+            }
+            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), trackToClear.name)
+            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), sessionToClearId)
+        }
+        notifySnapshotChanged()
+
+        // Record all questions in repo and persist completed session
         viewModelScope.launch {
             for (q in questions) {
                 val state = answers[q.id]
                 if (state?.selectedIndex != null) {
-                    markQuestionSeen(_selectedTrack.value, q.id)
+                    markQuestionSeen(trackToClear, q.id)
                 }
                 val isCorrect = state?.selectedIndex == q.correctAnswerIndex
                 repository.recordQuestionAttempt(q.id, isCorrect)
@@ -3601,14 +3751,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             }
             refreshMistakes()
             repository.saveExamRecord(result, questions.map { it.id })
-            val currentSnapshot = ActiveSessionSnapshotManager.loadSnapshot(getApplication(), _selectedTrack.value.name)
-            if (currentSnapshot != null) {
-                ActiveSessionSnapshotManager.saveSnapshot(getApplication(), currentSnapshot.copy(isCompleted = true))
+            if (isMistakesSession) {
+                repository.clearActiveMistakesSession(trackToClear)
+                repository.markDrillSessionCompleted(sessionToClearId)
+            } else {
+                repository.clearActiveSession(trackToClear)
+                repository.markDrillSessionCompleted(sessionToClearId)
             }
-            ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), _selectedTrack.value.name)
-            notifySnapshotChanged()
-            repository.clearActiveSession(_selectedTrack.value)
-            repository.markDrillSessionCompleted(currentActiveSessionId)
         }
 
         _currentScreen.value = Screen.Results
@@ -3627,6 +3776,29 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteExamRecord(recordId: String) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val examRecord = repository.getExamRecordById(recordId)
+            val drillSession = repository.getDrillSessionById(recordId)
+            val snapshotFile = ActiveSessionSnapshotManager.getSnapshotFile(context, recordId)
+            val snapshotJson = if (snapshotFile.exists()) snapshotFile.readText() else null
+
+            val label = drillSession?.scopeLabel ?: examRecord?.drillTitle ?: examRecord?.competence ?: recordId
+            val date = drillSession?.formattedTimestamp ?: examRecord?.dateFormatted ?: ""
+            val progress = if (drillSession != null) "${drillSession.answeredCount}/${drillSession.totalItems}" else (examRecord?.let { "${it.correctCount}/${it.totalQuestions}" } ?: "")
+
+            val deletedSession = DeletedSession(
+                sessionId = recordId,
+                trackName = _selectedTrack.value.name,
+                label = label,
+                date = date,
+                progress = progress,
+                examRecordJson = examRecord?.let { DeletedSessionManager.serializeExamRecord(it) } ?: "",
+                drillSessionJson = drillSession?.let { DeletedSessionManager.serializeDrillSession(it) } ?: "",
+                snapshotJson = snapshotJson
+            )
+            DeletedSessionManager.addDeletedSession(context, deletedSession)
+            _deletedSessions.value = DeletedSessionManager.loadDeletedSessions(context)
+
             repository.deleteExamRecord(recordId)
             ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), recordId)
             val trackName = _selectedTrack.value.name
@@ -3649,6 +3821,31 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteExamRecordsByIds(recordIds: List<String>) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val context = getApplication<Application>()
+            recordIds.forEach { recordId ->
+                val examRecord = repository.getExamRecordById(recordId)
+                val drillSession = repository.getDrillSessionById(recordId)
+                val snapshotFile = ActiveSessionSnapshotManager.getSnapshotFile(context, recordId)
+                val snapshotJson = if (snapshotFile.exists()) snapshotFile.readText() else null
+
+                val label = drillSession?.scopeLabel ?: examRecord?.drillTitle ?: examRecord?.competence ?: recordId
+                val date = drillSession?.formattedTimestamp ?: examRecord?.dateFormatted ?: ""
+                val progress = if (drillSession != null) "${drillSession.answeredCount}/${drillSession.totalItems}" else (examRecord?.let { "${it.correctCount}/${it.totalQuestions}" } ?: "")
+
+                val deletedSession = DeletedSession(
+                    sessionId = recordId,
+                    trackName = _selectedTrack.value.name,
+                    label = label,
+                    date = date,
+                    progress = progress,
+                    examRecordJson = examRecord?.let { DeletedSessionManager.serializeExamRecord(it) } ?: "",
+                    drillSessionJson = drillSession?.let { DeletedSessionManager.serializeDrillSession(it) } ?: "",
+                    snapshotJson = snapshotJson
+                )
+                DeletedSessionManager.addDeletedSession(context, deletedSession)
+            }
+            _deletedSessions.value = DeletedSessionManager.loadDeletedSessions(context)
+
             repository.deleteExamRecordsByIds(recordIds)
             recordIds.forEach { ActiveSessionSnapshotManager.deleteSnapshot(getApplication(), it) }
             val trackName = _selectedTrack.value.name

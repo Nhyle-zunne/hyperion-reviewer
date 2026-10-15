@@ -52,6 +52,10 @@ object DrillSessionFormatter {
         val p = part?.trim() ?: ""
         val isGmdss = track.contains("GMDSS", ignoreCase = true) || track.equals("GMDSS_GOC", ignoreCase = true)
 
+        if (comp.equals("MISTAKES", ignoreCase = true)) {
+            return "Mistakes"
+        }
+
         return when {
             comp.isNotEmpty() && p.isNotEmpty() && !p.equals("All Parts", ignoreCase = true) && !p.equals("ALL", ignoreCase = true) -> {
                 val cleanPart = p.replace(Regex("(?i)part\\s*"), "P").trim()
@@ -75,6 +79,9 @@ object DrillSessionFormatter {
     fun formatCompetenceLabel(competence: String?, part: String?, track: String): String {
         val comp = competence?.trim() ?: ""
         val p = part?.trim() ?: ""
+        if (comp.equals("MISTAKES", ignoreCase = true)) {
+            return "Mistakes"
+        }
         return when {
             comp.isNotEmpty() && p.isNotEmpty() -> {
                 val cleanPart = if (p.startsWith("Part", ignoreCase = true)) p else "Part $p"

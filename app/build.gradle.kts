@@ -16,8 +16,8 @@ android {
     applicationId = "com.nhyle.hyperionmaritime"
     minSdk = 24
     targetSdk = 36
-    versionCode = 44
-    versionName = "0.9.6.7"
+    versionCode = 46
+    versionName = "46.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

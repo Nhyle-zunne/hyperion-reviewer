@@ -56,7 +56,8 @@ enum class QuizMode {
     MOCK_EXAM,       // Timed, locked answers until submission, Question Palette
     COMPETENCE_DRILL,// Specific competence drill
     VAULT_DRILL,     // Practice questions from the Mistakes Notebook
-    BOOKMARKS_DRILL  // Practice bookmarked questions
+    BOOKMARKS_DRILL, // Practice bookmarked questions
+    MISTAKES         // Vault redemption practice session
 }
 
 data class UserQuestionState(

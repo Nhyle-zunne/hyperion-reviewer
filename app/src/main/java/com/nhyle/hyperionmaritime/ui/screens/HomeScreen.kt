@@ -181,7 +181,7 @@ fun HomeScreen(
                         ResumeActiveSessionCard(
                             session = session,
                             onResume = { viewModel.resumeSession(session.track, session.id) },
-                            onDiscard = { viewModel.discardActiveSession() }
+                            onDiscard = { viewModel.discardActiveSession(session.id, session.track) }
                         )
                     }
                 }
@@ -1194,8 +1194,9 @@ private fun ResumeActiveSessionCard(
     onDiscard: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
-    val trackName = if (session.track == Track.DECK_OIC_NW.name) "OIC-NW" else if (session.track == Track.GMDSS_GOC.name) "GMDSS" else session.track.replace('_', ' ')
-    val modeStr = if (session.mode.contains("MOCK")) "MOCK" else "PRACTICE"
+    val cleanTrack = session.track.removeSuffix("_MISTAKES")
+    val trackName = if (cleanTrack == Track.DECK_OIC_NW.name) "OIC-NW" else if (cleanTrack == Track.GMDSS_GOC.name) "GMDSS" else cleanTrack.replace('_', ' ')
+    val modeStr = if (session.mode.contains("MOCK")) "MOCK" else if (session.mode.contains("MISTAKES") || session.competenceId == "MISTAKES") "Mistakes" else "PRACTICE"
     val progressFraction = session.answeredCount.toFloat() / session.totalQuestions.coerceAtLeast(1)
 
     MianRuleCard(

@@ -56,6 +56,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -88,6 +92,9 @@ fun ActivationScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val promoBringIntoViewRequester = remember { BringIntoViewRequester() }
+    val density = LocalDensity.current
+    var promoFieldSize by remember { mutableStateOf(IntSize.Zero) }
 
     val isActivated by viewModel.isActivated.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
@@ -787,7 +794,32 @@ fun ActivationScreen(
                             unfocusedTextColor = colors.foreground,
                             disabledTextColor = colors.muted
                         ),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bringIntoViewRequester(promoBringIntoViewRequester)
+                            .onGloballyPositioned { coordinates ->
+                                promoFieldSize = coordinates.size
+                            }
+                            .onFocusChanged { focusState ->
+                                if (focusState.isFocused) {
+                                    coroutineScope.launch {
+                                        val extraBottom = with(density) { 12.dp.toPx() }
+                                        val width = promoFieldSize.width.toFloat()
+                                        val height = promoFieldSize.height.toFloat()
+                                        val targetRect = if (height > 0f) {
+                                            Rect(
+                                                left = 0f,
+                                                top = 0f,
+                                                right = width,
+                                                bottom = height + extraBottom
+                                            )
+                                        } else null
+                                        promoBringIntoViewRequester.bringIntoView(targetRect)
+                                        kotlinx.coroutines.delay(200)
+                                        promoBringIntoViewRequester.bringIntoView(targetRect)
+                                    }
+                                }
+                            }
                     )
 
                     if (regState.promoError != null) {
@@ -855,8 +887,6 @@ fun ActivationScreen(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 }

@@ -242,7 +242,7 @@ fun TrackSelectionScreen(
                         ActiveSessionResumeRow(
                             session = session,
                             onResume = { viewModel.resumeSession(session.track, session.id) },
-                            onDiscard = { viewModel.discardActiveSession() }
+                            onDiscard = { viewModel.discardActiveSession(session.id, session.track) }
                         )
                     }
                 }
@@ -313,10 +313,11 @@ private fun ActiveSessionResumeRow(
 ) {
     val colors = LocalSpaghettiColors.current
     val progressFraction = session.answeredCount.toFloat() / session.totalQuestions.coerceAtLeast(1)
-    val trackLabel = when (session.track.uppercase()) {
+    val cleanTrack = session.track.removeSuffix("_MISTAKES")
+    val trackLabel = when (cleanTrack.uppercase()) {
         "DECK_OIC_NW" -> "DECK OIC-NW"
         "GMDSS_GOC" -> "GMDSS GOC"
-        else -> session.track.replace('_', ' ')
+        else -> cleanTrack.replace('_', ' ')
     }
 
     Surface(
@@ -363,8 +364,9 @@ private fun ActiveSessionResumeRow(
                             maxLines = 2,
                             softWrap = true
                         )
+                        val modeDisplay = if (session.mode.equals("MISTAKES", ignoreCase = true) || session.competenceId.equals("MISTAKES", ignoreCase = true)) "MISTAKES" else session.mode.uppercase()
                         Text(
-                            text = "${session.mode.uppercase()} · Q ${session.answeredCount}/${session.totalQuestions} · ${(progressFraction * 100).toInt()}%",
+                            text = "$modeDisplay · Q ${session.answeredCount}/${session.totalQuestions} · ${(progressFraction * 100).toInt()}%",
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.muted,
                             fontSize = 10.sp,
