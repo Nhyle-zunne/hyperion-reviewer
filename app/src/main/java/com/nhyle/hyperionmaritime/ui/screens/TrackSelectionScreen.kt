@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -1413,7 +1414,7 @@ private fun TacticalReadinessTerminal(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold,
                             color = colors.foreground,
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -1425,7 +1426,8 @@ private fun TacticalReadinessTerminal(
                 Surface(
                     shape = RectangleShape,
                     color = if (marinaExamTargetMillis > 0L) colors.surface2 else colors.accent,
-                    border = BorderStroke(1.dp, colors.accent)
+                    border = BorderStroke(1.dp, colors.accent),
+                    modifier = Modifier.wrapContentWidth()
                 ) {
                     Box(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -1437,7 +1439,7 @@ private fun TacticalReadinessTerminal(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (marinaExamTargetMillis > 0L) colors.accent else colors.background,
-                            fontSize = 13.sp,
+                            fontSize = 11.sp,
                             maxLines = 1,
                             softWrap = false
                         )

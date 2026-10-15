@@ -150,13 +150,15 @@ fun PracticeConfigScreen(
     var showProLockedDialog by remember { mutableStateOf<String?>(null) }
 
     val isGmdssOpReview = (selectedTrack == Track.GMDSS_GOC) && isOperationalReview
-
     val isOicNwLicensed by viewModel.isOicNwProUnlocked.collectAsState()
     val isGmdssLicensed by viewModel.isGmdssProUnlocked.collectAsState()
     val isHyperionLicensed by viewModel.isHyperionProUnlocked.collectAsState()
     val isTrackLicensedVm by viewModel.isTrackLicensed.collectAsState()
     val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed || (if (selectedTrack == Track.GMDSS_GOC) isGmdssLicensed else isOicNwLicensed)
     val isVerified = isTrackLicensed
+    val isFreeTier = !isVerified
+    // showFixedPool should be true for CRP Mode OR GMDSS Operational Review (unconditionally per latest request)
+    val showFixedPool = isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview)
     var showVerificationDialog by remember { mutableStateOf(false) }
     val isAdvancedLocked = !isVerified
 
@@ -166,7 +168,12 @@ fun PracticeConfigScreen(
         if (selectedTrack == Track.GMDSS_GOC) {
             if (isOperationalReview) {
                 if (competenceId != null) {
-                    MaritimeCompetenceRegistry.getDynamicQuestionCount(competenceId, selectedTrack, isOperationalReview = true)
+                    val total = MaritimeCompetenceRegistry.getDynamicQuestionCount(competenceId, selectedTrack, isOperationalReview = true)
+                    when (competenceId) {
+                        "C1" -> minOf(total, 900)
+                        "C2" -> minOf(total, 130)
+                        else -> total
+                    }
                 } else {
                     MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isOperationalReview = true)
                 }
@@ -212,10 +219,12 @@ fun PracticeConfigScreen(
     var randomizeQuestionOrder by remember { mutableStateOf(false) } // Default Sequential
     var shuffleChoices by remember { mutableStateOf(if (isCrpMode) true else isActivated) } // Default Shuffle choices ON for CRP / Pro
 
-    // Step 4: Dual Range state (Start and End Item Selector) - Fixed in CRP Mode
+    // Step 4: Dual Range state (Start and End Item Selector) - Fixed in CRP Mode & GMDSS
+    // Note: showFixedPool is defined above for consistent scoping
+
     var startItem by remember(maxAvailable) { mutableIntStateOf(1) }
-    var endItem by remember(maxAvailable, isActivated, isCrpMode) {
-        mutableIntStateOf(if (isCrpMode) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
+    var endItem by remember(maxAvailable, isActivated, showFixedPool) {
+        mutableIntStateOf(if (showFixedPool) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
     }
     var startTextFieldValue by remember(startItem) {
         mutableStateOf(startItem.toString())
@@ -224,15 +233,15 @@ fun PracticeConfigScreen(
         mutableStateOf(endItem.toString())
     }
 
-    androidx.compose.runtime.LaunchedEffect(maxAvailable) {
+    androidx.compose.runtime.LaunchedEffect(maxAvailable, showFixedPool) {
         startItem = 1
-        endItem = if (isCrpMode) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable
+        endItem = if (showFixedPool) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable
         startTextFieldValue = "1"
         endTextFieldValue = endItem.toString()
     }
 
     fun updateRange(newStart: Int, newEnd: Int) {
-        if (isCrpMode || !isActivated) return
+        if (showFixedPool || !isActivated) return
         val clampedStart = newStart.coerceIn(1, maxAvailable)
         val clampedEnd = newEnd.coerceIn(clampedStart, maxAvailable)
         startItem = clampedStart
@@ -325,14 +334,14 @@ fun PracticeConfigScreen(
                     ) {
                         Surface(
                             shape = RectangleShape,
-                            color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                            border = BorderStroke(1.dp, if (isCrpMode) PassGreen else MaterialTheme.colorScheme.outline)
+                            color = if (showFixedPool) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, if (showFixedPool) PassGreen else MaterialTheme.colorScheme.outline)
                         ) {
                             Text(
                                 text = if (isGmdssOpReview) "STEP 2 OF 2 • GMDSS OPERATIONAL REVIEW" else if (isCrpMode) "STEP 2 OF 2 · MARINA CRP PRACTICE" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (showFixedPool) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
@@ -351,7 +360,7 @@ fun PracticeConfigScreen(
                         Text(
                             text = greetingSubtitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary
+                            color = if (showFixedPool) PassGreen else MaterialTheme.colorScheme.primary
                         )
 
                         compInfo?.description?.let { desc ->
@@ -727,14 +736,14 @@ fun PracticeConfigScreen(
                                         )
                                         Surface(
                                             shape = RectangleShape,
-                                            color = if (isCrpMode) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                                            border = BorderStroke(1.dp, if (isCrpMode) PassGreen else MaterialTheme.colorScheme.outline)
+                                            color = if (showFixedPool) PassGreen.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                                            border = BorderStroke(1.dp, if (showFixedPool) PassGreen else MaterialTheme.colorScheme.outline)
                                         ) {
                                             Text(
-                                                text = if (isCrpMode) "SEQUENTIAL ACTIVE" else "FIXED ITEMS",
+                                                text = if (showFixedPool) "SEQUENTIAL ACTIVE" else "FIXED ITEMS",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = if (showFixedPool) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 fontSize = 9.sp,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
@@ -1144,13 +1153,13 @@ fun PracticeConfigScreen(
                 }
             }
 
-            // Step 4: Dual Question Range Selector (RangeSlider + Start/End Inputs) - Fixed in CRP Mode
-            val selectedItemCount = if (isCrpMode) maxAvailable else (endItem - startItem + 1).coerceAtLeast(1)
+            // Step 4: Dual Question Range Selector (RangeSlider + Start/End Inputs) - Fixed in CRP Mode & GMDSS
+            val showFixedPoolLocal = isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview)
+            val selectedItemCount = if (showFixedPoolLocal) maxAvailable else (endItem - startItem + 1).coerceAtLeast(1)
             item {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .alpha(if (isAdvancedLocked) 0.45f else 1f),
+                        .fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
                     shape = RectangleShape
@@ -1160,21 +1169,21 @@ fun PracticeConfigScreen(
                             Icon(
                                 imageVector = Icons.Default.Tune,
                                 contentDescription = null,
-                                tint = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
+                                tint = if (showFixedPoolLocal) PassGreen else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isCrpMode) "3. QUESTION COUNT ($maxAvailable ITEMS POOL)" else "3. QUESTION RANGE SELECTOR (#$startItem TO #$endItem)",
+                                text = if (showFixedPoolLocal) "3. QUESTION COUNT ($maxAvailable ITEMS POOL)" else "3. QUESTION RANGE SELECTOR (#$startItem TO #$endItem)",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isCrpMode) PassGreen else MaterialTheme.colorScheme.primary,
+                                color = if (showFixedPoolLocal) PassGreen else MaterialTheme.colorScheme.primary,
                                 letterSpacing = 0.5.sp,
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (isAdvancedLocked) {
+                            if (isAdvancedLocked || showFixedPoolLocal) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 ClearanceRequiredBadge()
                             }
@@ -1182,7 +1191,7 @@ fun PracticeConfigScreen(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        if (isCrpMode) {
+                        if (showFixedPoolLocal) {
                             Surface(
                                 shape = RectangleShape,
                                 color = PassGreen.copy(alpha = 0.1f),
@@ -1205,6 +1214,7 @@ fun PracticeConfigScreen(
                                             text = "Fixed Question Pool: $maxAvailable Items",
                                             fontWeight = FontWeight.Bold,
                                             style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
@@ -1480,13 +1490,17 @@ fun PracticeConfigScreen(
 
                 Button(
                     onClick = {
+                        val launchStart = if (showFixedPool) 1 else startItem
+                        val launchEnd = if (showFixedPool) maxAvailable else endItem
+                        val launchCount = if (showFixedPool) maxAvailable else (endItem - startItem + 1).coerceAtLeast(1)
+
                         viewModel.startConfiguredPractice(
                             competenceId = competenceId,
                             selectedPart = selectedPart,
                             deliveryMode = selectedDeliveryFormat,
-                            questionCount = selectedItemCount,
-                            startItem = startItem,
-                            endItem = endItem,
+                            questionCount = launchCount,
+                            startItem = launchStart,
+                            endItem = launchEnd,
                             shuffleQuestions = randomizeQuestionOrder,
                             shuffleChoices = shuffleChoices,
                             isCrpMode = isCrpMode,

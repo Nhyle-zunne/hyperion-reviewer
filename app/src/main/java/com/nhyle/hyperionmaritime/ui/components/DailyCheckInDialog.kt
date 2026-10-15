@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -304,7 +305,7 @@ fun DailyCheckInDialog(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(64.dp)
+                                .height(54.dp)
                                 .background(
                                     when {
                                         isChecked -> colors.accentGreen.copy(alpha = 0.15f)
@@ -324,70 +325,74 @@ fun DailyCheckInDialog(
                                         }
                                     ),
                                     RectangleShape
-                                )
-                                .padding(vertical = 4.dp, horizontal = 2.dp),
+                                ),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.height(56.dp)
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 1.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "D$slotIndex",
+                                    text = "DAY $slotIndex",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 9.sp
+                                        fontSize = 10.sp
                                     ),
-                                    color = if (isChecked || isTodayTarget) colors.textPrimary else colors.textMuted
+                                    color = if (isChecked || isTodayTarget) colors.textPrimary else colors.textMuted,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
 
-                                Box(
-                                    modifier = Modifier.size(20.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isChecked) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Checked",
-                                            tint = colors.accentGreen,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    } else if (isRewardDay) {
-                                        Text(
-                                            text = "+20",
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                fontSize = 9.sp
-                                            ),
-                                            color = colors.accentGreen
-                                        )
-                                    } else if (isTodayTarget) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(6.dp)
-                                                .background(colors.accentGreen, RectangleShape)
-                                        )
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(4.dp)
-                                                .background(colors.borderInactive, RectangleShape)
-                                        )
-                                    }
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                if (isRewardDay) {
+                                    Text(
+                                        text = "+20 HYPE",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        ),
+                                        color = Color(0xFF00FF66),
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                } else if (isChecked) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Checked",
+                                        tint = colors.accentGreen,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                } else if (isTodayTarget) {
+                                    Text(
+                                        text = "TODAY",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 8.5.sp
+                                        ),
+                                        color = colors.accentGreen,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                } else {
+                                    Text(
+                                        text = "-",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontFamily = FontFamily.Monospace,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        ),
+                                        color = colors.textMuted,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
                                 }
-
-                                Text(
-                                    text = if (isRewardDay) "HYPE" else if (isChecked) "DONE" else if (isTodayTarget) "TODAY" else "-",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 7.5.sp
-                                    ),
-                                    color = if (isChecked) colors.accentGreen else if (isTodayTarget) colors.textPrimary else colors.textMuted
-                                )
                             }
                         }
                     }

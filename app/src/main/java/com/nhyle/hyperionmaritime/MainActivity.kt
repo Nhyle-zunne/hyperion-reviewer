@@ -27,20 +27,87 @@ import com.nhyle.hyperionmaritime.ui.store.StoreScreen
 import com.nhyle.hyperionmaritime.ui.theme.AppTheme
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 import com.nhyle.hyperionmaritime.viewmodel.Screen
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: ReviewerViewModel by viewModels()
+    private lateinit var appUpdateManager: AppUpdateManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MaritimeQuestionBank.init(applicationContext)
         LicenseManager.init(applicationContext)
+
+        appUpdateManager = AppUpdateManagerFactory.create(this)
+        checkForInAppUpdates()
+
         enableEdgeToEdge()
         setContent {
             val isDarkMode by viewModel.isDarkMode.collectAsState()
             AppTheme(isDarkMode = isDarkMode) {
                 HyperionApp(viewModel = viewModel)
+            }
+        }
+    }
+
+    private fun isOnline(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun checkForInAppUpdates() {
+        if (!isOnline(this)) {
+            // Offline Guard: Abort update check immediately for offline / at-sea users
+            return
+        }
+
+        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+            ) {
+                try {
+                    appUpdateManager.startUpdateFlowForResult(
+                        appUpdateInfo,
+                        AppUpdateType.IMMEDIATE,
+                        this,
+                        REQ_CODE_IMMEDIATE_UPDATE
+                    )
+                } catch (_: Exception) {
+                    // Silently handle error to prevent blocking user
+                }
+            }
+        }.addOnFailureListener {
+            // Catch errors, missing Play Store, or network drops silently
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::appUpdateManager.isInitialized && isOnline(this)) {
+            appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                    try {
+                        appUpdateManager.startUpdateFlowForResult(
+                            appUpdateInfo,
+                            AppUpdateType.IMMEDIATE,
+                            this,
+                            REQ_CODE_IMMEDIATE_UPDATE
+                        )
+                    } catch (_: Exception) {
+                        // Silently handle error
+                    }
+                }
+            }.addOnFailureListener {
+                // Silently handle failure
             }
         }
     }
@@ -57,6 +124,10 @@ class MainActivity : ComponentActivity() {
         if (isActiveQuestionScreen) {
             viewModel.studyTimeTracker.onAppForeground()
         }
+    }
+
+    companion object {
+        private const val REQ_CODE_IMMEDIATE_UPDATE = 999
     }
 }
 

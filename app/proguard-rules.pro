@@ -2,13 +2,20 @@
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.
 
+# Jetpack Room
+-keep class androidx.room.** { *; }
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.**
+
+# App Data Models & Question Entities
+-keepclassmembers class com.nhyle.hyperionmaritime.** { *; }
+-keep enum com.nhyle.hyperionmaritime.** { *; }
+
 # Room Database & SQLite Reflection
 -keepclassmembers class * {
     @androidx.room.* <fields>;
     @androidx.room.* <methods>;
 }
--keep class * extends androidx.room.RoomDatabase
--dontwarn androidx.room.paging.**
 
 # Data Models, Serialization & Licensing Objects
 -keepattributes Signature
@@ -26,6 +33,7 @@
 }
 
 # Preserve Licensing Key, Security Tokens & Question Bank Models
+-keep class com.nhyle.hyperionmaritime.** { *; }
 -keep class com.hyperion.maritime.data.** { *; }
 -keep class com.hyperion.maritime.model.** { *; }
 -keep class com.example.data.** { *; }

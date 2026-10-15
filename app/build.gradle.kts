@@ -16,7 +16,7 @@ android {
     applicationId = "com.nhyle.hyperionmaritime"
     minSdk = 24
     targetSdk = 36
-    versionCode = 38
+    versionCode = 44
     versionName = "0.9.6.7"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -41,9 +41,13 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
-      isShrinkResources = false
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
+      ndk {
+        debugSymbolLevel = "FULL"
+      }
     }
     debug {
       signingConfig = signingConfigs.getByName("debugConfig")
@@ -87,8 +91,10 @@ dependencies {
   implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-  // Google Play Billing
-  implementation("com.android.billingclient:billing-ktx:7.1.1")
+  // Google Play Billing & In-App Updates
+  implementation("com.android.billingclient:billing-ktx:8.0.0")
+  implementation("com.google.android.play:app-update:2.1.0")
+  implementation("com.google.android.play:app-update-ktx:2.1.0")
 
   // Firebase & Google Play Services
   implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
