@@ -195,11 +195,17 @@ fun DeviceVerificationCard(
                         val tierDisplayTitle = when (tier) {
                             ProTier.OIC_NW_PRO -> "OIC-NW Deck Operational"
                             ProTier.GMDSS_PRO -> "GMDSS Radio Communications"
+                            ProTier.ENGINE_OIC_EW_PRO -> "OIC-EW Engine Operational"
+                            ProTier.DECK_MGT_PRO -> "Deck Management Level"
+                            ProTier.ENGINE_MGT_PRO -> "Engine Management Level"
                             ProTier.HYPERION_PRO -> "Full Maritime Review Suite"
                         }
                         val tierDisplaySub = when (tier) {
                             ProTier.OIC_NW_PRO -> "Full 12-Competence Deck Question Bank & Mocks"
                             ProTier.GMDSS_PRO -> "Complete GOC Subsystems & Emergency Radio Mocks"
+                            ProTier.ENGINE_OIC_EW_PRO -> "Full 13-Competence Engine Question Bank & Mocks"
+                            ProTier.DECK_MGT_PRO -> "Full 18-Competence Management Question Bank & Mocks"
+                            ProTier.ENGINE_MGT_PRO -> "Full 14-Competence Management Question Bank & Mocks"
                             ProTier.HYPERION_PRO -> "Complete Deck Operational + GMDSS Suite"
                         }
 
@@ -347,12 +353,15 @@ fun DeviceVerificationCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val labelPrefix = when (selectedTier) {
-                                ProTier.OIC_NW_PRO, ProTier.GMDSS_PRO -> "Track:"
+                                ProTier.OIC_NW_PRO, ProTier.GMDSS_PRO, ProTier.ENGINE_OIC_EW_PRO, ProTier.DECK_MGT_PRO, ProTier.ENGINE_MGT_PRO -> "Track:"
                                 ProTier.HYPERION_PRO -> "Suite:"
                             }
                             val suiteName = when (selectedTier) {
                                 ProTier.OIC_NW_PRO -> "OIC-NW Deck Operational"
                                 ProTier.GMDSS_PRO -> "GMDSS Radio Communications"
+                                ProTier.ENGINE_OIC_EW_PRO -> "OIC-EW Engine Operational"
+                                ProTier.DECK_MGT_PRO -> "Deck Management Level"
+                                ProTier.ENGINE_MGT_PRO -> "Engine Management Level"
                                 ProTier.HYPERION_PRO -> "Full Maritime Review Suite"
                             }
 
@@ -476,6 +485,9 @@ fun DeviceVerificationCard(
                         val trackOrSuite = when (selectedTier) {
                             ProTier.OIC_NW_PRO -> "Track: OIC-NW Deck Operational"
                             ProTier.GMDSS_PRO -> "Track: GMDSS Radio Communications"
+                            ProTier.ENGINE_OIC_EW_PRO -> "Track: OIC-EW Engine Operational"
+                            ProTier.DECK_MGT_PRO -> "Track: Deck Management Level"
+                            ProTier.ENGINE_MGT_PRO -> "Track: Engine Management Level"
                             ProTier.HYPERION_PRO -> "Suite: Full Maritime Review Suite"
                         }
                         val fullDetails = """

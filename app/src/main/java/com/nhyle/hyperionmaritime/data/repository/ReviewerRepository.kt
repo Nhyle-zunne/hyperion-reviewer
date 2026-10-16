@@ -112,7 +112,13 @@ class ReviewerRepository(private val database: HyperionDatabase) {
     }
 
     fun getQuestionCountForCompetence(track: String, competence: String): Int {
-        val t = if (track.contains("GMDSS", ignoreCase = true)) Track.GMDSS_GOC else Track.DECK_OIC_NW
+        val t = when {
+            track.equals(Track.ENGINE_OIC_EW.name, ignoreCase = true) || track.contains("ENGINE_OIC_EW", ignoreCase = true) || track.contains("OIC_EW", ignoreCase = true) -> Track.ENGINE_OIC_EW
+            track.equals(Track.DECK_MGT.name, ignoreCase = true) || track.contains("DECK_MGT", ignoreCase = true) -> Track.DECK_MGT
+            track.equals(Track.ENGINE_MGT.name, ignoreCase = true) || track.contains("ENGINE_MGT", ignoreCase = true) -> Track.ENGINE_MGT
+            track.contains("GMDSS", ignoreCase = true) -> Track.GMDSS_GOC
+            else -> Track.DECK_OIC_NW
+        }
         return MaritimeCompetenceRegistry.getDynamicQuestionCount(competence, t, isCrpMode = false)
     }
 
@@ -420,7 +426,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
                 if (prioritizeUnseen) {
                     QuestionSelectionDispatcher.selectQuestions(
                         eligiblePool = mockDataset,
-                        requestedCount = if (track == Track.GMDSS_GOC) 100 else 200,
+                        requestedCount = if (track == Track.GMDSS_GOC) 100 else track.mockQuestions,
                         seenQuestionIds = seenQuestionIds,
                         prioritizeUnseen = true,
                         shuffleQuestions = true

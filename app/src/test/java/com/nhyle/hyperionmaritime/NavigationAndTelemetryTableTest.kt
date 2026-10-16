@@ -38,7 +38,7 @@ import org.robolectric.shadows.ShadowLooper
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class NavigationAndTelemetryTableTest {
 
     @get:Rule

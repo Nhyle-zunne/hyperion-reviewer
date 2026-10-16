@@ -3,7 +3,9 @@ package com.nhyle.hyperionmaritime.data.model
 enum class Track(val title: String, val shortName: String, val mockQuestions: Int, val timeMinutes: Int) {
     DECK_OIC_NW("Deck Operational Level (OIC-NW)", "Deck OIC-NW", 200, 200),
     GMDSS_GOC("GMDSS Radio Operator (GOC)", "GMDSS (GOC)", 100, 100),
-    ENGINE_OIC_EW("Engine Operational Level (OIC-EW)", "Engine OIC-EW", 150, 150);
+    ENGINE_OIC_EW("Engine Operational Level (OIC-EW)", "Engine OIC-EW", 200, 200),
+    DECK_MGT("Deck Management Level", "Deck MGT", 200, 200),
+    ENGINE_MGT("Engine Management Level", "Engine MGT", 200, 200);
 
     companion object {
         val OIC_NW: Track get() = DECK_OIC_NW
@@ -49,6 +51,33 @@ data class Question(
     val isWrongInVault: Boolean = false
 ) {
     val rationale: String get() = explanation
+}
+
+fun shuffleOptionsStable(q: Question, seed: String): Question {
+    if (q.options.size < 2) return q
+    val hasNonShufflableOption = q.options.any { opt ->
+        val trimmed = opt.trim().lowercase()
+        trimmed.contains("all of the above") ||
+        trimmed.contains("none of the above") ||
+        trimmed.contains("none of these") ||
+        trimmed.contains("all of these") ||
+        trimmed.contains("both a and b") ||
+        trimmed.contains("a and b") ||
+        trimmed.contains("a and c") ||
+        trimmed.contains("b and c") ||
+        trimmed.contains("neither")
+    }
+    if (hasNonShufflableOption) return q
+
+    val originalCorrectText = q.options.getOrNull(q.correctAnswerIndex) ?: return q
+    val rng = java.util.Random((q.id + seed).hashCode().toLong())
+    val shuffledOpts = q.options.toMutableList()
+    java.util.Collections.shuffle(shuffledOpts, rng)
+    val newIndex = shuffledOpts.indexOf(originalCorrectText)
+    return q.copy(
+        options = shuffledOpts,
+        correctAnswerIndex = if (newIndex >= 0) newIndex else q.correctAnswerIndex
+    )
 }
 
 enum class QuizMode {

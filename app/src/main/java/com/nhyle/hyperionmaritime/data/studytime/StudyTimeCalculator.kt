@@ -181,6 +181,8 @@ object StudyTimeCalculator {
                 Track.DECK_OIC_NW -> Color(0xFF00FF66)
                 Track.GMDSS_GOC -> Color(0xFF00E5FF)
                 Track.ENGINE_OIC_EW -> Color(0xFFFFB300)
+                Track.DECK_MGT -> Color(0xFF00FF66)
+                Track.ENGINE_MGT -> Color(0xFFFFB300)
             }
             TrackStudyStats(
                 trackId = trackId,

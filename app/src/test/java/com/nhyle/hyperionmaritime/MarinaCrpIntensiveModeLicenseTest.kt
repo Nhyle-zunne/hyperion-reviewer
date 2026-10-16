@@ -23,7 +23,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class MarinaCrpIntensiveModeLicenseTest {
 
     private lateinit var context: Context

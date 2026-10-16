@@ -56,11 +56,7 @@ fun QuickScanCompetenceSelectScreen(
     val currentSelectedTrack by viewModel.selectedTrack.collectAsState()
     val activeTrack = track ?: currentSelectedTrack
 
-    val competences = if (activeTrack == Track.DECK_OIC_NW) {
-        MaritimeCompetenceRegistry.ALL_DECK_COMPETENCES
-    } else {
-        MaritimeCompetenceRegistry.ALL_GMDSS_COMPETENCES
-    }
+    val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(activeTrack)
 
     BackHandler {
         viewModel.navigateBack()
@@ -71,9 +67,16 @@ fun QuickScanCompetenceSelectScreen(
             .fillMaxSize()
             .background(colors.background)
     ) {
+        val trackLabel = when (activeTrack) {
+            Track.DECK_OIC_NW -> "OIC-NW DECK"
+            Track.GMDSS_GOC -> "GMDSS GOC"
+            Track.ENGINE_OIC_EW -> "ENGINE OIC-EW"
+            Track.ENGINE_MGT -> "ENGINE MANAGEMENT"
+            Track.DECK_MGT -> "DECK MANAGEMENT"
+        }
         MaritimeTopBar(
             title = "QUICK SCAN MATERIAL",
-            subtitle = "SELECT COMPETENCE • ${if (activeTrack == Track.DECK_OIC_NW) "OIC-NW DECK" else "GMDSS GOC"}",
+            subtitle = "SELECT COMPETENCE • $trackLabel",
             showBackButton = true,
             onBackClick = { viewModel.navigateBack() }
         )

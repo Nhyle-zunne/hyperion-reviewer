@@ -100,6 +100,7 @@ import com.nhyle.hyperionmaritime.data.local.DrillSessionFormatter
 import com.nhyle.hyperionmaritime.ui.components.DeleteSessionLogConfirmationDialog
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.data.model.Track
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
@@ -170,7 +171,7 @@ fun PracticeConfigScreen(
     val isGmdssLicensed by viewModel.isGmdssProUnlocked.collectAsState()
     val isHyperionLicensed by viewModel.isHyperionProUnlocked.collectAsState()
     val isTrackLicensedVm by viewModel.isTrackLicensed.collectAsState()
-    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed || (if (selectedTrack == Track.GMDSS_GOC) isGmdssLicensed else isOicNwLicensed)
+    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed
     val isVerified = isTrackLicensed
     val isFreeTier = !isVerified
     // showFixedPool should be true for CRP Mode OR GMDSS Operational Review (unconditionally per latest request)
@@ -209,7 +210,7 @@ fun PracticeConfigScreen(
                     2260
                 }
             }
-        } else if (isCrpMode) {
+        } else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) {
             if (competenceId == null) {
                 2065
             } else {

@@ -39,6 +39,27 @@ enum class ProTier(
         subtitle = "Complete Deck Operational + GMDSS Radio Reviewer package with all competencies",
         shortName = "All-Access Bundle",
         questionCount = "Total Question Bank: 8,705 questions (6,445 OIC-NW + 2,260 GMDSS)"
+    ),
+    ENGINE_OIC_EW_PRO(
+        title = "OIC-EW ENGINE (OPERATIONAL LEVEL)",
+        codePrefix = "EW",
+        subtitle = "STCW Regulation III/1 • 13 Competencies, full rationale",
+        shortName = "Engine Operational",
+        questionCount = ""
+    ),
+    DECK_MGT_PRO(
+        title = "DECK MANAGEMENT LEVEL",
+        codePrefix = "DM",
+        subtitle = "STCW Regulation II/2 • 18 Competencies, full rationale",
+        shortName = "Deck Management",
+        questionCount = ""
+    ),
+    ENGINE_MGT_PRO(
+        title = "ENGINE MANAGEMENT LEVEL",
+        codePrefix = "EM",
+        subtitle = "STCW Regulation III/2 • 14 Competencies, full rationale",
+        shortName = "Engine Management",
+        questionCount = ""
     );
 
     companion object {
@@ -49,7 +70,10 @@ enum class ProTier(
 enum class LicenseTier {
     OIC_NW,
     GMDSS,
-    HYPERION_ALL_ACCESS
+    HYPERION_ALL_ACCESS,
+    ENGINE_OIC_EW,
+    DECK_MGT,
+    ENGINE_MGT
 }
 
 enum class UnlockResult(val toastMessage: String, val isSuccess: Boolean) {
@@ -57,6 +81,9 @@ enum class UnlockResult(val toastMessage: String, val isSuccess: Boolean) {
     OIC_NW_UNLOCKED("OIC-NW Deck Unlocked! Offline review access active.", true),
     GMDSS_UNLOCKED("GMDSS GOC Unlocked! Offline review access active.", true),
     HYPERION_UNLOCKED("Hyperion All Access Unlocked! Full offline access active.", true),
+    ENGINE_OIC_EW_UNLOCKED("Engine OIC-EW Unlocked! Offline review access active.", true),
+    DECK_MGT_UNLOCKED("Deck Management Unlocked! Offline review access active.", true),
+    ENGINE_MGT_UNLOCKED("Engine Management Unlocked! Offline review access active.", true),
     CLOCK_ERROR("ERR: CLOCK TAMPERING DETECTED. RESTORE CORRECT SYSTEM TIME.", false),
     KEY_EXPIRED("ERR: ACTIVATION KEY HAS EXPIRED.", false),
     INVALID_KEY("ERR: INVALID OR UNRECOGNIZED ACTIVATION KEY", false);
@@ -155,16 +182,31 @@ object LicenseManager {
 
     const val KEY_OIC_NW_PRO_UNLOCKED = "is_oic_nw_pro_unlocked"
     const val KEY_GMDSS_PRO_UNLOCKED = "is_gmdss_pro_unlocked"
+    const val KEY_ENGINE_OIC_EW_PRO_UNLOCKED = "is_engine_oic_ew_pro_unlocked"
+    const val KEY_DECK_MGT_PRO_UNLOCKED = "is_deck_mgt_pro_unlocked"
+    const val KEY_ENGINE_MGT_PRO_UNLOCKED = "is_engine_mgt_pro_unlocked"
     const val KEY_LICENSE_ACTIVATED = "is_license_activated"
 
     const val OIC_NW_LICENSED = "OIC_NW_LICENSED"
     const val GMDSS_LICENSED = "GMDSS_LICENSED"
+    const val ENGINE_OIC_EW_LICENSED = "ENGINE_OIC_EW_LICENSED"
+    const val DECK_MGT_LICENSED = "DECK_MGT_LICENSED"
+    const val ENGINE_MGT_LICENSED = "ENGINE_MGT_LICENSED"
 
     private val _isOicNwProUnlockedFlow = MutableStateFlow(false)
     val isOicNwProUnlockedFlow: StateFlow<Boolean> = _isOicNwProUnlockedFlow.asStateFlow()
 
     private val _isGmdssProUnlockedFlow = MutableStateFlow(false)
     val isGmdssProUnlockedFlow: StateFlow<Boolean> = _isGmdssProUnlockedFlow.asStateFlow()
+
+    private val _isEngineOicEwProUnlockedFlow = MutableStateFlow(false)
+    val isEngineOicEwProUnlockedFlow: StateFlow<Boolean> = _isEngineOicEwProUnlockedFlow.asStateFlow()
+
+    private val _isDeckMgtProUnlockedFlow = MutableStateFlow(false)
+    val isDeckMgtProUnlockedFlow: StateFlow<Boolean> = _isDeckMgtProUnlockedFlow.asStateFlow()
+
+    private val _isEngineMgtProUnlockedFlow = MutableStateFlow(false)
+    val isEngineMgtProUnlockedFlow: StateFlow<Boolean> = _isEngineMgtProUnlockedFlow.asStateFlow()
 
     private val _isProActivatedFlow = MutableStateFlow(false)
     val isProActivatedFlow: StateFlow<Boolean> = _isProActivatedFlow.asStateFlow()
@@ -211,11 +253,17 @@ object LicenseManager {
 
         val oic = isOicNwProUnlocked(context)
         val gmdss = isGmdssProUnlocked(context)
-        val hyp = oic && gmdss
-        val active = oic || gmdss
+        val engineEw = isEngineOicEwProUnlocked(context)
+        val deckMgt = isDeckMgtProUnlocked(context)
+        val engineMgt = isEngineMgtProUnlocked(context)
+        val hyp = oic && gmdss && engineEw && deckMgt && engineMgt
+        val active = oic || gmdss || engineEw || deckMgt || engineMgt
 
         _isOicNwProUnlockedFlow.value = oic
         _isGmdssProUnlockedFlow.value = gmdss
+        _isEngineOicEwProUnlockedFlow.value = engineEw
+        _isDeckMgtProUnlockedFlow.value = deckMgt
+        _isEngineMgtProUnlockedFlow.value = engineMgt
         _isHyperionProUnlockedFlow.value = hyp
         _isProActivatedFlow.value = active
     }
@@ -241,6 +289,9 @@ object LicenseManager {
                 .putString("license_type", "RESTRICTED")
                 .putBoolean("is_oic_unlocked", false)
                 .putBoolean("is_gmdss_unlocked", false)
+                .putBoolean("is_engine_ew_unlocked", false)
+                .putBoolean("is_deck_mgt_unlocked", false)
+                .putBoolean("is_engine_mgt_unlocked", false)
                 .putBoolean("is_all_access_unlocked", false)
                 .apply()
 
@@ -360,6 +411,9 @@ object LicenseManager {
         val normTier = when (tier.uppercase().trim()) {
             "OIC", "DECK", "OIC_NW" -> "OIC"
             "GOC", "GMDSS", "GMDSS_GOC" -> "GOC"
+            "EW", "ENGINE_EW", "ENGINE_OIC_EW" -> "EW"
+            "DM", "DECK_MGT" -> "DM"
+            "EM", "ENGINE_MGT" -> "EM"
             else -> "ALL"
         }
 
@@ -530,6 +584,9 @@ object LicenseManager {
                 expiryEpoch = expiry,
                 unlockOic = true,
                 unlockGmdss = true,
+                unlockEw = true,
+                unlockDm = true,
+                unlockEm = true,
                 unlockAll = true
             )
             return UnlockResult.TERMINAL_ACTIVATED
@@ -537,8 +594,8 @@ object LicenseManager {
 
         // Parse key structure: HYPE-[TIER]-[DURATION]-[ISSUEDAY/EXPDAY]-[SIG1]-[SIG2]
         // or compact HYPE[TIER][DUR][ISSUEDAY/EXPDAY][SIG]
-        val regexWithDashes = Regex("^HYPE-(ALL|OIC|GOC)-(1W|1M|1Y|EXP|EX)-([0-9A-F]{4})-([0-9A-F]{4})-([0-9A-F]{4})$")
-        val regexCompact = Regex("^HYPE(ALL|OIC|GOC)(1W|1M|1Y|EXP|EX)([0-9A-F]{4})([0-9A-F]{8})$")
+        val regexWithDashes = Regex("^HYPE-(ALL|OIC|GOC|EW|DM|EM)-(1W|1M|1Y|EXP|EX)-([0-9A-F]{4})-([0-9A-F]{4})-([0-9A-F]{4})$")
+        val regexCompact = Regex("^HYPE(ALL|OIC|GOC|EW|DM|EM)(1W|1M|1Y|EXP|EX)([0-9A-F]{4})([0-9A-F]{8})$")
 
         var tierPart = ""
         var durPart = ""
@@ -631,10 +688,13 @@ object LicenseManager {
             storedDuration = durPart
         }
 
-        val (unlockOic, unlockGmdss, unlockAll, resolvedTier) = when (tierPart) {
-            "OIC" -> Quadruple(true, false, false, "OIC_NW")
-            "GOC" -> Quadruple(false, true, false, "GMDSS_GOC")
-            else -> Quadruple(true, true, true, "ALL_ACCESS")
+        val (unlockOic, unlockGmdss, unlockEw, unlockDm, unlockEm, unlockAll, resolvedTier) = when (tierPart) {
+            "OIC" -> Septuple(true, false, false, false, false, false, "OIC_NW")
+            "GOC" -> Septuple(false, true, false, false, false, false, "GMDSS_GOC")
+            "EW" -> Septuple(false, false, true, false, false, false, "ENGINE_OIC_EW")
+            "DM" -> Septuple(false, false, false, true, false, false, "DECK_MGT")
+            "EM" -> Septuple(false, false, false, false, true, false, "ENGINE_MGT")
+            else -> Septuple(true, true, true, true, true, true, "ALL_ACCESS")
         }
 
         saveOfflineActivation(
@@ -646,17 +706,23 @@ object LicenseManager {
             expiryEpoch = expiryEpoch,
             unlockOic = unlockOic,
             unlockGmdss = unlockGmdss,
+            unlockEw = unlockEw,
+            unlockDm = unlockDm,
+            unlockEm = unlockEm,
             unlockAll = unlockAll
         )
 
         return when (tierPart) {
             "OIC" -> UnlockResult.OIC_NW_UNLOCKED
             "GOC" -> UnlockResult.GMDSS_UNLOCKED
+            "EW" -> UnlockResult.ENGINE_OIC_EW_UNLOCKED
+            "DM" -> UnlockResult.DECK_MGT_UNLOCKED
+            "EM" -> UnlockResult.ENGINE_MGT_UNLOCKED
             else -> UnlockResult.HYPERION_UNLOCKED
         }
     }
 
-    private data class Quadruple(val oic: Boolean, val gmdss: Boolean, val all: Boolean, val tier: String)
+    private data class Septuple(val oic: Boolean, val gmdss: Boolean, val ew: Boolean, val dm: Boolean, val em: Boolean, val all: Boolean, val tier: String)
 
     private fun saveOfflineActivation(
         context: Context,
@@ -667,6 +733,9 @@ object LicenseManager {
         expiryEpoch: Long,
         unlockOic: Boolean,
         unlockGmdss: Boolean,
+        unlockEw: Boolean,
+        unlockDm: Boolean,
+        unlockEm: Boolean,
         unlockAll: Boolean
     ) {
         val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
@@ -684,6 +753,9 @@ object LicenseManager {
             .putBoolean("is_licensed", true)
             .putBoolean("is_oic_unlocked", unlockOic)
             .putBoolean("is_gmdss_unlocked", unlockGmdss)
+            .putBoolean("is_engine_ew_unlocked", unlockEw)
+            .putBoolean("is_deck_mgt_unlocked", unlockDm)
+            .putBoolean("is_engine_mgt_unlocked", unlockEm)
             .putBoolean("is_all_access_unlocked", unlockAll)
             .putBoolean("is_full_access_unlocked", unlockAll)
             .remove("is_hardware_lifetime")
@@ -692,6 +764,9 @@ object LicenseManager {
 
         setOicNwProUnlocked(context, unlockOic)
         setGmdssProUnlocked(context, unlockGmdss)
+        setEngineOicEwProUnlocked(context, unlockEw)
+        setDeckMgtProUnlocked(context, unlockDm)
+        setEngineMgtProUnlocked(context, unlockEm)
         setHyperionProUnlocked(context, unlockAll)
     }
 
@@ -705,12 +780,18 @@ object LicenseManager {
             .putBoolean("is_licensed", false)
             .putBoolean("is_oic_unlocked", false)
             .putBoolean("is_gmdss_unlocked", false)
+            .putBoolean("is_engine_ew_unlocked", false)
+            .putBoolean("is_deck_mgt_unlocked", false)
+            .putBoolean("is_engine_mgt_unlocked", false)
             .putBoolean("is_all_access_unlocked", false)
             .putBoolean("is_full_access_unlocked", false)
             .apply()
 
         setOicNwProUnlocked(context, false)
         setGmdssProUnlocked(context, false)
+        setEngineOicEwProUnlocked(context, false)
+        setDeckMgtProUnlocked(context, false)
+        setEngineMgtProUnlocked(context, false)
         setHyperionProUnlocked(context, false)
     }
 
@@ -777,6 +858,51 @@ object LicenseManager {
         }
     }
 
+    fun isOfflineEngineOicEwUnlocked(context: Context): Boolean {
+        val status = checkOfflineLicense(context)
+        return when (status) {
+            is OfflineLicenseStatus.Active -> {
+                val tier = status.info.tier
+                tier == "ALL_ACCESS" || tier == "ENGINE_OIC_EW" || tier == "ALL" || tier == "EW"
+            }
+            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
+            OfflineLicenseStatus.NotActive -> {
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.getBoolean(KEY_ENGINE_OIC_EW_PRO_UNLOCKED, false)
+            }
+        }
+    }
+
+    fun isOfflineDeckMgtUnlocked(context: Context): Boolean {
+        val status = checkOfflineLicense(context)
+        return when (status) {
+            is OfflineLicenseStatus.Active -> {
+                val tier = status.info.tier
+                tier == "ALL_ACCESS" || tier == "DECK_MGT" || tier == "ALL" || tier == "DM"
+            }
+            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
+            OfflineLicenseStatus.NotActive -> {
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.getBoolean(KEY_DECK_MGT_PRO_UNLOCKED, false)
+            }
+        }
+    }
+
+    fun isOfflineEngineMgtUnlocked(context: Context): Boolean {
+        val status = checkOfflineLicense(context)
+        return when (status) {
+            is OfflineLicenseStatus.Active -> {
+                val tier = status.info.tier
+                tier == "ALL_ACCESS" || tier == "ENGINE_MGT" || tier == "ALL" || tier == "EM"
+            }
+            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
+            OfflineLicenseStatus.NotActive -> {
+                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                prefs.getBoolean(KEY_ENGINE_MGT_PRO_UNLOCKED, false)
+            }
+        }
+    }
+
     fun isOfflineHyperionUnlocked(context: Context): Boolean {
         val status = checkOfflineLicense(context)
         return when (status) {
@@ -812,10 +938,40 @@ object LicenseManager {
         return isOfflineGmdssUnlocked(context)
     }
 
+    fun isEngineOicEwProUnlocked(context: Context): Boolean {
+        try {
+            val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
+            if (billing.entitlements.value.engineOicEwUnlocked || billing.entitlements.value.allAccessUnlocked) {
+                return true
+            }
+        } catch (_: Exception) {}
+        return isOfflineEngineOicEwUnlocked(context)
+    }
+
+    fun isDeckMgtProUnlocked(context: Context): Boolean {
+        try {
+            val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
+            if (billing.entitlements.value.deckMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
+                return true
+            }
+        } catch (_: Exception) {}
+        return isOfflineDeckMgtUnlocked(context)
+    }
+
+    fun isEngineMgtProUnlocked(context: Context): Boolean {
+        try {
+            val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
+            if (billing.entitlements.value.engineMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
+                return true
+            }
+        } catch (_: Exception) {}
+        return isOfflineEngineMgtUnlocked(context)
+    }
+
     fun isHyperionProUnlocked(context: Context): Boolean {
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
-            if (billing.entitlements.value.allAccessUnlocked || (billing.entitlements.value.oicNwUnlocked && billing.entitlements.value.gmdssUnlocked)) {
+            if (billing.entitlements.value.allAccessUnlocked || (billing.entitlements.value.oicNwUnlocked && billing.entitlements.value.gmdssUnlocked && billing.entitlements.value.engineOicEwUnlocked && billing.entitlements.value.deckMgtUnlocked && billing.entitlements.value.engineMgtUnlocked)) {
                 return true
             }
         } catch (_: Exception) {}
@@ -825,26 +981,34 @@ object LicenseManager {
     fun isMasterProUnlocked(context: Context): Boolean = isHyperionProUnlocked(context)
 
     fun isTrackProUnlocked(context: Context, track: Track): Boolean {
-        return if (track == Track.DECK_OIC_NW) {
-            isOicNwProUnlocked(context)
-        } else {
-            isGmdssProUnlocked(context)
+        return when (track) {
+            Track.DECK_OIC_NW -> isOicNwProUnlocked(context)
+            Track.GMDSS_GOC -> isGmdssProUnlocked(context)
+            Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked(context)
+            Track.DECK_MGT -> isDeckMgtProUnlocked(context)
+            Track.ENGINE_MGT -> isEngineMgtProUnlocked(context)
         }
     }
 
     fun hasAccessTo(context: Context, module: LicenseTier): Boolean {
         val oic = isOicNwProUnlocked(context)
         val gmdss = isGmdssProUnlocked(context)
-        val hyp = isHyperionProUnlocked(context) || (oic && gmdss)
+        val ew = isEngineOicEwProUnlocked(context)
+        val dm = isDeckMgtProUnlocked(context)
+        val em = isEngineMgtProUnlocked(context)
+        val hyp = isHyperionProUnlocked(context) || (oic && gmdss && ew && dm && em)
         return when (module) {
             LicenseTier.HYPERION_ALL_ACCESS -> hyp
             LicenseTier.OIC_NW -> oic || hyp
             LicenseTier.GMDSS -> gmdss || hyp
+            LicenseTier.ENGINE_OIC_EW -> ew || hyp
+            LicenseTier.DECK_MGT -> dm || hyp
+            LicenseTier.ENGINE_MGT -> em || hyp
         }
     }
 
     fun isActivated(context: Context): Boolean {
-        val active = isOicNwProUnlocked(context) || isGmdssProUnlocked(context)
+        val active = isOicNwProUnlocked(context) || isGmdssProUnlocked(context) || isEngineOicEwProUnlocked(context) || isDeckMgtProUnlocked(context) || isEngineMgtProUnlocked(context)
         _isProActivatedFlow.value = active
         return active
     }
@@ -856,8 +1020,8 @@ object LicenseManager {
             .putBoolean(OIC_NW_LICENSED, unlocked)
             .apply()
         _isOicNwProUnlockedFlow.value = unlocked
-        _isHyperionProUnlockedFlow.value = unlocked && _isGmdssProUnlockedFlow.value
-        _isProActivatedFlow.value = unlocked || _isGmdssProUnlockedFlow.value
+        _isHyperionProUnlockedFlow.value = unlocked && _isGmdssProUnlockedFlow.value && _isEngineOicEwProUnlockedFlow.value && _isDeckMgtProUnlockedFlow.value && _isEngineMgtProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isGmdssProUnlockedFlow.value || _isEngineOicEwProUnlockedFlow.value || _isDeckMgtProUnlockedFlow.value || _isEngineMgtProUnlockedFlow.value
     }
 
     fun setGmdssProUnlocked(context: Context, unlocked: Boolean) {
@@ -867,13 +1031,49 @@ object LicenseManager {
             .putBoolean(GMDSS_LICENSED, unlocked)
             .apply()
         _isGmdssProUnlockedFlow.value = unlocked
-        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value
-        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value
+        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value && _isEngineOicEwProUnlockedFlow.value && _isDeckMgtProUnlockedFlow.value && _isEngineMgtProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value || _isEngineOicEwProUnlockedFlow.value || _isDeckMgtProUnlockedFlow.value || _isEngineMgtProUnlockedFlow.value
+    }
+
+    fun setEngineOicEwProUnlocked(context: Context, unlocked: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ENGINE_OIC_EW_PRO_UNLOCKED, unlocked)
+            .putBoolean(ENGINE_OIC_EW_LICENSED, unlocked)
+            .apply()
+        _isEngineOicEwProUnlockedFlow.value = unlocked
+        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value && _isGmdssProUnlockedFlow.value && _isDeckMgtProUnlockedFlow.value && _isEngineMgtProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value || _isGmdssProUnlockedFlow.value || _isDeckMgtProUnlockedFlow.value || _isEngineMgtProUnlockedFlow.value
+    }
+
+    fun setDeckMgtProUnlocked(context: Context, unlocked: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_DECK_MGT_PRO_UNLOCKED, unlocked)
+            .putBoolean(DECK_MGT_LICENSED, unlocked)
+            .apply()
+        _isDeckMgtProUnlockedFlow.value = unlocked
+        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value && _isGmdssProUnlockedFlow.value && _isEngineOicEwProUnlockedFlow.value && _isEngineMgtProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value || _isGmdssProUnlockedFlow.value || _isEngineOicEwProUnlockedFlow.value || _isEngineMgtProUnlockedFlow.value
+    }
+
+    fun setEngineMgtProUnlocked(context: Context, unlocked: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_ENGINE_MGT_PRO_UNLOCKED, unlocked)
+            .putBoolean(ENGINE_MGT_LICENSED, unlocked)
+            .apply()
+        _isEngineMgtProUnlockedFlow.value = unlocked
+        _isHyperionProUnlockedFlow.value = unlocked && _isOicNwProUnlockedFlow.value && _isGmdssProUnlockedFlow.value && _isEngineOicEwProUnlockedFlow.value && _isDeckMgtProUnlockedFlow.value
+        _isProActivatedFlow.value = unlocked || _isOicNwProUnlockedFlow.value || _isGmdssProUnlockedFlow.value || _isEngineOicEwProUnlockedFlow.value || _isDeckMgtProUnlockedFlow.value
     }
 
     fun setHyperionProUnlocked(context: Context, unlocked: Boolean) {
         setOicNwProUnlocked(context, unlocked)
         setGmdssProUnlocked(context, unlocked)
+        setEngineOicEwProUnlocked(context, unlocked)
+        setDeckMgtProUnlocked(context, unlocked)
+        setEngineMgtProUnlocked(context, unlocked)
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putBoolean(KEY_LICENSE_ACTIVATED, unlocked).apply()
         _isHyperionProUnlockedFlow.value = unlocked

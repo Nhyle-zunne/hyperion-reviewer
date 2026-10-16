@@ -47,11 +47,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
@@ -78,11 +82,18 @@ fun SearchScreen(
     val selectedSearchTrack by viewModel.selectedSearchTrack.collectAsState()
     val isOicNwActive by viewModel.isOicNwActive.collectAsState()
     val isGmdssActive by viewModel.isGmdssActive.collectAsState()
+    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsState()
+    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsState()
+    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsState()
     val isUnlocked by viewModel.isUnlocked.collectAsState()
 
     val oicCompetencies = listOf("ALL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12")
     val gmdssCompetencies = listOf("ALL", "C1", "C2")
-    val currentCompetencies = if (selectedSearchTrack == Track.DECK_OIC_NW) oicCompetencies else gmdssCompetencies
+    val currentCompetencies = when (selectedSearchTrack) {
+        Track.DECK_OIC_NW -> oicCompetencies
+        Track.GMDSS_GOC -> gmdssCompetencies
+        else -> listOf("ALL") + MaritimeCompetenceRegistry.getCompetencesForTrack(selectedSearchTrack).map { it.competenceId }
+    }
 
     BackHandler {
         viewModel.navigateBack()
@@ -230,7 +241,9 @@ fun SearchScreen(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // OIC-NW Track Chip
@@ -239,8 +252,7 @@ fun SearchScreen(
                                 isSelected = selectedSearchTrack == Track.DECK_OIC_NW,
                                 isUnlocked = isOicNwActive,
                                 isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.DECK_OIC_NW) },
-                                modifier = Modifier.weight(1f)
+                                onClick = { viewModel.setSearchTrack(Track.DECK_OIC_NW) }
                             )
 
                             // GMDSS Track Chip
@@ -249,8 +261,34 @@ fun SearchScreen(
                                 isSelected = selectedSearchTrack == Track.GMDSS_GOC,
                                 isUnlocked = isGmdssActive,
                                 isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.GMDSS_GOC) },
-                                modifier = Modifier.weight(1f)
+                                onClick = { viewModel.setSearchTrack(Track.GMDSS_GOC) }
+                            )
+
+                            // ENGINE OIC-EW Track Chip
+                            TrackChip(
+                                title = "EW",
+                                isSelected = selectedSearchTrack == Track.ENGINE_OIC_EW,
+                                isUnlocked = isEwActive,
+                                isDarkMode = isDarkMode,
+                                onClick = { viewModel.setSearchTrack(Track.ENGINE_OIC_EW) }
+                            )
+
+                            // ENGINE MGT Track Chip
+                            TrackChip(
+                                title = "ENGINE MGT",
+                                isSelected = selectedSearchTrack == Track.ENGINE_MGT,
+                                isUnlocked = isEmActive,
+                                isDarkMode = isDarkMode,
+                                onClick = { viewModel.setSearchTrack(Track.ENGINE_MGT) }
+                            )
+
+                            // DECK MGT Track Chip
+                            TrackChip(
+                                title = "DECK MGT",
+                                isSelected = selectedSearchTrack == Track.DECK_MGT,
+                                isUnlocked = isDmActive,
+                                isDarkMode = isDarkMode,
+                                onClick = { viewModel.setSearchTrack(Track.DECK_MGT) }
                             )
                         }
                     }

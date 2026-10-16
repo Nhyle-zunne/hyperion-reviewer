@@ -41,9 +41,12 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.outlined.CalendarMonth
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.app.DatePickerDialog
@@ -106,6 +109,9 @@ fun TrackSelectionScreen(
     val examRecords by viewModel.examRecords.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
     val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
+    val isEwProUnlocked by viewModel.isEngineOicEwProUnlocked.collectAsState()
+    val isDmProUnlocked by viewModel.isDeckMgtProUnlocked.collectAsState()
+    val isEmProUnlocked by viewModel.isEngineMgtProUnlocked.collectAsState()
     val regState by viewModel.registrationUiState.collectAsState()
     val rollingStreak by viewModel.rollingStreak.collectAsState()
     val marinaExamTargetMillis by viewModel.marinaExamTargetMillis.collectAsState()
@@ -266,8 +272,12 @@ fun TrackSelectionScreen(
                 val gmdssProgress = (gmdssSeenCount.toFloat() / 2260f * 100).toInt().coerceIn(0, 100)
 
                 DashboardGrid(
+                    viewModel = viewModel,
                     isOicNwProUnlocked = isOicNwProUnlocked,
                     isGmdssProUnlocked = isGmdssProUnlocked,
+                    isEwProUnlocked = isEwProUnlocked,
+                    isDmProUnlocked = isDmProUnlocked,
+                    isEmProUnlocked = isEmProUnlocked,
                     regState = regState,
                     deckProgress = deckProgress,
                     gmdssProgress = gmdssProgress,
@@ -291,10 +301,24 @@ fun TrackSelectionScreen(
     }
 
     selectedDetailsTrack?.let { track ->
+        val isUnlocked = when (track) {
+            Track.DECK_OIC_NW -> isOicNwProUnlocked
+            Track.GMDSS_GOC -> isGmdssProUnlocked
+            Track.ENGINE_OIC_EW -> isEwProUnlocked
+            Track.DECK_MGT -> isDmProUnlocked
+            Track.ENGINE_MGT -> isEmProUnlocked
+        }
+        val timeLeft = when (track) {
+            Track.DECK_OIC_NW -> regState.oicTimeLeft
+            Track.GMDSS_GOC -> regState.gmdssTimeLeft
+            Track.ENGINE_OIC_EW -> regState.ewTimeLeft
+            Track.DECK_MGT -> regState.dmTimeLeft
+            Track.ENGINE_MGT -> regState.emTimeLeft
+        }
         TrackDetailsPopup(
             track = track,
-            isUnlocked = if (track == Track.DECK_OIC_NW) isOicNwProUnlocked else isGmdssProUnlocked,
-            timeLeft = if (track == Track.DECK_OIC_NW) regState.oicTimeLeft else regState.gmdssTimeLeft,
+            isUnlocked = isUnlocked,
+            timeLeft = timeLeft,
             onDismiss = { selectedDetailsTrack = null },
             onEnterReview = {
                 viewModel.selectTrack(track)
@@ -427,8 +451,12 @@ private fun ActiveSessionResumeRow(
 
 @Composable
 private fun DashboardGrid(
+    viewModel: ReviewerViewModel,
     isOicNwProUnlocked: Boolean,
     isGmdssProUnlocked: Boolean,
+    isEwProUnlocked: Boolean,
+    isDmProUnlocked: Boolean,
+    isEmProUnlocked: Boolean,
     regState: ReviewerViewModel.DeviceRegistrationUiState,
     deckProgress: Int,
     gmdssProgress: Int,
@@ -478,13 +506,78 @@ private fun DashboardGrid(
             }
         }
 
-        // Row 2: Engine Locked & Pass Store
+        val ewTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_OIC_EW)
+        val ewSeen = viewModel.getSeenQuestionIds(Track.ENGINE_OIC_EW).size
+        val ewProgress = if (ewTotal > 0) ((ewSeen.toFloat() / ewTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
+
+        val emTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_MGT)
+        val emSeen = viewModel.getSeenQuestionIds(Track.ENGINE_MGT).size
+        val emProgress = if (emTotal > 0) ((emSeen.toFloat() / emTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
+
+        val dmTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_MGT)
+        val dmSeen = viewModel.getSeenQuestionIds(Track.DECK_MGT).size
+        val dmProgress = if (dmTotal > 0) ((dmSeen.toFloat() / dmTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
+
+        // Row 2: ENGINE OIC-EW | ENGINE MANAGEMENT
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(modifier = Modifier.weight(1f)) {
-                LockedEngineTile()
+                ActiveTrackTile(
+                    track = Track.ENGINE_OIC_EW,
+                    title = "ENGINE OIC-EW",
+                    regulation = "STCW REGULATION III/1",
+                    questionNumber = if (ewTotal >= 1000) "%,d".format(ewTotal) else ewTotal.toString(),
+                    competencyAndMock = "13 COMPETENCIES · 200-ITEM MOCK",
+                    progressPercent = ewProgress,
+                    isUnlocked = isEwProUnlocked,
+                    timeLeft = regState.ewTimeLeft,
+                    badgeOverride = null,
+                    icon = Icons.Default.Build,
+                    onClickTile = { onOpenDetails(Track.ENGINE_OIC_EW) },
+                    onClickEnter = { onSelectTrack(Track.ENGINE_OIC_EW) }
+                )
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
+                ActiveTrackTile(
+                    track = Track.ENGINE_MGT,
+                    title = "ENGINE MANAGEMENT",
+                    regulation = "STCW REGULATION III/2",
+                    questionNumber = if (emTotal >= 1000) "%,d".format(emTotal) else emTotal.toString(),
+                    competencyAndMock = "14 COMPETENCIES · 200-ITEM MOCK",
+                    progressPercent = emProgress,
+                    isUnlocked = isEmProUnlocked,
+                    timeLeft = regState.emTimeLeft,
+                    badgeOverride = null,
+                    icon = Icons.Default.Construction,
+                    onClickTile = { onOpenDetails(Track.ENGINE_MGT) },
+                    onClickEnter = { onSelectTrack(Track.ENGINE_MGT) }
+                )
+            }
+        }
+
+        // Row 3: DECK MANAGEMENT | PassStoreTile
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                ActiveTrackTile(
+                    track = Track.DECK_MGT,
+                    title = "DECK MANAGEMENT",
+                    regulation = "STCW REGULATION II/2",
+                    questionNumber = if (dmTotal >= 1000) "%,d".format(dmTotal) else dmTotal.toString(),
+                    competencyAndMock = "18 COMPETENCIES · 200-ITEM MOCK",
+                    progressPercent = dmProgress,
+                    isUnlocked = isDmProUnlocked,
+                    timeLeft = regState.dmTimeLeft,
+                    badgeOverride = null,
+                    icon = Icons.Default.Navigation,
+                    onClickTile = { onOpenDetails(Track.DECK_MGT) },
+                    onClickEnter = { onSelectTrack(Track.DECK_MGT) }
+                )
             }
 
             Box(modifier = Modifier.weight(1f)) {
@@ -505,12 +598,11 @@ private fun ActiveTrackTile(
     isUnlocked: Boolean,
     timeLeft: String?,
     icon: ImageVector,
+    badgeOverride: String? = null,
     onClickTile: () -> Unit,
     onClickEnter: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
-    val badgeText = if (isUnlocked) "VERIFIED" else "FREE TIER"
-    val badgeColor = if (isUnlocked) PassGreen else colors.muted
     val progressFraction = progressPercent.toFloat() / 100f
 
     Surface(
@@ -551,6 +643,7 @@ private fun ActiveTrackTile(
                 val days = Regex("(\\d+)\\s+days?").find(timeLeft ?: "")?.groupValues?.get(1)?.toIntOrNull()
                 val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
                 val badgeText = when {
+                    badgeOverride != null -> badgeOverride
                     !isUnlocked -> "FREE TIER"
                     isExpiredFlag -> "EXPIRED"
                     days != null && days <= 7 -> "EXPIRING · ${days}D"
@@ -558,6 +651,7 @@ private fun ActiveTrackTile(
                     else -> "VERIFIED"
                 }
                 val badgeColor = when {
+                    badgeOverride != null -> if (isUnlocked) PassGreen else colors.muted
                     !isUnlocked -> colors.muted
                     badgeText.startsWith("EXPIRING") -> Color(0xFFF59E0B)
                     badgeText == "EXPIRED" -> Color(0xFFEF4444)
@@ -921,11 +1015,40 @@ private fun TrackDetailsPopup(
 ) {
     val colors = LocalSpaghettiColors.current
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
-    val totalQuestions = if (track == Track.DECK_OIC_NW) "6,445" else "2,260"
-    val mockSize = if (track == Track.DECK_OIC_NW) 200 else 100
-    val title = if (track == Track.DECK_OIC_NW) "DECK OIC-NW OPERATIONAL LEVEL" else "GMDSS RADIO OPERATOR (GOC)"
-    val regulation = if (track == Track.DECK_OIC_NW) "STCW REGULATION II/1" else "STCW REGULATION IV/2"
-    val icon = if (track == Track.DECK_OIC_NW) Icons.Default.Explore else Icons.Default.CellTower
+    val totalQuestions = when (track) {
+        Track.DECK_OIC_NW -> "6,445"
+        Track.GMDSS_GOC -> "2,260"
+        else -> {
+            val count = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+            if (count >= 1000) "%,d".format(count) else count.toString()
+        }
+    }
+    val mockSize = when (track) {
+        Track.DECK_OIC_NW -> 200
+        Track.GMDSS_GOC -> 100
+        else -> track.mockQuestions
+    }
+    val title = when (track) {
+        Track.DECK_OIC_NW -> "DECK OIC-NW OPERATIONAL LEVEL"
+        Track.GMDSS_GOC -> "GMDSS RADIO OPERATOR (GOC)"
+        Track.ENGINE_OIC_EW -> "ENGINE OIC-EW OPERATIONAL LEVEL"
+        Track.ENGINE_MGT -> "ENGINE MANAGEMENT LEVEL"
+        Track.DECK_MGT -> "DECK MANAGEMENT LEVEL"
+    }
+    val regulation = when (track) {
+        Track.DECK_OIC_NW -> "STCW REGULATION II/1"
+        Track.GMDSS_GOC -> "STCW REGULATION IV/2"
+        Track.ENGINE_OIC_EW -> "STCW REGULATION III/1"
+        Track.ENGINE_MGT -> "STCW REGULATION III/2"
+        Track.DECK_MGT -> "STCW REGULATION II/2"
+    }
+    val icon = when (track) {
+        Track.DECK_OIC_NW -> Icons.Default.Explore
+        Track.GMDSS_GOC -> Icons.Default.CellTower
+        Track.ENGINE_OIC_EW -> Icons.Default.Build
+        Track.ENGINE_MGT -> Icons.Default.Construction
+        Track.DECK_MGT -> Icons.Default.Navigation
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1001,9 +1124,13 @@ private fun TrackDetailsPopup(
                                     softWrap = true
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
+                                val days = Regex("(\\d+)\\s+days?").find(timeLeft ?: "")?.groupValues?.get(1)?.toIntOrNull()
+                                val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
                                 val fullDetailsText = when {
                                     !isUnlocked -> "FREE TIER"
-                                    !timeLeft.isNullOrBlank() -> "VERIFIED · $timeLeft"
+                                    isExpiredFlag -> "EXPIRED"
+                                    days != null && days <= 7 -> "EXPIRING · ${days}D"
+                                    days != null -> "VERIFIED · ${days}D"
                                     else -> "VERIFIED"
                                 }
                                 Text(
@@ -1138,27 +1265,73 @@ private fun TrackDetailsPopup(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        if (track == Track.DECK_OIC_NW) {
-                            val functions = listOf(
-                                "FUNCTION 1 · NAVIGATION" to competences.filter { it.functionId == "F1" },
-                                "FUNCTION 2 · CARGO HANDLING" to competences.filter { it.functionId == "F2" },
-                                "FUNCTION 3 · SHIP OPERATIONS" to competences.filter { it.functionId == "F3" }
-                            )
+                        when (track) {
+                            Track.DECK_OIC_NW -> {
+                                val functions = listOf(
+                                    "FUNCTION 1 · NAVIGATION" to competences.filter { it.functionId == "F1" },
+                                    "FUNCTION 2 · CARGO HANDLING" to competences.filter { it.functionId == "F2" },
+                                    "FUNCTION 3 · SHIP OPERATIONS" to competences.filter { it.functionId == "F3" }
+                                )
 
-                            functions.forEach { (funcHeader, comps) ->
-                                item {
-                                    Text(
-                                        text = funcHeader,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.accent,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 1.sp,
-                                        modifier = Modifier.padding(vertical = 4.dp),
-                                        softWrap = true
-                                    )
+                                functions.forEach { (funcHeader, comps) ->
+                                    item {
+                                        Text(
+                                            text = funcHeader,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.accent,
+                                            fontSize = 10.sp,
+                                            letterSpacing = 1.sp,
+                                            modifier = Modifier.padding(vertical = 4.dp),
+                                            softWrap = true
+                                        )
+                                    }
+                                    comps.forEach { comp ->
+                                        item {
+                                            Surface(
+                                                shape = RectangleShape,
+                                                color = colors.surface2,
+                                                border = BorderStroke(1.dp, colors.border),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            text = "COMPETENCE ${comp.competenceId}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            color = colors.foreground,
+                                                            fontSize = 10.sp,
+                                                            softWrap = true
+                                                        )
+                                                        Text(
+                                                            text = "${comp.officialTOSItems} Qs",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = colors.accent,
+                                                            fontSize = 10.sp,
+                                                            softWrap = true
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = comp.title,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = colors.muted,
+                                                        fontSize = 11.sp,
+                                                        softWrap = true
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                comps.forEach { comp ->
+                            }
+                            Track.GMDSS_GOC -> {
+                                competences.forEach { comp ->
                                     item {
                                         Surface(
                                             shape = RectangleShape,
@@ -1179,8 +1352,9 @@ private fun TrackDetailsPopup(
                                                         fontSize = 10.sp,
                                                         softWrap = true
                                                     )
+                                                    val countText = if (comp.competenceId == "C1") "1,911 Qs" else "349 Qs"
                                                     Text(
-                                                        text = "${comp.officialTOSItems} Qs",
+                                                        text = countText,
                                                         style = MaterialTheme.typography.labelSmall,
                                                         fontWeight = FontWeight.Bold,
                                                         color = colors.accent,
@@ -1201,46 +1375,65 @@ private fun TrackDetailsPopup(
                                     }
                                 }
                             }
-                        } else {
-                            competences.forEach { comp ->
-                                item {
-                                    Surface(
-                                        shape = RectangleShape,
-                                        color = colors.surface2,
-                                        border = BorderStroke(1.dp, colors.border),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(10.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
+                            else -> {
+                                val functionGroups = competences.groupBy { it.functionId }
+                                functionGroups.forEach { (funcId, comps) ->
+                                    val funcNum = funcId.removePrefix("F")
+                                    val funcTitle = MaritimeCompetenceRegistry.getFunctionTitle(funcId, track).uppercase()
+                                    val funcHeader = "FUNCTION $funcNum · $funcTitle"
+                                    item {
+                                        Text(
+                                            text = funcHeader,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.accent,
+                                            fontSize = 10.sp,
+                                            letterSpacing = 1.sp,
+                                            modifier = Modifier.padding(vertical = 4.dp),
+                                            softWrap = true
+                                        )
+                                    }
+                                    comps.forEach { comp ->
+                                        item {
+                                            Surface(
+                                                shape = RectangleShape,
+                                                color = colors.surface2,
+                                                border = BorderStroke(1.dp, colors.border),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
-                                                Text(
-                                                    text = "COMPETENCE ${comp.competenceId}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    color = colors.foreground,
-                                                    fontSize = 10.sp,
-                                                    softWrap = true
-                                                )
-                                                val countText = if (comp.competenceId == "C1") "1,911 Qs" else "349 Qs"
-                                                Text(
-                                                    text = countText,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = colors.accent,
-                                                    fontSize = 10.sp,
-                                                    softWrap = true
-                                                )
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(
+                                                            text = "COMPETENCE ${comp.competenceId}",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            color = colors.foreground,
+                                                            fontSize = 10.sp,
+                                                            softWrap = true
+                                                        )
+                                                        val loadedCount = MaritimeCompetenceRegistry.getDynamicQuestionCount(comp.competenceId, track, isProUnlocked = true)
+                                                        Text(
+                                                            text = "$loadedCount Qs",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = colors.accent,
+                                                            fontSize = 10.sp,
+                                                            softWrap = true
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = comp.title,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = colors.muted,
+                                                        fontSize = 11.sp,
+                                                        softWrap = true
+                                                    )
+                                                }
                                             }
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = comp.title,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = colors.muted,
-                                                fontSize = 11.sp,
-                                                softWrap = true
-                                            )
                                         }
                                     }
                                 }
@@ -1265,8 +1458,15 @@ private fun TrackDetailsPopup(
                                 accent = true,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
+                                val buttonText = when (track) {
+                                    Track.DECK_OIC_NW -> "ENTER DECK REVIEW"
+                                    Track.GMDSS_GOC -> "ENTER GMDSS REVIEW"
+                                    Track.ENGINE_OIC_EW -> "ENTER EW REVIEW"
+                                    Track.ENGINE_MGT -> "ENTER ENGINE MGT REVIEW"
+                                    Track.DECK_MGT -> "ENTER DECK MGT REVIEW"
+                                }
                                 Text(
-                                    text = if (track == Track.DECK_OIC_NW) "ENTER DECK REVIEW" else "ENTER GMDSS REVIEW",
+                                    text = buttonText,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 11.sp,
                                     letterSpacing = 1.sp,

@@ -53,6 +53,7 @@ import com.nhyle.hyperionmaritime.data.model.CompetenceInfo
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
@@ -148,13 +149,9 @@ fun PracticeCompetenceSelectScreen(
     val isGmdssLicensed by viewModel.isGmdssProUnlocked.collectAsState()
     val isHyperionLicensed by viewModel.isHyperionProUnlocked.collectAsState()
     val isTrackLicensedVm by viewModel.isTrackLicensed.collectAsState()
-    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed || (if (selectedTrack == Track.GMDSS_GOC) isGmdssLicensed else isOicNwLicensed)
+    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed
 
-    val competences = if (selectedTrack == Track.DECK_OIC_NW) {
-        MaritimeCompetenceRegistry.ALL_DECK_COMPETENCES
-    } else {
-        MaritimeCompetenceRegistry.ALL_GMDSS_COMPETENCES
-    }
+    val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
 
     BackHandler {
         viewModel.navigateBack()

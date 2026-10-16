@@ -75,6 +75,8 @@ import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleButton
@@ -103,12 +105,27 @@ fun HomeScreen(
     val activeSession by viewModel.activeSession.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
     val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
+    val isEngineOicEwProUnlocked by viewModel.isEngineOicEwProUnlocked.collectAsState()
+    val isDeckMgtProUnlocked by viewModel.isDeckMgtProUnlocked.collectAsState()
+    val isEngineMgtProUnlocked by viewModel.isEngineMgtProUnlocked.collectAsState()
     val isHyperionProUnlocked by viewModel.isHyperionProUnlocked.collectAsState()
-    val isTrackUnlocked = if (selectedTrack == Track.DECK_OIC_NW) isOicNwProUnlocked else isGmdssProUnlocked
+    val isTrackUnlocked = when (selectedTrack) {
+        Track.DECK_OIC_NW -> isOicNwProUnlocked
+        Track.GMDSS_GOC -> isGmdssProUnlocked
+        Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked
+        Track.DECK_MGT -> isDeckMgtProUnlocked
+        Track.ENGINE_MGT -> isEngineMgtProUnlocked
+    }
     val isActivated by viewModel.isActivated.collectAsState()
-    val isAnyProUnlocked = isOicNwProUnlocked || isGmdssProUnlocked || isHyperionProUnlocked || isActivated
+    val isAnyProUnlocked = isOicNwProUnlocked || isGmdssProUnlocked || isEngineOicEwProUnlocked || isDeckMgtProUnlocked || isEngineMgtProUnlocked || isHyperionProUnlocked || isActivated
     val regState by viewModel.registrationUiState.collectAsState()
-    val trackTimeLeft = if (selectedTrack == Track.DECK_OIC_NW) regState.oicTimeLeft else regState.gmdssTimeLeft
+    val trackTimeLeft = when (selectedTrack) {
+        Track.DECK_OIC_NW -> regState.oicTimeLeft
+        Track.GMDSS_GOC -> regState.gmdssTimeLeft
+        Track.ENGINE_OIC_EW -> regState.ewTimeLeft
+        Track.DECK_MGT -> regState.dmTimeLeft
+        Track.ENGINE_MGT -> regState.emTimeLeft
+    }
     var showMockExamWarningDialog by remember { mutableStateOf(false) }
     var showSearchLockedDialog by remember { mutableStateOf(false) }
     var showUpgradeRequiredDialog by remember { mutableStateOf(false) }
@@ -138,7 +155,9 @@ fun HomeScreen(
             title = when (selectedTrack) {
                 Track.DECK_OIC_NW -> "OIC-NW Operational Track"
                 Track.GMDSS_GOC -> "GMDSS Radio Track"
-                else -> "Engine OIC-EW Track"
+                Track.ENGINE_OIC_EW -> "Engine OIC-EW Track"
+                Track.ENGINE_MGT -> "Engine Management Track"
+                Track.DECK_MGT -> "Deck Management Track"
             },
             showBackButton = false,
             onMenuClick = { viewModel.openDrawer() },
@@ -242,15 +261,42 @@ fun HomeScreen(
                         }
                     )
                 }
+            } else {
+                val totalCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isTrackUnlocked)
+                val totalStr = "%,d".format(totalCount)
+                val compCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+                item {
+                    ModeLauncherCard(
+                        title = when (selectedTrack) {
+                            Track.ENGINE_OIC_EW -> "ENGINE OIC-EW OPERATIONAL REVIEW"
+                            Track.DECK_MGT -> "DECK MANAGEMENT STANDARD REVIEW"
+                            Track.ENGINE_MGT -> "ENGINE MANAGEMENT STANDARD REVIEW"
+                            else -> "Standard Review"
+                        },
+                        subtitle = "Standard review • $totalStr questions across $compCount competencies",
+                        badge = "STANDARD REVIEW",
+                        badgeColor = colors.success,
+                        icon = Icons.Default.School,
+                        accentColor = colors.success,
+                        onClick = {
+                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
+                        }
+                    )
+                }
             }
 
             item {
                 ModeLauncherCard(
                     title = "Practice All Questions",
-                    subtitle = if (selectedTrack == Track.DECK_OIC_NW) {
-                        "Practice across all 12 competencies (6,445 questions available)."
-                    } else {
-                        "Practice across all competencies (2,260 questions available)."
+                    subtitle = when (selectedTrack) {
+                        Track.DECK_OIC_NW -> "Practice across all 12 competencies (6,445 questions available)."
+                        Track.GMDSS_GOC -> "Practice across all competencies (2,260 questions available)."
+                        Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
+                            val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+                            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
+                            val qCountStr = "%,d".format(qCount)
+                            "Practice across all $compCount competencies ($qCountStr questions available)."
+                        }
                     },
                     badge = if (isTrackUnlocked) "CUSTOMIZABLE" else "LOCKED",
                     badgeColor = if (isTrackUnlocked) colors.foreground else colors.muted,
@@ -272,7 +318,11 @@ fun HomeScreen(
             item {
                 ModeLauncherCard(
                     title = "Official Timed Mock Exam",
-                    subtitle = if (selectedTrack == Track.DECK_OIC_NW) "Competency-based timing • 1 min/item • 70% Cutoff" else "Competency-based timing • Operator standard • 70% Cutoff",
+                    subtitle = when (selectedTrack) {
+                        Track.DECK_OIC_NW -> "Competency-based timing • 1 min/item • 70% Cutoff"
+                        Track.GMDSS_GOC -> "Competency-based timing • Operator standard • 70% Cutoff"
+                        Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> "Competency-based timing • 1 min/item • 70% Cutoff"
+                    },
                     badge = if (isTrackUnlocked) "STCW TOS MOCK" else "LOCKED",
                     badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
                     icon = Icons.Default.Timer,
@@ -377,7 +427,13 @@ fun HomeScreen(
 
     // Professional Chegg-style Upgrade Required Dialog
     if (showUpgradeRequiredDialog) {
-        val trackTitle = if (selectedTrack == Track.DECK_OIC_NW) "OIC-NW Deck" else "GMDSS Radio Operator"
+        val trackTitle = when (selectedTrack) {
+            Track.DECK_OIC_NW -> "OIC-NW Deck"
+            Track.GMDSS_GOC -> "GMDSS Radio Operator"
+            Track.ENGINE_OIC_EW -> "Engine OIC-EW"
+            Track.ENGINE_MGT -> "Engine Management"
+            Track.DECK_MGT -> "Deck Management"
+        }
         Dialog(
             onDismissRequest = { showUpgradeRequiredDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -646,10 +702,19 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
                     )
                 }
 
+                val days = Regex("(\\d+)\\s+days?").find(timeLeft ?: "")?.groupValues?.get(1)?.toIntOrNull()
+                val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
+                val statusLabel = when {
+                    !isUnlocked -> "UNVERIFIED"
+                    isExpiredFlag -> "EXPIRED"
+                    days != null && days <= 7 -> "EXPIRING · ${days}D"
+                    days != null -> "VERIFIED · ${days}D"
+                    else -> "VERIFIED TERMINAL"
+                }
                 ProStatusBadge(
                     isUnlocked = isUnlocked,
                     lockedLabel = "UNVERIFIED",
-                    unlockedLabel = "VERIFIED TERMINAL"
+                    unlockedLabel = statusLabel
                 )
             }
 
@@ -686,10 +751,12 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
             Spacer(modifier = Modifier.height(2.dp))
 
             Text(
-                text = if (track == Track.DECK_OIC_NW) {
-                    "OIC-NW OPERATIONAL REVIEWER"
-                } else {
-                    "GMDSS RADIO OPERATOR REVIEWER"
+                text = when (track) {
+                    Track.DECK_OIC_NW -> "OIC-NW OPERATIONAL REVIEWER"
+                    Track.GMDSS_GOC -> "GMDSS RADIO OPERATOR REVIEWER"
+                    Track.ENGINE_OIC_EW -> "OIC-EW OPERATIONAL REVIEWER"
+                    Track.DECK_MGT -> "DECK MANAGEMENT REVIEWER"
+                    Track.ENGINE_MGT -> "ENGINE MANAGEMENT REVIEWER"
                 },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.ExtraBold,
@@ -701,10 +768,16 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = if (track == Track.DECK_OIC_NW) {
-                    "Functions 1, 2, and 3 • 6,445 total questions across 12 competencies • Bloom's taxonomy weighted scoring"
-                } else {
-                    "GOC Standard Radio Equipment, Distress & Safety Procedures • 2,260 total questions available"
+                text = when (track) {
+                    Track.DECK_OIC_NW -> "Functions 1, 2, and 3 • 6,445 total questions across 12 competencies • Bloom's taxonomy weighted scoring"
+                    Track.GMDSS_GOC -> "GOC Standard Radio Equipment, Distress & Safety Procedures • 2,260 total questions available"
+                    Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
+                        val funcList = if (track == Track.DECK_MGT) "1, 2, and 3" else "1, 2, 3, and 4"
+                        val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+                        val qCountStr = "%,d".format(qCount)
+                        val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).size
+                        "Functions $funcList • $qCountStr total questions across $compCount competencies • Bloom's taxonomy weighted scoring"
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.bodySmall,
@@ -1195,7 +1268,14 @@ private fun ResumeActiveSessionCard(
 ) {
     val colors = LocalSpaghettiColors.current
     val cleanTrack = session.track.removeSuffix("_MISTAKES")
-    val trackName = if (cleanTrack == Track.DECK_OIC_NW.name) "OIC-NW" else if (cleanTrack == Track.GMDSS_GOC.name) "GMDSS" else cleanTrack.replace('_', ' ')
+    val trackName = when (cleanTrack) {
+        Track.DECK_OIC_NW.name -> "OIC-NW"
+        Track.GMDSS_GOC.name -> "GMDSS"
+        Track.ENGINE_OIC_EW.name -> "EW"
+        Track.DECK_MGT.name -> "DECK MGT"
+        Track.ENGINE_MGT.name -> "ENGINE MGT"
+        else -> cleanTrack.replace('_', ' ')
+    }
     val modeStr = if (session.mode.contains("MOCK")) "MOCK" else if (session.mode.contains("MISTAKES") || session.competenceId == "MISTAKES") "Mistakes" else "PRACTICE"
     val progressFraction = session.answeredCount.toFloat() / session.totalQuestions.coerceAtLeast(1)
 

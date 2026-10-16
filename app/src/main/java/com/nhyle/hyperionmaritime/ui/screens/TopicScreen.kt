@@ -59,11 +59,7 @@ fun TopicScreen(
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val isActivated by viewModel.isActivated.collectAsState()
 
-    val competences = if (selectedTrack == Track.DECK_OIC_NW) {
-        MaritimeCompetenceRegistry.ALL_DECK_COMPETENCES
-    } else {
-        MaritimeCompetenceRegistry.ALL_GMDSS_COMPETENCES
-    }
+    val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
 
     BackHandler {
         viewModel.navigateBack()

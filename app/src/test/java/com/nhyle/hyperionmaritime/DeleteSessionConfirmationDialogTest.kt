@@ -6,7 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -22,11 +22,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [34], manifest = Config.NONE)
 class DeleteSessionConfirmationDialogTest {
 
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<MainActivity>()
+    val composeTestRule = createComposeRule()
 
     @Test
     fun testDialogDisplaysCorrectContentAndButtons() {
@@ -127,8 +127,7 @@ class DeleteSessionConfirmationDialogTest {
     }
 
     @Test
-    fun testLightAndDarkModeRendering() {
-        // Light mode
+    fun testLightModeRendering() {
         composeTestRule.setContent {
             AppTheme(isDarkMode = false) {
                 Surface {
@@ -142,8 +141,10 @@ class DeleteSessionConfirmationDialogTest {
         }
         composeTestRule.onNodeWithTag("delete_session_log_dialog").assertIsDisplayed()
         composeTestRule.onNodeWithText("Delete Session Log?").assertIsDisplayed()
+    }
 
-        // Dark mode
+    @Test
+    fun testDarkModeRendering() {
         composeTestRule.setContent {
             AppTheme(isDarkMode = true) {
                 Surface {

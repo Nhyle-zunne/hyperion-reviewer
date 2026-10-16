@@ -110,11 +110,17 @@ object BillingConstants {
     const val PRODUCT_OIC_NW_PASS = "hyperion_oic_nw_pass"
     const val PRODUCT_GMDSS_PASS = "hyperion_gmdss_pass"
     const val PRODUCT_ALL_ACCESS_PASS = "hyperion_all_access_pass"
+    const val PRODUCT_ENGINE_OIC_EW_PASS = "pass_engine_oic_ew"
+    const val PRODUCT_DECK_MGT_PASS = "pass_deck_mgt"
+    const val PRODUCT_ENGINE_MGT_PASS = "pass_engine_mgt"
 
     val ALL_PRODUCT_IDS = listOf(
         PRODUCT_OIC_NW_PASS,
         PRODUCT_GMDSS_PASS,
-        PRODUCT_ALL_ACCESS_PASS
+        PRODUCT_ALL_ACCESS_PASS,
+        PRODUCT_ENGINE_OIC_EW_PASS,
+        PRODUCT_DECK_MGT_PASS,
+        PRODUCT_ENGINE_MGT_PASS
     )
 
     // Base Plan IDs mapped in Google Play Console
@@ -130,23 +136,44 @@ object BillingConstants {
     const val BASE_PLAN_ALL_ACCESS_MONTHLY = "all-access-monthly"
     const val BASE_PLAN_ALL_ACCESS_YEARLY = "all-access-yearly"
 
+    const val BASE_PLAN_EW_WEEKLY = "engine-ew-weekly"
+    const val BASE_PLAN_EW_MONTHLY = "engine-ew-monthly"
+    const val BASE_PLAN_EW_YEARLY = "engine-ew-yearly"
+
+    const val BASE_PLAN_DM_WEEKLY = "deck-mgt-weekly"
+    const val BASE_PLAN_DM_MONTHLY = "deck-mgt-monthly"
+    const val BASE_PLAN_DM_YEARLY = "deck-mgt-yearly"
+
+    const val BASE_PLAN_EM_WEEKLY = "engine-mgt-weekly"
+    const val BASE_PLAN_EM_MONTHLY = "engine-mgt-monthly"
+    const val BASE_PLAN_EM_YEARLY = "engine-mgt-yearly"
+
     // Standard Fallback Display Prices across billing cycles
     val DEFAULT_PRICES_YEARLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱350 / year",
         PRODUCT_GMDSS_PASS to "₱250 / year",
-        PRODUCT_ALL_ACCESS_PASS to "₱500 / year"
+        PRODUCT_ALL_ACCESS_PASS to "₱500 / year",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱350 / year",
+        PRODUCT_DECK_MGT_PASS to "₱400 / year",
+        PRODUCT_ENGINE_MGT_PASS to "₱400 / year"
     )
 
     val DEFAULT_PRICES_MONTHLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱50 / month",
         PRODUCT_GMDSS_PASS to "₱40 / month",
-        PRODUCT_ALL_ACCESS_PASS to "₱80 / month"
+        PRODUCT_ALL_ACCESS_PASS to "₱80 / month",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱50 / month",
+        PRODUCT_DECK_MGT_PASS to "₱60 / month",
+        PRODUCT_ENGINE_MGT_PASS to "₱60 / month"
     )
 
     val DEFAULT_PRICES_WEEKLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱20 / week",
         PRODUCT_GMDSS_PASS to "₱15 / week",
-        PRODUCT_ALL_ACCESS_PASS to "₱35 / week"
+        PRODUCT_ALL_ACCESS_PASS to "₱35 / week",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱20 / week",
+        PRODUCT_DECK_MGT_PASS to "₱25 / week",
+        PRODUCT_ENGINE_MGT_PASS to "₱25 / week"
     )
 
     // Backward-compatible default price map (Yearly)
@@ -185,13 +212,19 @@ object BillingConstants {
     val PRODUCT_NAMES = mapOf(
         PRODUCT_OIC_NW_PASS to "Deck OIC-NW Pass",
         PRODUCT_GMDSS_PASS to "GMDSS GOC Pass",
-        PRODUCT_ALL_ACCESS_PASS to "Hyperion All-Access Pass"
+        PRODUCT_ALL_ACCESS_PASS to "Hyperion All-Access Pass",
+        PRODUCT_ENGINE_OIC_EW_PASS to "Engine OIC-EW Pass",
+        PRODUCT_DECK_MGT_PASS to "Deck Management Pass",
+        PRODUCT_ENGINE_MGT_PASS to "Engine Management Pass"
     )
 
     val PRODUCT_DESCRIPTIONS = mapOf(
         PRODUCT_OIC_NW_PASS to "Unlocks all 12 competencies, full question bank (6,445 items), rationale, and mock exams for Deck OIC-NW.",
         PRODUCT_GMDSS_PASS to "Unlocks all GMDSS competencies, radio communications bank (2,260 items), and mock exams.",
-        PRODUCT_ALL_ACCESS_PASS to "Unlocks both Deck OIC-NW and GMDSS GOC tracks with full rationale and offline access."
+        PRODUCT_ALL_ACCESS_PASS to "Unlocks both Deck OIC-NW and GMDSS GOC tracks with full rationale and offline access.",
+        PRODUCT_ENGINE_OIC_EW_PASS to "Unlocks all Engine OIC-EW competencies, full question bank, and mock exams.",
+        PRODUCT_DECK_MGT_PASS to "Unlocks all Deck Management competencies, full question bank, and mock exams.",
+        PRODUCT_ENGINE_MGT_PASS to "Unlocks all Engine Management competencies, full question bank, and mock exams."
     )
 }
 
@@ -202,6 +235,9 @@ data class TrackEntitlements(
     val oicNwPlan: ActivePlanInfo? = null,
     val gmdssPlan: ActivePlanInfo? = null,
     val allAccessPlan: ActivePlanInfo? = null,
+    val engineOicEwPlan: ActivePlanInfo? = null,
+    val deckMgtPlan: ActivePlanInfo? = null,
+    val engineMgtPlan: ActivePlanInfo? = null,
     val billingConnected: Boolean = false,
     val pendingPurchaseProductId: String? = null,
     val errorMessage: String? = null,
@@ -210,7 +246,10 @@ data class TrackEntitlements(
     val isClockTampered: Boolean = false,
     private val explicitOicNwUnlocked: Boolean? = null,
     private val explicitGmdssUnlocked: Boolean? = null,
-    private val explicitAllAccessUnlocked: Boolean? = null
+    private val explicitAllAccessUnlocked: Boolean? = null,
+    private val explicitEngineOicEwUnlocked: Boolean? = null,
+    private val explicitDeckMgtUnlocked: Boolean? = null,
+    private val explicitEngineMgtUnlocked: Boolean? = null
 ) {
     // Secondary constructor for backward compatibility
     constructor(
@@ -247,14 +286,25 @@ data class TrackEntitlements(
 
     val allAccessUnlocked: Boolean
         get() = (explicitAllAccessUnlocked == true) || (allAccessPlan != null && !allAccessPlan.isExpired) ||
-                (oicNwPlan != null && !oicNwPlan.isExpired && gmdssPlan != null && !gmdssPlan.isExpired)
+                (oicNwPlan != null && !oicNwPlan.isExpired && gmdssPlan != null && !gmdssPlan.isExpired && engineOicEwPlan != null && !engineOicEwPlan.isExpired && deckMgtPlan != null && !deckMgtPlan.isExpired && engineMgtPlan != null && !engineMgtPlan.isExpired)
+
+    val engineOicEwUnlocked: Boolean
+        get() = (explicitEngineOicEwUnlocked == true) || (engineOicEwPlan != null && !engineOicEwPlan.isExpired) || (allAccessPlan != null && !allAccessPlan.isExpired)
+
+    val deckMgtUnlocked: Boolean
+        get() = (explicitDeckMgtUnlocked == true) || (deckMgtPlan != null && !deckMgtPlan.isExpired) || (allAccessPlan != null && !allAccessPlan.isExpired)
+
+    val engineMgtUnlocked: Boolean
+        get() = (explicitEngineMgtUnlocked == true) || (engineMgtPlan != null && !engineMgtPlan.isExpired) || (allAccessPlan != null && !allAccessPlan.isExpired)
 
     fun isTrackUnlocked(track: Track): Boolean {
         if (allAccessUnlocked) return true
         return when (track) {
             Track.DECK_OIC_NW -> oicNwUnlocked
             Track.GMDSS_GOC -> gmdssUnlocked
-            else -> false
+            Track.ENGINE_OIC_EW -> engineOicEwUnlocked
+            Track.DECK_MGT -> deckMgtUnlocked
+            Track.ENGINE_MGT -> engineMgtUnlocked
         }
     }
 
@@ -263,7 +313,9 @@ data class TrackEntitlements(
         return when (track) {
             Track.DECK_OIC_NW -> if (oicNwPlan != null && !oicNwPlan.isExpired) oicNwPlan else null
             Track.GMDSS_GOC -> if (gmdssPlan != null && !gmdssPlan.isExpired) gmdssPlan else null
-            else -> null
+            Track.ENGINE_OIC_EW -> if (engineOicEwPlan != null && !engineOicEwPlan.isExpired) engineOicEwPlan else null
+            Track.DECK_MGT -> if (deckMgtPlan != null && !deckMgtPlan.isExpired) deckMgtPlan else null
+            Track.ENGINE_MGT -> if (engineMgtPlan != null && !engineMgtPlan.isExpired) engineMgtPlan else null
         }
     }
 
@@ -307,10 +359,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         private const val KEY_OIC_NW_UNLOCKED = "play_entitlement_oic_nw"
         private const val KEY_GMDSS_UNLOCKED = "play_entitlement_gmdss"
         private const val KEY_ALL_ACCESS_UNLOCKED = "play_entitlement_all_access"
+        private const val KEY_ENGINE_OIC_EW_UNLOCKED = "play_entitlement_engine_ew"
+        private const val KEY_DECK_MGT_UNLOCKED = "play_entitlement_deck_mgt"
+        private const val KEY_ENGINE_MGT_UNLOCKED = "play_entitlement_engine_mgt"
 
         private const val KEY_OIC_TOKEN = "play_token_oic_nw"
         private const val KEY_GMDSS_TOKEN = "play_token_gmdss"
         private const val KEY_ALL_ACCESS_TOKEN = "play_token_all_access"
+        private const val KEY_ENGINE_OIC_EW_TOKEN = "play_token_engine_ew"
+        private const val KEY_DECK_MGT_TOKEN = "play_token_deck_mgt"
+        private const val KEY_ENGINE_MGT_TOKEN = "play_token_engine_mgt"
 
         private const val KEY_PURCHASE_TIME = "play_purchase_timestamp"
         private const val KEY_BASE_PLAN = "play_base_plan_id"
@@ -565,6 +623,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         var oicPlan: ActivePlanInfo? = null
         var gmdssPlan: ActivePlanInfo? = null
         var allAccessPlan: ActivePlanInfo? = null
+        var engineOicEwPlan: ActivePlanInfo? = null
+        var deckMgtPlan: ActivePlanInfo? = null
+        var engineMgtPlan: ActivePlanInfo? = null
         var pendingProduct: String? = null
         var lastPurchaseTime = 0L
         var lastBasePlan: String? = null
@@ -596,6 +657,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
                             BillingConstants.PRODUCT_GMDSS_PASS -> "play_plan_cycle_gmdss"
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_plan_cycle_all_access"
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_plan_cycle_engine_ew"
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_plan_cycle_deck_mgt"
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
                             else -> "play_plan_cycle_default"
                         }
                         val requestedCycle = lastRequestedCycles[productId]
@@ -654,6 +718,33 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     highWaterMarkEpoch = currentWaterMark
                                 )
                             }
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
+                                engineOicEwPlan = ActivePlanInfo(
+                                    cycle = cycle,
+                                    purchaseToken = purchase.purchaseToken,
+                                    purchaseTimestamp = purchaseTime,
+                                    expiryTimestamp = expiryTime,
+                                    highWaterMarkEpoch = currentWaterMark
+                                )
+                            }
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> {
+                                deckMgtPlan = ActivePlanInfo(
+                                    cycle = cycle,
+                                    purchaseToken = purchase.purchaseToken,
+                                    purchaseTimestamp = purchaseTime,
+                                    expiryTimestamp = expiryTime,
+                                    highWaterMarkEpoch = currentWaterMark
+                                )
+                            }
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
+                                engineMgtPlan = ActivePlanInfo(
+                                    cycle = cycle,
+                                    purchaseToken = purchase.purchaseToken,
+                                    purchaseTimestamp = purchaseTime,
+                                    expiryTimestamp = expiryTime,
+                                    highWaterMarkEpoch = currentWaterMark
+                                )
+                            }
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
                                 val plan = ActivePlanInfo(
                                     cycle = cycle,
@@ -665,6 +756,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 allAccessPlan = plan
                                 oicPlan = plan
                                 gmdssPlan = plan
+                                engineOicEwPlan = plan
+                                deckMgtPlan = plan
+                                engineMgtPlan = plan
                             }
                         }
                     }
@@ -730,11 +824,56 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             editor.remove("play_plan_cycle_all_access")
         }
 
+        if (engineOicEwPlan != null) {
+            editor.putBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, true)
+            editor.putString("play_plan_cycle_engine_ew", engineOicEwPlan.cycle.name)
+            editor.putString(KEY_ENGINE_OIC_EW_TOKEN, engineOicEwPlan.purchaseToken)
+            editor.putLong("play_purchase_time_engine_ew", engineOicEwPlan.purchaseTimestamp)
+            editor.putLong("play_expiry_time_engine_ew", engineOicEwPlan.expiryTimestamp)
+        } else {
+            editor.putBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
+            editor.remove(KEY_ENGINE_OIC_EW_TOKEN)
+            editor.remove("play_purchase_time_engine_ew")
+            editor.remove("play_expiry_time_engine_ew")
+            editor.remove("play_plan_cycle_engine_ew")
+        }
+
+        if (deckMgtPlan != null) {
+            editor.putBoolean(KEY_DECK_MGT_UNLOCKED, true)
+            editor.putString("play_plan_cycle_deck_mgt", deckMgtPlan.cycle.name)
+            editor.putString(KEY_DECK_MGT_TOKEN, deckMgtPlan.purchaseToken)
+            editor.putLong("play_purchase_time_deck_mgt", deckMgtPlan.purchaseTimestamp)
+            editor.putLong("play_expiry_time_deck_mgt", deckMgtPlan.expiryTimestamp)
+        } else {
+            editor.putBoolean(KEY_DECK_MGT_UNLOCKED, false)
+            editor.remove(KEY_DECK_MGT_TOKEN)
+            editor.remove("play_purchase_time_deck_mgt")
+            editor.remove("play_expiry_time_deck_mgt")
+            editor.remove("play_plan_cycle_deck_mgt")
+        }
+
+        if (engineMgtPlan != null) {
+            editor.putBoolean(KEY_ENGINE_MGT_UNLOCKED, true)
+            editor.putString("play_plan_cycle_engine_mgt", engineMgtPlan.cycle.name)
+            editor.putString(KEY_ENGINE_MGT_TOKEN, engineMgtPlan.purchaseToken)
+            editor.putLong("play_purchase_time_engine_mgt", engineMgtPlan.purchaseTimestamp)
+            editor.putLong("play_expiry_time_engine_mgt", engineMgtPlan.expiryTimestamp)
+        } else {
+            editor.putBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
+            editor.remove(KEY_ENGINE_MGT_TOKEN)
+            editor.remove("play_purchase_time_engine_mgt")
+            editor.remove("play_expiry_time_engine_mgt")
+            editor.remove("play_plan_cycle_engine_mgt")
+        }
+
         val hasOic = oicPlan != null && !oicPlan.isExpired
         val hasGmdss = gmdssPlan != null && !gmdssPlan.isExpired
         val hasAll = allAccessPlan != null && !allAccessPlan.isExpired
+        val hasEw = engineOicEwPlan != null && !engineOicEwPlan.isExpired
+        val hasDm = deckMgtPlan != null && !deckMgtPlan.isExpired
+        val hasEm = engineMgtPlan != null && !engineMgtPlan.isExpired
 
-        val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll)
+        val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
         editor.putLong(KEY_PURCHASE_TIME, lastPurchaseTime)
         editor.apply()
@@ -744,6 +883,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 oicNwPlan = oicPlan,
                 gmdssPlan = gmdssPlan,
                 allAccessPlan = allAccessPlan,
+                engineOicEwPlan = engineOicEwPlan,
+                deckMgtPlan = deckMgtPlan,
+                engineMgtPlan = engineMgtPlan,
                 billingConnected = true,
                 pendingPurchaseProductId = pendingProduct,
                 errorMessage = null,
@@ -810,10 +952,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val oicCycleName = securePrefs.getString("play_plan_cycle_oic", null)
         val gmdssCycleName = securePrefs.getString("play_plan_cycle_gmdss", null)
         val allAccessCycleName = securePrefs.getString("play_plan_cycle_all_access", null)
+        val engineEwCycleName = securePrefs.getString("play_plan_cycle_engine_ew", null)
+        val deckMgtCycleName = securePrefs.getString("play_plan_cycle_deck_mgt", null)
+        val engineMgtCycleName = securePrefs.getString("play_plan_cycle_engine_mgt", null)
 
         val oicCycle = oicCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
         val gmdssCycle = gmdssCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
         val allAccessCycle = allAccessCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
+        val engineEwCycle = engineEwCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
+        val deckMgtCycle = deckMgtCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
+        val engineMgtCycle = engineMgtCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
 
         val now = System.currentTimeMillis()
         val oicPurchase = securePrefs.getLong("play_purchase_time_oic", if (purchaseTime > 0L) purchaseTime else now)
@@ -860,21 +1008,60 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             highWaterMarkEpoch = playHighWaterMark
         ) else null
 
-        val hasOic = oicPlan != null && !oicPlan.isExpired
-        val hasGmdss = gmdssPlan != null && !gmdssPlan.isExpired
-        val hasAll = allAccessPlan != null && !allAccessPlan.isExpired
+        val hasEw = securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
+        val ewPurchase = securePrefs.getLong("play_purchase_time_engine_ew", if (purchaseTime > 0L) purchaseTime else now)
+        val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", ewPurchase + engineEwCycle.durationMs)
+        val engineEwPlan = if (hasEw) ActivePlanInfo(
+            cycle = engineEwCycle,
+            purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
+            purchaseTimestamp = ewPurchase,
+            expiryTimestamp = ewExpiry,
+            highWaterMarkEpoch = playHighWaterMark
+        ) else null
+
+        val hasDm = securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false)
+        val dmPurchase = securePrefs.getLong("play_purchase_time_deck_mgt", if (purchaseTime > 0L) purchaseTime else now)
+        val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", dmPurchase + deckMgtCycle.durationMs)
+        val deckMgtPlan = if (hasDm) ActivePlanInfo(
+            cycle = deckMgtCycle,
+            purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
+            purchaseTimestamp = dmPurchase,
+            expiryTimestamp = dmExpiry,
+            highWaterMarkEpoch = playHighWaterMark
+        ) else null
+
+        val hasEm = securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
+        val emPurchase = securePrefs.getLong("play_purchase_time_engine_mgt", if (purchaseTime > 0L) purchaseTime else now)
+        val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", emPurchase + engineMgtCycle.durationMs)
+        val engineMgtPlan = if (hasEm) ActivePlanInfo(
+            cycle = engineMgtCycle,
+            purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
+            purchaseTimestamp = emPurchase,
+            expiryTimestamp = emExpiry,
+            highWaterMarkEpoch = playHighWaterMark
+        ) else null
+
+        val hasOicActive = oicPlan != null && !oicPlan.isExpired
+        val hasGmdssActive = gmdssPlan != null && !gmdssPlan.isExpired
+        val hasAllActive = allAccessPlan != null && !allAccessPlan.isExpired
+        val hasEwActive = engineEwPlan != null && !engineEwPlan.isExpired
+        val hasDmActive = deckMgtPlan != null && !deckMgtPlan.isExpired
+        val hasEmActive = engineMgtPlan != null && !engineMgtPlan.isExpired
 
         val storedHash = securePrefs.getString(KEY_SIGNATURE_HASH, null)
-        val expectedHash = computeIntegrityChecksum(hasOic, hasGmdss, hasAll)
+        val expectedHash = computeIntegrityChecksum(hasOicActive, hasGmdssActive, hasAllActive, hasEwActive, hasDmActive, hasEmActive)
 
         val isValid = storedHash == null || storedHash == expectedHash
 
         if (isValid) {
             _entitlements.update {
                 it.copy(
-                    oicNwPlan = if (hasOic) oicPlan else null,
-                    gmdssPlan = if (hasGmdss) gmdssPlan else null,
-                    allAccessPlan = if (hasAll) allAccessPlan else null,
+                    oicNwPlan = if (hasOicActive) oicPlan else null,
+                    gmdssPlan = if (hasGmdssActive) gmdssPlan else null,
+                    allAccessPlan = if (hasAllActive) allAccessPlan else null,
+                    engineOicEwPlan = if (hasEwActive) engineEwPlan else null,
+                    deckMgtPlan = if (hasDmActive) deckMgtPlan else null,
+                    engineMgtPlan = if (hasEmActive) engineMgtPlan else null,
                     cachedPurchaseTime = purchaseTime,
                     cachedBasePlan = basePlan
                 )
@@ -885,8 +1072,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
-    private fun computeIntegrityChecksum(oic: Boolean, gmdss: Boolean, all: Boolean): String {
-        val raw = "HYP_PLAY_ENT_${appContext.packageName}_${oic}_${gmdss}_${all}_SEA_SAFE"
+    private fun computeIntegrityChecksum(oic: Boolean, gmdss: Boolean, all: Boolean, ew: Boolean, dm: Boolean, em: Boolean): String {
+        val raw = "HYP_PLAY_ENT_${appContext.packageName}_${oic}_${gmdss}_${all}_${ew}_${dm}_${em}_SEA_SAFE"
         val md = MessageDigest.getInstance("SHA-256")
         return md.digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
     }
@@ -920,6 +1107,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
             BillingConstants.PRODUCT_GMDSS_PASS -> "play_plan_cycle_gmdss"
             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_plan_cycle_all_access"
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_plan_cycle_engine_ew"
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_plan_cycle_deck_mgt"
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
             else -> "play_plan_cycle_default"
         }
         try {
@@ -962,9 +1152,12 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val ent = _entitlements.value
 
         val isOwned = when (productId) {
-            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> ent.allAccessUnlocked || (ent.oicNwUnlocked && ent.gmdssUnlocked)
+            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> ent.allAccessUnlocked || (ent.oicNwUnlocked && ent.gmdssUnlocked && ent.engineOicEwUnlocked && ent.deckMgtUnlocked && ent.engineMgtUnlocked)
             BillingConstants.PRODUCT_OIC_NW_PASS -> ent.oicNwUnlocked || ent.allAccessUnlocked
             BillingConstants.PRODUCT_GMDSS_PASS -> ent.gmdssUnlocked || ent.allAccessUnlocked
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> ent.engineOicEwUnlocked || ent.allAccessUnlocked
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> ent.deckMgtUnlocked || ent.allAccessUnlocked
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> ent.engineMgtUnlocked || ent.allAccessUnlocked
             else -> false
         }
 
@@ -1043,6 +1236,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         var oicPlan = _entitlements.value.oicNwPlan
         var gmdssPlan = _entitlements.value.gmdssPlan
         var allAccessPlan = _entitlements.value.allAccessPlan
+        var engineOicEwPlan = _entitlements.value.engineOicEwPlan
+        var deckMgtPlan = _entitlements.value.deckMgtPlan
+        var engineMgtPlan = _entitlements.value.engineMgtPlan
 
         when (productId) {
             BillingConstants.PRODUCT_OIC_NW_PASS -> {
@@ -1071,6 +1267,45 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 editor.putLong("play_purchase_time_gmdss", now)
                 editor.putLong("play_expiry_time_gmdss", expiryTime)
             }
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
+                engineOicEwPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
+                editor.putBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, true)
+                editor.putString("play_plan_cycle_engine_ew", cycle.name)
+                editor.putString(KEY_ENGINE_OIC_EW_TOKEN, mockToken)
+                editor.putLong("play_purchase_time_engine_ew", now)
+                editor.putLong("play_expiry_time_engine_ew", expiryTime)
+            }
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> {
+                deckMgtPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
+                editor.putBoolean(KEY_DECK_MGT_UNLOCKED, true)
+                editor.putString("play_plan_cycle_deck_mgt", cycle.name)
+                editor.putString(KEY_DECK_MGT_TOKEN, mockToken)
+                editor.putLong("play_purchase_time_deck_mgt", now)
+                editor.putLong("play_expiry_time_deck_mgt", expiryTime)
+            }
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
+                engineMgtPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
+                editor.putBoolean(KEY_ENGINE_MGT_UNLOCKED, true)
+                editor.putString("play_plan_cycle_engine_mgt", cycle.name)
+                editor.putString(KEY_ENGINE_MGT_TOKEN, mockToken)
+                editor.putLong("play_purchase_time_engine_mgt", now)
+                editor.putLong("play_expiry_time_engine_mgt", expiryTime)
+            }
             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
                 allAccessPlan = ActivePlanInfo(
                     cycle = cycle,
@@ -1090,21 +1325,54 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     purchaseTimestamp = now,
                     expiryTimestamp = expiryTime
                 )
+                engineOicEwPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
+                deckMgtPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
+                engineMgtPlan = ActivePlanInfo(
+                    cycle = cycle,
+                    purchaseToken = mockToken,
+                    purchaseTimestamp = now,
+                    expiryTimestamp = expiryTime
+                )
                 editor.putBoolean(KEY_ALL_ACCESS_UNLOCKED, true)
                 editor.putBoolean(KEY_OIC_NW_UNLOCKED, true)
                 editor.putBoolean(KEY_GMDSS_UNLOCKED, true)
+                editor.putBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, true)
+                editor.putBoolean(KEY_DECK_MGT_UNLOCKED, true)
+                editor.putBoolean(KEY_ENGINE_MGT_UNLOCKED, true)
                 editor.putString("play_plan_cycle_all_access", cycle.name)
                 editor.putString("play_plan_cycle_oic", cycle.name)
                 editor.putString("play_plan_cycle_gmdss", cycle.name)
+                editor.putString("play_plan_cycle_engine_ew", cycle.name)
+                editor.putString("play_plan_cycle_deck_mgt", cycle.name)
+                editor.putString("play_plan_cycle_engine_mgt", cycle.name)
                 editor.putString(KEY_ALL_ACCESS_TOKEN, mockToken)
                 editor.putString(KEY_OIC_TOKEN, mockToken)
                 editor.putString(KEY_GMDSS_TOKEN, mockToken)
+                editor.putString(KEY_ENGINE_OIC_EW_TOKEN, mockToken)
+                editor.putString(KEY_DECK_MGT_TOKEN, mockToken)
+                editor.putString(KEY_ENGINE_MGT_TOKEN, mockToken)
                 editor.putLong("play_purchase_time_all_access", now)
                 editor.putLong("play_expiry_time_all_access", expiryTime)
                 editor.putLong("play_purchase_time_oic", now)
                 editor.putLong("play_expiry_time_oic", expiryTime)
                 editor.putLong("play_purchase_time_gmdss", now)
                 editor.putLong("play_expiry_time_gmdss", expiryTime)
+                editor.putLong("play_purchase_time_engine_ew", now)
+                editor.putLong("play_expiry_time_engine_ew", expiryTime)
+                editor.putLong("play_purchase_time_deck_mgt", now)
+                editor.putLong("play_expiry_time_deck_mgt", expiryTime)
+                editor.putLong("play_purchase_time_engine_mgt", now)
+                editor.putLong("play_expiry_time_engine_mgt", expiryTime)
             }
         }
 
@@ -1112,8 +1380,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasOic = oicPlan != null && !oicPlan.isExpired
         val hasGmdss = gmdssPlan != null && !gmdssPlan.isExpired
         val hasAll = allAccessPlan != null && !allAccessPlan.isExpired
+        val hasEw = engineOicEwPlan != null && !engineOicEwPlan.isExpired
+        val hasDm = deckMgtPlan != null && !deckMgtPlan.isExpired
+        val hasEm = engineMgtPlan != null && !engineMgtPlan.isExpired
 
-        val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll)
+        val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
         editor.apply()
 
@@ -1122,6 +1393,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 oicNwPlan = oicPlan,
                 gmdssPlan = gmdssPlan,
                 allAccessPlan = allAccessPlan,
+                engineOicEwPlan = engineOicEwPlan,
+                deckMgtPlan = deckMgtPlan,
+                engineMgtPlan = engineMgtPlan,
                 pendingPurchaseProductId = null,
                 errorMessage = null,
                 cachedPurchaseTime = now

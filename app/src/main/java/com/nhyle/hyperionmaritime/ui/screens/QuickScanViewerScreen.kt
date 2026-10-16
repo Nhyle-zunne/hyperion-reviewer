@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
@@ -93,11 +94,7 @@ fun QuickScanViewerScreen(
     }
 
     val competenceInfo = remember(competenceId, activeTrack) {
-        val allComps = if (activeTrack == Track.DECK_OIC_NW) {
-            MaritimeCompetenceRegistry.ALL_DECK_COMPETENCES
-        } else {
-            MaritimeCompetenceRegistry.ALL_GMDSS_COMPETENCES
-        }
+        val allComps = MaritimeCompetenceRegistry.getCompetencesForTrack(activeTrack)
         allComps.find { it.competenceId == competenceId }
     }
 
@@ -107,7 +104,10 @@ fun QuickScanViewerScreen(
     var jumpInputError by remember { mutableStateOf<String?>(null) }
 
     val totalQuestions = questions.size
-    val currentQuestion = questions.getOrNull(currentIndex)
+    val rawCurrentQuestion = questions.getOrNull(currentIndex)
+    val currentQuestion = remember(rawCurrentQuestion?.id) {
+        rawCurrentQuestion?.let { shuffleOptionsStable(it, "quickscan") }
+    }
 
     val savedIndex = remember(competenceId, activeTrack) {
         viewModel.getQuickScanLastIndex(activeTrack, competenceId)

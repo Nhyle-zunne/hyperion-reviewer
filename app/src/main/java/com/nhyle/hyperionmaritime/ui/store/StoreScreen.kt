@@ -226,10 +226,16 @@ fun StoreScreen(
 
     val isOicOffline = LicenseManager.isOfflineOicNwUnlocked(context)
     val isGmdssOffline = LicenseManager.isOfflineGmdssUnlocked(context)
+    val isEwOffline = LicenseManager.isOfflineEngineOicEwUnlocked(context)
+    val isDmOffline = LicenseManager.isOfflineDeckMgtUnlocked(context)
+    val isEmOffline = LicenseManager.isOfflineEngineMgtUnlocked(context)
     val isAllAccessOffline = LicenseManager.isOfflineHyperionUnlocked(context)
 
     val hasExpiredPlan = (entitlements.oicNwPlan?.isExpired == true) ||
             (entitlements.gmdssPlan?.isExpired == true) ||
+            (entitlements.engineOicEwPlan?.isExpired == true) ||
+            (entitlements.deckMgtPlan?.isExpired == true) ||
+            (entitlements.engineMgtPlan?.isExpired == true) ||
             (entitlements.allAccessPlan?.isExpired == true)
 
     androidx.compose.runtime.LaunchedEffect(hasExpiredPlan) {
@@ -327,51 +333,78 @@ fun StoreScreen(
 
             val isOfflineOicCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "OIC_NW", "ALL", "OIC"))
             val isOfflineGmdssCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "GMDSS_GOC", "ALL", "GOC"))
+            val isOfflineEwCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_OIC_EW", "ALL", "EW"))
+            val isOfflineDmCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "DECK_MGT", "ALL", "DM"))
+            val isOfflineEmCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_MGT", "ALL", "EM"))
             val isOfflineAllCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ALL"))
 
             val oicOfflineExp = if (isOfflineOicCovered) offlineInfo!!.expiryEpoch else 0L
             val gmdssOfflineExp = if (isOfflineGmdssCovered) offlineInfo!!.expiryEpoch else 0L
+            val ewOfflineExp = if (isOfflineEwCovered) offlineInfo!!.expiryEpoch else 0L
+            val dmOfflineExp = if (isOfflineDmCovered) offlineInfo!!.expiryEpoch else 0L
+            val emOfflineExp = if (isOfflineEmCovered) offlineInfo!!.expiryEpoch else 0L
             val allOfflineExp = if (isOfflineAllCovered) offlineInfo!!.expiryEpoch else 0L
 
             val oicPlayExp = if (entitlements.oicNwPlan?.isExpired == false) entitlements.oicNwPlan!!.expiryTimestamp else 0L
             val gmdssPlayExp = if (entitlements.gmdssPlan?.isExpired == false) entitlements.gmdssPlan!!.expiryTimestamp else 0L
+            val ewPlayExp = if (entitlements.engineOicEwPlan?.isExpired == false) entitlements.engineOicEwPlan!!.expiryTimestamp else 0L
+            val dmPlayExp = if (entitlements.deckMgtPlan?.isExpired == false) entitlements.deckMgtPlan!!.expiryTimestamp else 0L
+            val emPlayExp = if (entitlements.engineMgtPlan?.isExpired == false) entitlements.engineMgtPlan!!.expiryTimestamp else 0L
             val allPlayExp = if (entitlements.allAccessPlan?.isExpired == false) entitlements.allAccessPlan!!.expiryTimestamp else 0L
 
             val effectiveOicExp = maxOf(oicOfflineExp, oicPlayExp, allPlayExp, allOfflineExp)
             val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssPlayExp, allPlayExp, allOfflineExp)
+            val effectiveEwExp = maxOf(ewOfflineExp, ewPlayExp, allPlayExp, allOfflineExp)
+            val effectiveDmExp = maxOf(dmOfflineExp, dmPlayExp, allPlayExp, allOfflineExp)
+            val effectiveEmExp = maxOf(emOfflineExp, emPlayExp, allPlayExp, allOfflineExp)
 
             val hasDirectAllAccess = (allPlayExp > now) || (allOfflineExp > now)
             val hasActiveOic = (effectiveOicExp > now) || isOicOffline || entitlements.oicNwUnlocked
             val hasActiveGmdss = (effectiveGmdssExp > now) || isGmdssOffline || entitlements.gmdssUnlocked
-            val hasSeparateDualTracks = hasActiveOic && hasActiveGmdss && !hasDirectAllAccess
+            val hasActiveEw = (effectiveEwExp > now) || isEwOffline || entitlements.engineOicEwUnlocked
+            val hasActiveDm = (effectiveDmExp > now) || isDmOffline || entitlements.deckMgtUnlocked
+            val hasActiveEm = (effectiveEmExp > now) || isEmOffline || entitlements.engineMgtUnlocked
+            val hasSeparateDualTracks = (hasActiveOic && hasActiveGmdss && hasActiveEw && hasActiveDm && hasActiveEm) && !hasDirectAllAccess
 
             // When candidate has both Deck and Radio via separate passes, All-Access is strictly bounded by the LESSER expiration:
             val effectiveAllAccessExp = if (hasDirectAllAccess) {
                 maxOf(allPlayExp, allOfflineExp)
             } else if (hasSeparateDualTracks) {
-                minOf(effectiveOicExp, effectiveGmdssExp)
+                minOf(effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp)
             } else {
                 0L
             }
 
             val hasActiveAllAccess = hasDirectAllAccess || hasSeparateDualTracks
 
-            val isAnyOffline = isAllAccessOffline || isOicOffline || isGmdssOffline
-            val isAnyPlayPlan = entitlements.allAccessUnlocked || entitlements.oicNwUnlocked || entitlements.gmdssUnlocked
+            val isAnyOffline = isAllAccessOffline || isOicOffline || isGmdssOffline || isEwOffline || isDmOffline || isEmOffline
+            val isAnyPlayPlan = entitlements.allAccessUnlocked || entitlements.oicNwUnlocked || entitlements.gmdssUnlocked || entitlements.engineOicEwUnlocked || entitlements.deckMgtUnlocked || entitlements.engineMgtUnlocked
             if (isAnyOffline || isAnyPlayPlan) {
                 ActiveLicenseOverviewCard(
                     isAllAccess = hasActiveAllAccess,
                     isOic = hasActiveOic,
                     isGmdss = hasActiveGmdss,
+                    isEw = hasActiveEw,
+                    isDm = hasActiveDm,
+                    isEm = hasActiveEm,
                     hasDirectAllAccess = hasDirectAllAccess,
                     hasSeparateDualTracks = hasSeparateDualTracks,
                     effectiveAllAccessExp = effectiveAllAccessExp,
                     effectiveOicExp = effectiveOicExp,
                     effectiveGmdssExp = effectiveGmdssExp,
+                    effectiveEwExp = effectiveEwExp,
+                    effectiveDmExp = effectiveDmExp,
+                    effectiveEmExp = effectiveEmExp,
                     oicPlayExp = oicPlayExp,
                     oicOfflineExp = oicOfflineExp,
                     gmdssPlayExp = gmdssPlayExp,
                     gmdssOfflineExp = gmdssOfflineExp,
+                    ewPlayExp = ewPlayExp,
+                    ewOfflineExp = ewOfflineExp,
+                    dmPlayExp = dmPlayExp,
+                    dmOfflineExp = dmOfflineExp,
+                    emPlayExp = emPlayExp,
+                    emOfflineExp = emOfflineExp,
                     isOffline = isAnyOffline,
                     isPlay = isAnyPlayPlan,
                     offlineInfo = offlineInfo,
@@ -386,6 +419,9 @@ fun StoreScreen(
                 val isEntitled = when (productId) {
                     BillingConstants.PRODUCT_OIC_NW_PASS -> hasActiveOic
                     BillingConstants.PRODUCT_GMDSS_PASS -> hasActiveGmdss
+                    BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> hasActiveEw
+                    BillingConstants.PRODUCT_DECK_MGT_PASS -> hasActiveDm
+                    BillingConstants.PRODUCT_ENGINE_MGT_PASS -> hasActiveEm
                     BillingConstants.PRODUCT_ALL_ACCESS_PASS -> hasActiveAllAccess
                     else -> false
                 }
@@ -403,6 +439,33 @@ fun StoreScreen(
                     BillingConstants.PRODUCT_GMDSS_PASS -> {
                         if (effectiveGmdssExp > now) {
                             "ACTIVE: ${formatRemainingDuration(effectiveGmdssExp).uppercase()}"
+                        } else if (offlineInfo?.isTampered == true) {
+                            "CLOCK TAMPERED"
+                        } else {
+                            "ACTIVE: UNLOCKED"
+                        }
+                    }
+                    BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
+                        if (effectiveEwExp > now) {
+                            "ACTIVE: ${formatRemainingDuration(effectiveEwExp).uppercase()}"
+                        } else if (offlineInfo?.isTampered == true) {
+                            "CLOCK TAMPERED"
+                        } else {
+                            "ACTIVE: UNLOCKED"
+                        }
+                    }
+                    BillingConstants.PRODUCT_DECK_MGT_PASS -> {
+                        if (effectiveDmExp > now) {
+                            "ACTIVE: ${formatRemainingDuration(effectiveDmExp).uppercase()}"
+                        } else if (offlineInfo?.isTampered == true) {
+                            "CLOCK TAMPERED"
+                        } else {
+                            "ACTIVE: UNLOCKED"
+                        }
+                    }
+                    BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
+                        if (effectiveEmExp > now) {
+                            "ACTIVE: ${formatRemainingDuration(effectiveEmExp).uppercase()}"
                         } else if (offlineInfo?.isTampered == true) {
                             "CLOCK TAMPERED"
                         } else {
@@ -1022,6 +1085,9 @@ private fun SharpProductCard(
     val title = when (productId) {
         BillingConstants.PRODUCT_OIC_NW_PASS -> "DECK OIC-NW PASS"
         BillingConstants.PRODUCT_GMDSS_PASS -> "GMDSS GOC PASS"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE OIC-EW PASS"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT PASS"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT PASS"
         BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "HYPERION ALL-ACCESS PASS"
         else -> productId.uppercase()
     }
@@ -1029,7 +1095,10 @@ private fun SharpProductCard(
     val featureBullets = when (productId) {
         BillingConstants.PRODUCT_OIC_NW_PASS -> "6,445 Questions • All 12 Competencies • Timed Mock Exams • Offline at Sea"
         BillingConstants.PRODUCT_GMDSS_PASS -> "2,260 Questions • Radio Protocols & Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "8,705 Questions • Complete Deck & Radio Banks • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "Engine Operational Level • 13 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "Deck Management Level • 18 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "Engine Management Level • 14 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "15,000+ Questions • Complete Deck & Engine Tracks • Mock Exams • Offline at Sea"
         else -> ""
     }
 
@@ -1428,15 +1497,27 @@ private fun ActiveLicenseOverviewCard(
     isAllAccess: Boolean,
     isOic: Boolean,
     isGmdss: Boolean,
+    isEw: Boolean,
+    isDm: Boolean,
+    isEm: Boolean,
     hasDirectAllAccess: Boolean,
     hasSeparateDualTracks: Boolean,
     effectiveAllAccessExp: Long,
     effectiveOicExp: Long,
     effectiveGmdssExp: Long,
+    effectiveEwExp: Long,
+    effectiveDmExp: Long,
+    effectiveEmExp: Long,
     oicPlayExp: Long,
     oicOfflineExp: Long,
     gmdssPlayExp: Long,
     gmdssOfflineExp: Long,
+    ewPlayExp: Long,
+    ewOfflineExp: Long,
+    dmPlayExp: Long,
+    dmOfflineExp: Long,
+    emPlayExp: Long,
+    emOfflineExp: Long,
     isOffline: Boolean,
     isPlay: Boolean,
     offlineInfo: com.nhyle.hyperionmaritime.data.util.OfflineLicenseInfo?,
@@ -1451,6 +1532,9 @@ private fun ActiveLicenseOverviewCard(
         hasDirectAllAccess || hasSeparateDualTracks -> "HYPERION ALL-ACCESS PASS"
         isOic -> "OIC-NW DECK PASS"
         isGmdss -> "GMDSS GOC PASS"
+        isEw -> "OIC-EW ENGINE PASS"
+        isDm -> "DECK MANAGEMENT PASS"
+        isEm -> "ENGINE MANAGEMENT PASS"
         else -> "MARITIME CANDIDATE PASS"
     }
 
@@ -1462,9 +1546,12 @@ private fun ActiveLicenseOverviewCard(
 
     val activeExp = when {
         hasDirectAllAccess -> effectiveAllAccessExp
-        hasSeparateDualTracks -> minOf(effectiveOicExp, effectiveGmdssExp)
+        hasSeparateDualTracks -> minOf(effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp)
         isOic -> effectiveOicExp
         isGmdss -> effectiveGmdssExp
+        isEw -> effectiveEwExp
+        isDm -> effectiveDmExp
+        isEm -> effectiveEmExp
         else -> 0L
     }
 

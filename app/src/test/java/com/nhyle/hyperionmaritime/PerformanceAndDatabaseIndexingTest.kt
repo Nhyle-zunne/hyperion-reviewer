@@ -27,7 +27,7 @@ import org.robolectric.annotation.Config
 import kotlin.system.measureTimeMillis
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class PerformanceAndDatabaseIndexingTest {
 
     private lateinit var context: Context

@@ -211,9 +211,33 @@ fun HowToAvailScreen(
 
             item {
                 TierCard(
+                    title = "OIC-EW ENGINE (OPERATIONAL LEVEL)",
+                    subtitle = "STCW Regulation III/1 • 13 Competencies, full rationale",
+                    isUnlocked = viewModel.isEngineOicEwProUnlocked.collectAsState().value
+                )
+            }
+
+            item {
+                TierCard(
+                    title = "DECK MANAGEMENT LEVEL",
+                    subtitle = "STCW Regulation II/2 • 18 Competencies, full rationale",
+                    isUnlocked = viewModel.isDeckMgtProUnlocked.collectAsState().value
+                )
+            }
+
+            item {
+                TierCard(
+                    title = "ENGINE MANAGEMENT LEVEL",
+                    subtitle = "STCW Regulation III/2 • 14 Competencies, full rationale",
+                    isUnlocked = viewModel.isEngineMgtProUnlocked.collectAsState().value
+                )
+            }
+
+            item {
+                TierCard(
                     title = "HYPERION ALL ACCESS",
-                    subtitle = "Complete Deck Operational + GMDSS Radio Reviewer package with all competencies",
-                    questionCount = "Total Question Bank: 8,705 questions (6,445 OIC-NW + 2,260 GMDSS)",
+                    subtitle = "Complete Deck Operational + GMDSS Radio + Engine Reviewer package",
+                    questionCount = "Total Question Bank: 12,000+ questions across all suites",
                     isUnlocked = isHyperionProUnlocked
                 )
             }

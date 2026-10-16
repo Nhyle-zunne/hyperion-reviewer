@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.DifficultyBadge
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
@@ -116,7 +117,10 @@ fun FlashcardScreen(
     }
 
     val safeIndex = currentIndex.coerceIn(0, filteredQuestions.size - 1)
-    val currentCard = filteredQuestions[safeIndex]
+    val rawCard = filteredQuestions[safeIndex]
+    val currentCard = remember(rawCard.id) {
+        shuffleOptionsStable(rawCard, "flash")
+    }
     val isBookmarked = bookmarkedIds.contains(currentCard.id)
 
     Column(

@@ -25,12 +25,7 @@
         <activity-alias
             android:name="com.example.MainActivity"
             android:targetActivity="com.nhyle.hyperionmaritime.MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+            android:exported="true" />
     </application>
 
 </manifest>

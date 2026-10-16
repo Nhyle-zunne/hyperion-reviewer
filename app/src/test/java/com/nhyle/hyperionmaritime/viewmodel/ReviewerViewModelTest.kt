@@ -45,7 +45,7 @@ import org.robolectric.annotation.Config
  * l) Multi-cycle billing plan resolution (Weekly, Monthly, Yearly).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class ReviewerViewModelTest {
 
     private lateinit var context: Context

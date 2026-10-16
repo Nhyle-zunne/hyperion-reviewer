@@ -161,12 +161,14 @@ object MaritimeCompetenceRegistry {
         return when (track) {
             Track.DECK_OIC_NW -> DECK_COMPETENCES
             Track.GMDSS_GOC -> GMDSS_COMPETENCES
-            else -> emptyList()
+            Track.ENGINE_OIC_EW -> ENGINE_OIC_EW_COMPETENCES
+            Track.DECK_MGT -> DECK_MGT_COMPETENCES
+            Track.ENGINE_MGT -> ENGINE_MGT_COMPETENCES
         }
     }
 
     fun getCompetenceById(id: String, track: Track? = null): CompetenceInfo? {
-        val all = DECK_COMPETENCES + GMDSS_COMPETENCES
+        val all = DECK_COMPETENCES + GMDSS_COMPETENCES + ENGINE_OIC_EW_COMPETENCES + DECK_MGT_COMPETENCES + ENGINE_MGT_COMPETENCES
         return if (track != null) {
             all.find { it.track == track && it.competenceId == id } ?: all.find { it.competenceId == id }
         } else {
@@ -181,6 +183,25 @@ object MaritimeCompetenceRegistry {
             "F3" -> "CONTROLLING OF OPERATION OF THE SHIP AT THE OPERATIONAL LEVEL"
             "GMDSS" -> "GMDSS General Operator Certificate (GOC)"
             else -> functionId
+        }
+    }
+
+    fun getFunctionTitle(functionId: String, track: Track): String {
+        return when (track) {
+            Track.ENGINE_OIC_EW -> ENGINE_OIC_EW_FUNCTION_TITLES[functionId] ?: functionId
+            Track.DECK_MGT -> DECK_MGT_FUNCTION_TITLES[functionId] ?: functionId
+            Track.ENGINE_MGT -> ENGINE_MGT_FUNCTION_TITLES[functionId] ?: functionId
+            else -> getFunctionTitle(functionId)
+        }
+    }
+
+    fun getPermitDistribution(track: Track): Map<String, Int> {
+        return when (track) {
+            Track.DECK_OIC_NW -> OFFICIAL_DECK_PERMIT_DISTRIBUTION
+            Track.GMDSS_GOC -> OFFICIAL_GMDSS_PERMIT_DISTRIBUTION
+            Track.ENGINE_OIC_EW -> OFFICIAL_ENGINE_OIC_EW_PERMIT_DISTRIBUTION
+            Track.DECK_MGT -> OFFICIAL_DECK_MGT_PERMIT_DISTRIBUTION
+            Track.ENGINE_MGT -> OFFICIAL_ENGINE_MGT_PERMIT_DISTRIBUTION
         }
     }
 
@@ -240,6 +261,9 @@ object MaritimeCompetenceRegistry {
     )
 
     fun getPermitItemCount(competenceId: String, track: Track): Int {
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            return getPermitDistribution(track)[competenceId] ?: 10
+        }
         return if (track == Track.DECK_OIC_NW) {
             OFFICIAL_DECK_PERMIT_DISTRIBUTION[competenceId] ?: 15
         } else {
@@ -248,6 +272,12 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getPermitItemsForFunction(functionId: String, track: Track): Int {
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            val dist = getPermitDistribution(track)
+            return getCompetencesForTrack(track)
+                .filter { it.functionId == functionId }
+                .sumOf { dist[it.competenceId] ?: 0 }
+        }
         return if (track == Track.DECK_OIC_NW) {
             when (functionId) {
                 "F1" -> 125 // 35+20+15+10+10+20+15
@@ -261,6 +291,9 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getOfficialCrpQuestionCount(competenceId: String, track: Track): Int {
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            return 0
+        }
         return if (track == Track.DECK_OIC_NW) {
             CRP_DECK_DISTRIBUTION[competenceId] ?: 100
         } else {
@@ -274,6 +307,9 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getDynamicQuestionCount(competenceId: String, track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            return MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
+        }
         if (track == Track.GMDSS_GOC) {
             return if (isOperationalReview) {
                 when (competenceId) {
@@ -318,6 +354,9 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getTotalTrackQuestionCount(track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            return MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = isProUnlocked).size
+        }
         if (track == Track.GMDSS_GOC) {
             if (isOperationalReview) {
                 return OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
@@ -332,5 +371,14 @@ object MaritimeCompetenceRegistry {
         }
         val count = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
         return if (count > 0) count else 6444
+    }
+
+    fun getTotalStandardReviewQuestionCount(track: Track, isProUnlocked: Boolean): Int {
+        if (track == Track.DECK_OIC_NW) return 2065
+        if (track == Track.GMDSS_GOC) return if (isProUnlocked) 2260 else 1150
+        
+        return getCompetencesForTrack(track).sumOf { 
+            getDynamicQuestionCount(it.competenceId, track, isCrpMode = true, isProUnlocked = isProUnlocked) 
+        }
     }
 }

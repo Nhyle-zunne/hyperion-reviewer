@@ -4,6 +4,8 @@ import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
 
+import kotlin.math.roundToInt
+
 object MaritimeQuestionBank {
 
     var appContext: Context? = null
@@ -16,7 +18,8 @@ object MaritimeQuestionBank {
     val ALL_QUESTIONS: List<Question> by lazy {
         val lists = (MaritimeQuestionBankDeckF1.getQuestions() +
                 MaritimeQuestionBankDeckF2F3.getQuestions() +
-                MaritimeQuestionBankGmdss.getQuestions(appContext))
+                MaritimeQuestionBankGmdss.getQuestions(appContext) +
+                NewTrackQuestionBank.getQuestions())
         lists.filter { q ->
             val text = q.questionText.trim()
             val isHeader = text.equals("Question", ignoreCase = true) || text.isBlank()
@@ -36,7 +39,16 @@ object MaritimeQuestionBank {
 
     fun getQuestionsByCompetence(competenceId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
         val list = ALL_QUESTIONS.filter { (track == null || it.track == track) && it.competenceId == competenceId }
-        return if (isProUnlocked) list else list.take(5)
+        if (isProUnlocked) return list
+        
+        // Unlicensed Quota
+        val resolvedTrack = track ?: list.firstOrNull()?.track
+        return if (resolvedTrack == Track.ENGINE_OIC_EW || resolvedTrack == Track.DECK_MGT || resolvedTrack == Track.ENGINE_MGT) {
+            val quota = (list.size * 0.40).roundToInt().coerceAtLeast(1)
+            list.take(quota)
+        } else {
+            list.take(5)
+        }
     }
 
     fun getQuestionsByFunction(functionId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
@@ -52,6 +64,15 @@ object MaritimeQuestionBank {
     fun getMockExamDataset(track: Track, isProUnlocked: Boolean): List<Question> {
         if (!isProUnlocked) return emptyList()
         val allTrackQuestions = getQuestionsByTrack(track, isProUnlocked = true)
+        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
+            val distribution = MaritimeCompetenceRegistry.getPermitDistribution(track)
+            val sampled = mutableListOf<Question>()
+            for ((compId, quota) in distribution) {
+                val compQuestions = allTrackQuestions.filter { it.competenceId == compId }.shuffled()
+                sampled.addAll(compQuestions.take(quota))
+            }
+            return sampled
+        }
         val distribution = if (track == Track.DECK_OIC_NW) {
             MaritimeCompetenceRegistry.OFFICIAL_DECK_PERMIT_DISTRIBUTION
         } else {
@@ -147,6 +168,19 @@ object MaritimeQuestionBank {
             }
             else -> allC1 + allC2
         }
+    }
+
+    fun getNewTrackStandardReviewQuestions(track: Track, isProUnlocked: Boolean): List<Question> {
+        val allTrackQuestions = ALL_QUESTIONS.filter { it.track == track }
+        if (isProUnlocked) return allTrackQuestions
+        
+        val result = mutableListOf<Question>()
+        val competences = allTrackQuestions.groupBy { it.competenceId }
+        for ((_, questions) in competences) {
+            val quota = (questions.size * 0.40).roundToInt().coerceAtLeast(1)
+            result.addAll(questions.take(quota))
+        }
+        return result
     }
 
     fun searchQuestions(query: String, track: Track? = null, isProUnlocked: Boolean = true, competenceId: String? = null): List<Question> {

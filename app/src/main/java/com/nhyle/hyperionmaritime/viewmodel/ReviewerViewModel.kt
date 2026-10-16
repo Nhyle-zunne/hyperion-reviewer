@@ -34,6 +34,7 @@ import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBankGmdss
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
 import com.nhyle.hyperionmaritime.data.repository.ReviewerRepository
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
+// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
@@ -149,6 +150,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _marinaExamTargetMillis.value = 0L
     }
 
+    private data class Sextuple<A, B, C, D, E, F>(val first: A, val second: B, val third: C, val fourth: D, val fifth: E, val sixth: F)
+
     val studyTimeTracker = com.nhyle.hyperionmaritime.data.studytime.StudyTimeTracker(
         scope = viewModelScope,
         saveSegmentCallback = { segments ->
@@ -216,9 +219,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val activeTier: String = "NONE",         // "OIC_NW", "GMDSS_GOC", "ALL_ACCESS", "NONE"
         val isOicLicensed: Boolean = false,
         val isGmdssLicensed: Boolean = false,
+        val isEwLicensed: Boolean = false,
+        val isDmLicensed: Boolean = false,
+        val isEmLicensed: Boolean = false,
         val isAllAccessLicensed: Boolean = false,
         val oicTimeLeft: String? = null,
         val gmdssTimeLeft: String? = null,
+        val ewTimeLeft: String? = null,
+        val dmTimeLeft: String? = null,
+        val emTimeLeft: String? = null,
         val allAccessTimeLeft: String? = null,
         val isVerifyingLicense: Boolean = false,
         val isVerifyingOnLaunch: Boolean = false,
@@ -276,10 +285,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun clearAllSeenQuestions() {
         synchronized(this) {
-            prefs.edit()
-                .remove("seen_questions_${Track.DECK_OIC_NW.name}")
-                .remove("seen_questions_${Track.GMDSS_GOC.name}")
-                .commit()
+            val editor = prefs.edit()
+            Track.entries.forEach { track ->
+                editor.remove("seen_questions_${track.name}")
+            }
+            editor.commit()
         }
     }
 
@@ -337,6 +347,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _isHyperionProUnlocked = MutableStateFlow(false)
     val isHyperionProUnlocked: StateFlow<Boolean> = _isHyperionProUnlocked.asStateFlow()
 
+    private val _isEngineOicEwProUnlocked = MutableStateFlow(false)
+    val isEngineOicEwProUnlocked: StateFlow<Boolean> = _isEngineOicEwProUnlocked.asStateFlow()
+
+    private val _isDeckMgtProUnlocked = MutableStateFlow(false)
+    val isDeckMgtProUnlocked: StateFlow<Boolean> = _isDeckMgtProUnlocked.asStateFlow()
+
+    private val _isEngineMgtProUnlocked = MutableStateFlow(false)
+    val isEngineMgtProUnlocked: StateFlow<Boolean> = _isEngineMgtProUnlocked.asStateFlow()
+
     val isMasterProUnlocked: StateFlow<Boolean> = isHyperionProUnlocked
 
     private val _isActivated = MutableStateFlow(false)
@@ -357,8 +376,20 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             LicenseManager.isOfflineHyperionUnlocked(app) ||
             LicenseManager.isOfflineGmdssUnlocked(app)
         )
+        val offlineEw = if (isClockTampered) false else (
+            LicenseManager.isOfflineHyperionUnlocked(app) ||
+            LicenseManager.isOfflineEngineOicEwUnlocked(app)
+        )
+        val offlineDm = if (isClockTampered) false else (
+            LicenseManager.isOfflineHyperionUnlocked(app) ||
+            LicenseManager.isOfflineDeckMgtUnlocked(app)
+        )
+        val offlineEm = if (isClockTampered) false else (
+            LicenseManager.isOfflineHyperionUnlocked(app) ||
+            LicenseManager.isOfflineEngineMgtUnlocked(app)
+        )
         val offlineHyp = if (isClockTampered) false else LicenseManager.isOfflineHyperionUnlocked(app)
-        val activatedOffline = offlineOic || offlineGmdss
+        val activatedOffline = offlineOic || offlineGmdss || offlineEw || offlineDm || offlineEm
 
         // Temporary Hype Pass Layer (Device-bound, read-only overlay)
         val hypePass = if (app != null) HypePassManager.getActivePass(app) else null
@@ -368,11 +399,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val newOic = if (isClockTampered) false else (offlineOic || playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || isHypeDeck)
         val newGmdss = if (isClockTampered) false else (offlineGmdss || playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || isHypeRadio)
-        val newHyp = if (isClockTampered) false else (offlineHyp || playEnt.allAccessUnlocked || isHypeAll || (newOic && newGmdss))
-        val newAct = if (isClockTampered) false else (newOic || newGmdss)
+        val newEw = if (isClockTampered) false else (offlineEw || playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked)
+        val newDm = if (isClockTampered) false else (offlineDm || playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked)
+        val newEm = if (isClockTampered) false else (offlineEm || playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked)
+        val newHyp = if (isClockTampered) false else (offlineHyp || playEnt.allAccessUnlocked || isHypeAll || (newOic && newGmdss && newEw && newDm && newEm))
+        val newAct = if (isClockTampered) false else (newOic || newGmdss || newEw || newDm || newEm)
 
         if (_isOicNwProUnlocked.value != newOic) _isOicNwProUnlocked.value = newOic
         if (_isGmdssProUnlocked.value != newGmdss) _isGmdssProUnlocked.value = newGmdss
+        if (_isEngineOicEwProUnlocked.value != newEw) _isEngineOicEwProUnlocked.value = newEw
+        if (_isDeckMgtProUnlocked.value != newDm) _isDeckMgtProUnlocked.value = newDm
+        if (_isEngineMgtProUnlocked.value != newEm) _isEngineMgtProUnlocked.value = newEm
         if (_isHyperionProUnlocked.value != newHyp) _isHyperionProUnlocked.value = newHyp
         if (_isActivated.value != newAct) _isActivated.value = newAct
 
@@ -402,6 +439,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val oicOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "OIC_NW", "ALL", "OIC"))
         val gmdssOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "GMDSS_GOC", "ALL", "GOC"))
+        val ewOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_OIC_EW", "ALL", "EW"))
+        val dmOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "DECK_MGT", "ALL", "DM"))
+        val emOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_MGT", "ALL", "EM"))
         val allAccessOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ALL"))
 
         val oicTimeLeft = when {
@@ -415,6 +455,26 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             gmdssOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             gmdssPlan != null && !gmdssPlan.isExpired -> "${gmdssPlan.getFormattedTimeRemaining()} (${gmdssPlan.getFormattedExpiryDate()})"
             isHypeRadio -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
+            else -> null
+        }
+
+        val ewPlan = playEnt.getActivePlanForTrack(Track.ENGINE_OIC_EW)
+        val dmPlan = playEnt.getActivePlanForTrack(Track.DECK_MGT)
+        val emPlan = playEnt.getActivePlanForTrack(Track.ENGINE_MGT)
+
+        val ewTimeLeft = when {
+            ewOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
+            ewPlan != null && !ewPlan.isExpired -> "${ewPlan.getFormattedTimeRemaining()} (${ewPlan.getFormattedExpiryDate()})"
+            else -> null
+        }
+        val dmTimeLeft = when {
+            dmOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
+            dmPlan != null && !dmPlan.isExpired -> "${dmPlan.getFormattedTimeRemaining()} (${dmPlan.getFormattedExpiryDate()})"
+            else -> null
+        }
+        val emTimeLeft = when {
+            emOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
+            emPlan != null && !emPlan.isExpired -> "${emPlan.getFormattedTimeRemaining()} (${emPlan.getFormattedExpiryDate()})"
             else -> null
         }
 
@@ -470,9 +530,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 activeTier = activeTier,
                 isOicLicensed = newOic,
                 isGmdssLicensed = newGmdss,
+                isEwLicensed = newEw,
+                isDmLicensed = newDm,
+                isEmLicensed = newEm,
                 isAllAccessLicensed = newHyp,
                 oicTimeLeft = oicTimeLeft,
                 gmdssTimeLeft = gmdssTimeLeft,
+                ewTimeLeft = ewTimeLeft,
+                dmTimeLeft = dmTimeLeft,
+                emTimeLeft = emTimeLeft,
                 allAccessTimeLeft = allAccessTimeLeft,
                 statusMessage = statusMsg
             )
@@ -612,6 +678,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val reactiveUnlocked = when (track) {
             Track.DECK_OIC_NW -> isOicNwProUnlocked.value
             Track.GMDSS_GOC -> isGmdssProUnlocked.value
+            Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked.value
+            Track.DECK_MGT -> isDeckMgtProUnlocked.value
+            Track.ENGINE_MGT -> isEngineMgtProUnlocked.value
             else -> false
         }
         if (reactiveUnlocked) return true
@@ -629,6 +698,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                         if (prefs.getBoolean("is_oic_unlocked", false)) return true
                     } else if (track == Track.GMDSS_GOC) {
                         if (prefs.getBoolean("is_gmdss_unlocked", false)) return true
+                    } else if (track == Track.ENGINE_OIC_EW) {
+                        if (prefs.getBoolean("is_ew_unlocked", false)) return true
+                    } else if (track == Track.DECK_MGT) {
+                        if (prefs.getBoolean("is_dm_unlocked", false)) return true
+                    } else if (track == Track.ENGINE_MGT) {
+                        if (prefs.getBoolean("is_em_unlocked", false)) return true
                     }
                 }
                 if (LicenseManager.isTrackProUnlocked(app, track) ||
@@ -643,6 +718,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             return when (track) {
                 Track.DECK_OIC_NW -> playEnt.oicNwUnlocked
                 Track.GMDSS_GOC -> playEnt.gmdssUnlocked
+                Track.ENGINE_OIC_EW -> playEnt.engineOicEwUnlocked
+                Track.DECK_MGT -> playEnt.deckMgtUnlocked
+                Track.ENGINE_MGT -> playEnt.engineMgtUnlocked
                 else -> false
             }
         } catch (_: Exception) {}
@@ -657,7 +735,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         when (module) {
             com.nhyle.hyperionmaritime.data.util.LicenseTier.OIC_NW -> if (playEnt.oicNwUnlocked) return true
             com.nhyle.hyperionmaritime.data.util.LicenseTier.GMDSS -> if (playEnt.gmdssUnlocked) return true
-            com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> if (playEnt.allAccessUnlocked || (playEnt.oicNwUnlocked && playEnt.gmdssUnlocked)) return true
+            com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_OIC_EW -> if (playEnt.engineOicEwUnlocked) return true
+            com.nhyle.hyperionmaritime.data.util.LicenseTier.DECK_MGT -> if (playEnt.deckMgtUnlocked) return true
+            com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_MGT -> if (playEnt.engineMgtUnlocked) return true
+            com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> if (playEnt.allAccessUnlocked || (playEnt.oicNwUnlocked && playEnt.gmdssUnlocked && playEnt.engineOicEwUnlocked && playEnt.deckMgtUnlocked && playEnt.engineMgtUnlocked)) return true
         }
 
         try {
@@ -670,7 +751,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     when (module) {
                         com.nhyle.hyperionmaritime.data.util.LicenseTier.OIC_NW -> if (prefs.getBoolean("is_oic_unlocked", false)) return true
                         com.nhyle.hyperionmaritime.data.util.LicenseTier.GMDSS -> if (prefs.getBoolean("is_gmdss_unlocked", false)) return true
-                        com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> if (prefs.getBoolean("is_oic_unlocked", false) && prefs.getBoolean("is_gmdss_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_OIC_EW -> if (prefs.getBoolean("is_ew_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.DECK_MGT -> if (prefs.getBoolean("is_dm_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_MGT -> if (prefs.getBoolean("is_em_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> if (prefs.getBoolean("is_oic_unlocked", false) && prefs.getBoolean("is_gmdss_unlocked", false) && prefs.getBoolean("is_ew_unlocked", false) && prefs.getBoolean("is_dm_unlocked", false) && prefs.getBoolean("is_em_unlocked", false)) return true
                     }
                 }
                 return LicenseManager.hasAccessTo(app, module)
@@ -1526,13 +1610,27 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _selectedTrack,
         isOicNwProUnlocked,
         isGmdssProUnlocked,
+        isEngineOicEwProUnlocked,
+        isDeckMgtProUnlocked,
+        isEngineMgtProUnlocked,
         isHyperionProUnlocked,
         billingManager.entitlements
-    ) { track, oic, gmdss, hyp, playEnt ->
+    ) { array ->
+        val track = array[0] as Track
+        val oic = array[1] as Boolean
+        val gmdss = array[2] as Boolean
+        val ew = array[3] as Boolean
+        val dm = array[4] as Boolean
+        val em = array[5] as Boolean
+        val hyp = array[6] as Boolean
+        val playEnt = array[7] as TrackEntitlements
         when {
             hyp || playEnt.allAccessUnlocked -> true
             track == Track.DECK_OIC_NW -> oic || playEnt.oicNwUnlocked
             track == Track.GMDSS_GOC -> gmdss || playEnt.gmdssUnlocked
+            track == Track.ENGINE_OIC_EW -> ew || playEnt.engineOicEwUnlocked
+            track == Track.DECK_MGT -> dm || playEnt.deckMgtUnlocked
+            track == Track.ENGINE_MGT -> em || playEnt.engineMgtUnlocked
             else -> false
         }
     }.stateIn(
@@ -1583,17 +1681,34 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         combine(
             isOicNwProUnlocked,
             isGmdssProUnlocked,
-            isActivated
-        ) { oic, gmdss, activated -> Triple(oic, gmdss, activated) }
+            isActivated,
+            isEngineOicEwProUnlocked,
+            isDeckMgtProUnlocked,
+            isEngineMgtProUnlocked
+        ) { array ->
+            Sextuple(
+                array[0] as Boolean,
+                array[1] as Boolean,
+                array[2] as Boolean,
+                array[3] as Boolean,
+                array[4] as Boolean,
+                array[5] as Boolean
+            )
+        }
     ) { searchPair, licensePair ->
         val query = searchPair.first
         val track = searchPair.second
         val competence = searchPair.third
-        val oicPro = licensePair.first
-        val gmdssPro = licensePair.second
         val proUnlocked = licensePair.third
 
-        val hasTrackAccess = if (track == Track.DECK_OIC_NW) oicPro else gmdssPro
+        val hasTrackAccess = when (track) {
+            Track.DECK_OIC_NW -> licensePair.first
+            Track.GMDSS_GOC -> licensePair.second
+            Track.ENGINE_OIC_EW -> licensePair.fourth
+            Track.DECK_MGT -> licensePair.fifth
+            Track.ENGINE_MGT -> licensePair.sixth
+            else -> false
+        }
         if (!hasTrackAccess) {
             emptyList()
         } else {
@@ -2142,10 +2257,21 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _isPaletteOpen.value = false
 
         val isPro = isTrackUnlocked(_selectedTrack.value)
-        val crpQuestions = if (_selectedTrack.value == Track.GMDSS_GOC) {
-            MaritimeQuestionBank.getMarinaCrpGmdssQuestions(getApplication(), competenceId, selectedPart, isProUnlocked = isPro)
-        } else {
-            MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+        val crpQuestions = when (val track = _selectedTrack.value) {
+            Track.GMDSS_GOC -> MaritimeQuestionBank.getMarinaCrpGmdssQuestions(getApplication(), competenceId, selectedPart, isProUnlocked = isPro)
+            Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+            Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
+                if (competenceId != null) {
+                    MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isPro)
+                } else {
+                    // Standard Review All for new tracks: collect 40% (if unlicensed) from each competence
+                    val allComps = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
+                    allComps.flatMap { comp ->
+                        MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = isPro)
+                    }
+                }
+            }
+            else -> emptyList()
         }
         _activeQuestions.value = crpQuestions
         _userQuestionStates.value = crpQuestions.associate { it.id to UserQuestionState(questionId = it.id) }
@@ -2328,10 +2454,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isGmdssOpReview = (_selectedTrack.value == Track.GMDSS_GOC && isOperationalReview && (competenceId == "C1" || competenceId == "C2") && selectedPart == null)
 
         var questions: List<Question> = if (isCrpMode) {
-            if (_selectedTrack.value == Track.GMDSS_GOC) {
-                MaritimeQuestionBank.getMarinaCrpGmdssQuestions(context, competenceId, selectedPart, isProUnlocked = isPro)
-            } else {
-                MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+            when (val track = _selectedTrack.value) {
+                Track.GMDSS_GOC -> MaritimeQuestionBank.getMarinaCrpGmdssQuestions(context, competenceId, selectedPart, isProUnlocked = isPro)
+                Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
+                Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
+                    if (competenceId != null) {
+                        MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isPro)
+                    } else {
+                        MaritimeQuestionBank.getNewTrackStandardReviewQuestions(track, isProUnlocked = isPro)
+                    }
+                }
+                else -> emptyList()
             }
         } else if (isGmdssOpReview) {
             getSeededShuffledGmdssPool(context, competenceId!!)
@@ -2722,6 +2855,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             questions = questions.take(limitQuestions)
         }
 
+        questions = questions.map { com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable(it, currentActiveSessionId) }
         _activeQuestions.value = questions
 
         // Initialize question states
@@ -3319,7 +3453,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun getQuestionsForCompetence(competenceId: String): List<Question> {
         // Direct defense: Unactivated mock exam returns empty list immediately
-        if (!isActivated.value) return emptyList()
+        if (!isTrackUnlocked(_selectedTrack.value)) return emptyList()
         return _activeQuestions.value.filter { it.competenceId == competenceId }
     }
 
@@ -4002,7 +4136,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             val text = q.questionText.trim()
             !text.equals("Question", ignoreCase = true) && text.isNotBlank()
         }
-        return if (isActivated.value) list else list.take(5)
+        return if (isTrackUnlocked(_selectedTrack.value)) list else list.take(5)
     }
 
     fun getBookmarkedQuestions(): List<Question> {

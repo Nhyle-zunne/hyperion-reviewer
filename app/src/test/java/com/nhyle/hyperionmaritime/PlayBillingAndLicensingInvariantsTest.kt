@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class PlayBillingAndLicensingInvariantsTest {
 
     private lateinit var context: Context
@@ -72,7 +72,7 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals("hyperion_oic_nw_pass", BillingConstants.PRODUCT_OIC_NW_PASS)
         assertEquals("hyperion_gmdss_pass", BillingConstants.PRODUCT_GMDSS_PASS)
         assertEquals("hyperion_all_access_pass", BillingConstants.PRODUCT_ALL_ACCESS_PASS)
-        assertEquals(3, BillingConstants.ALL_PRODUCT_IDS.size)
+        assertEquals(6, BillingConstants.ALL_PRODUCT_IDS.size)
         assertTrue(BillingConstants.ALL_PRODUCT_IDS.contains(BillingConstants.PRODUCT_OIC_NW_PASS))
         assertTrue(BillingConstants.ALL_PRODUCT_IDS.contains(BillingConstants.PRODUCT_GMDSS_PASS))
         assertTrue(BillingConstants.ALL_PRODUCT_IDS.contains(BillingConstants.PRODUCT_ALL_ACCESS_PASS))

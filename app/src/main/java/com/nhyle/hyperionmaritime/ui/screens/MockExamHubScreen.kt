@@ -143,7 +143,13 @@ fun MockExamHubScreen(
                 Spacer(modifier = Modifier.width(4.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (selectedTrack == Track.DECK_OIC_NW) "OIC-NW Mock Examination" else "GMDSS GOC Mock Examination",
+                        text = when (selectedTrack) {
+                            Track.DECK_OIC_NW -> "OIC-NW Mock Examination"
+                            Track.GMDSS_GOC -> "GMDSS GOC Mock Examination"
+                            Track.ENGINE_OIC_EW -> "Engine OIC-EW Mock Examination"
+                            Track.ENGINE_MGT -> "Engine Management Mock Examination"
+                            Track.DECK_MGT -> "Deck Management Mock Examination"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = headerTitleColor,
@@ -219,7 +225,7 @@ fun MockExamHubScreen(
             // Iterate through functions and competences
             groupedByFunction.forEach { (functionId, functionCompetences) ->
                 item {
-                    val functionTitle = MaritimeCompetenceRegistry.getFunctionTitle(functionId)
+                    val functionTitle = MaritimeCompetenceRegistry.getFunctionTitle(functionId, selectedTrack)
                     val permitItems = MaritimeCompetenceRegistry.getPermitItemsForFunction(functionId, selectedTrack)
                     val compQuestionsForFunc = activeQuestions.filter { it.functionId == functionId }
                     val functionItemsCount = if (compQuestionsForFunc.isNotEmpty()) compQuestionsForFunc.size else permitItems

@@ -23,7 +23,7 @@ import java.util.Date
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34], manifest = Config.NONE)
 class HypeStreakAndRedemptionTest {
 
     private lateinit var context: Context

@@ -248,12 +248,15 @@ fun ActivationScreen(
                             Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = when {
-                                    regState.isLicensed && regState.isOicLicensed && regState.isGmdssLicensed -> {
+                                    regState.isLicensed && regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed -> {
                                         "ACTIVE (ALL-ACCESS PASS)"
                                     }
                                     regState.isLicensed && regState.isAllAccessLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (ALL-ACCESS SUBSCRIPTION)"
                                     regState.isLicensed && regState.isOicLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (OIC-NW DECK SUBSCRIPTION)"
                                     regState.isLicensed && regState.isGmdssLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (GMDSS GOC SUBSCRIPTION)"
+                                    regState.isLicensed && regState.isEwLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (ENGINE OIC-EW SUBSCRIPTION)"
+                                    regState.isLicensed && regState.isDmLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (DECK MANAGEMENT SUBSCRIPTION)"
+                                    regState.isLicensed && regState.isEmLicensed && regState.licenseType == "SUBSCRIPTION" -> "ACTIVE (ENGINE MANAGEMENT SUBSCRIPTION)"
                                     regState.isLicensed && regState.licenseType == "OFFLINE_PASS" -> "ACTIVE (OFFLINE PASS)"
                                     regState.isLicensed && regState.licenseType == "PROMO_PASS" -> "ACTIVE (PROMO PASS)"
                                     regState.isLicensed -> "ACTIVE (VERIFIED)"
@@ -289,10 +292,12 @@ fun ActivationScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         val activeTimeLeft = when {
                             regState.isAllAccessLicensed -> regState.allAccessTimeLeft
-                            regState.isOicLicensed && !regState.isGmdssLicensed -> regState.oicTimeLeft
-                            regState.isGmdssLicensed && !regState.isOicLicensed -> regState.gmdssTimeLeft
-                            regState.isOicLicensed && regState.isGmdssLicensed -> regState.allAccessTimeLeft ?: regState.oicTimeLeft
-                            else -> null
+                            regState.isOicLicensed && !regState.isGmdssLicensed && !regState.isEwLicensed && !regState.isDmLicensed && !regState.isEmLicensed -> regState.oicTimeLeft
+                            regState.isGmdssLicensed && !regState.isOicLicensed && !regState.isEwLicensed && !regState.isDmLicensed && !regState.isEmLicensed -> regState.gmdssTimeLeft
+                            regState.isEwLicensed && !regState.isOicLicensed && !regState.isGmdssLicensed && !regState.isDmLicensed && !regState.isEmLicensed -> regState.ewTimeLeft
+                            regState.isDmLicensed && !regState.isOicLicensed && !regState.isGmdssLicensed && !regState.isEwLicensed && !regState.isEmLicensed -> regState.dmTimeLeft
+                            regState.isEmLicensed && !regState.isOicLicensed && !regState.isGmdssLicensed && !regState.isEwLicensed && !regState.isDmLicensed -> regState.emTimeLeft
+                            else -> regState.allAccessTimeLeft ?: regState.oicTimeLeft ?: regState.gmdssTimeLeft ?: regState.ewTimeLeft ?: regState.dmTimeLeft ?: regState.emTimeLeft
                         }
                         if (!activeTimeLeft.isNullOrBlank()) {
                             Surface(
@@ -395,16 +400,22 @@ fun ActivationScreen(
 
             ProTier.values().forEach { tier ->
                 val isTierSelected = selectedTier == tier
-                val isAllAccessActive = regState.isAllAccessLicensed || (regState.isOicLicensed && regState.isGmdssLicensed)
+                val isAllAccessActive = regState.isAllAccessLicensed || (regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed)
                 val isTierUnlocked = when (tier) {
                     ProTier.OIC_NW_PRO -> regState.isOicLicensed || isAllAccessActive
                     ProTier.GMDSS_PRO -> regState.isGmdssLicensed || isAllAccessActive
+                    ProTier.ENGINE_OIC_EW_PRO -> regState.isEwLicensed || isAllAccessActive
+                    ProTier.DECK_MGT_PRO -> regState.isDmLicensed || isAllAccessActive
+                    ProTier.ENGINE_MGT_PRO -> regState.isEmLicensed || isAllAccessActive
                     ProTier.HYPERION_PRO -> isAllAccessActive
                 }
                 val tierTimeLeft = when (tier) {
                     ProTier.OIC_NW_PRO -> regState.oicTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
                     ProTier.GMDSS_PRO -> regState.gmdssTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.HYPERION_PRO -> regState.allAccessTimeLeft ?: if (regState.isOicLicensed && regState.isGmdssLicensed) regState.oicTimeLeft else null
+                    ProTier.ENGINE_OIC_EW_PRO -> regState.ewTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
+                    ProTier.DECK_MGT_PRO -> regState.dmTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
+                    ProTier.ENGINE_MGT_PRO -> regState.emTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
+                    ProTier.HYPERION_PRO -> regState.allAccessTimeLeft ?: if (regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed) regState.oicTimeLeft else null
                 }
 
                 MianRuleCard(
