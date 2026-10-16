@@ -42,9 +42,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,7 +84,14 @@ fun HyperionDrawerContent(
     val isActivated by viewModel.isActivated.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
     val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
+    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsState()
+    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsState()
+    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsState()
+    val isUnlocked by viewModel.isUnlocked.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
+
+    val hasAnyActiveLicense = isOicNwProUnlocked || isGmdssProUnlocked || isEwActive || isDmActive || isEmActive || isActivated || isUnlocked
+    var showSearchLockDialog by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(
         modifier = modifier
@@ -232,16 +248,105 @@ fun HyperionDrawerContent(
                     label = "SEARCH QUESTION BANK",
                     icon = Icons.Default.Search,
                     isSelected = currentScreen is Screen.Search,
-                    isLocked = !(isOicNwProUnlocked || isGmdssProUnlocked || isActivated),
+                    isLocked = !hasAnyActiveLicense,
                     onClick = {
-                        onCloseDrawer()
-                        if (isOicNwProUnlocked || isGmdssProUnlocked || isActivated) {
+                        if (hasAnyActiveLicense) {
+                            onCloseDrawer()
                             viewModel.navigateTo(Screen.Search)
                         } else {
-                            viewModel.navigateTo(Screen.Store)
+                            showSearchLockDialog = true
                         }
                     }
                 )
+
+                if (showSearchLockDialog) {
+                    Dialog(
+                        onDismissRequest = { showSearchLockDialog = false },
+                        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+                    ) {
+                        Surface(
+                            shape = RectangleShape,
+                            color = colors.surface,
+                            border = BorderStroke(1.dp, colors.border),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(20.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = "Locked",
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "ACTIVE LICENSE REQUIRED",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.foreground,
+                                    letterSpacing = 1.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "An active license is required to access the Question Bank Search index. You can purchase a pass in the Pass Store or activate an offline key.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.muted,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { showSearchLockDialog = false },
+                                        shape = RectangleShape,
+                                        border = BorderStroke(1.dp, colors.border),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = colors.foreground
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                    ) {
+                                        Text(
+                                            text = "LATER",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                    Button(
+                                        onClick = {
+                                            showSearchLockDialog = false
+                                            onCloseDrawer()
+                                            viewModel.navigateTo(Screen.Store)
+                                        },
+                                        shape = RectangleShape,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = colors.accent,
+                                            contentColor = colors.accentForeground
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(42.dp)
+                                    ) {
+                                        Text(
+                                            text = "STORE",
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 DrawerNavRow(
                     label = "BOOKMARKED QUESTIONS",
@@ -308,16 +413,6 @@ fun HyperionDrawerContent(
 
                 // SECTION: LEGAL & COMPLIANCE
                 MianSectionHeader(title = "LEGAL & COMPLIANCE")
-
-                DrawerNavRow(
-                    label = "EXAM GUIDELINES",
-                    icon = Icons.Default.Gavel,
-                    isSelected = currentScreen is Screen.ExamGuidelines,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.ExamGuidelines)
-                    }
-                )
 
                 DrawerNavRow(
                     label = "Terms and Conditions",

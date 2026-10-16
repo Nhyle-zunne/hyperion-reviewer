@@ -154,8 +154,8 @@ object BillingConstants {
         PRODUCT_GMDSS_PASS to "₱250 / year",
         PRODUCT_ALL_ACCESS_PASS to "₱500 / year",
         PRODUCT_ENGINE_OIC_EW_PASS to "₱350 / year",
-        PRODUCT_DECK_MGT_PASS to "₱400 / year",
-        PRODUCT_ENGINE_MGT_PASS to "₱400 / year"
+        PRODUCT_DECK_MGT_PASS to "₱700 / year",
+        PRODUCT_ENGINE_MGT_PASS to "₱700 / year"
     )
 
     val DEFAULT_PRICES_MONTHLY = mapOf(
@@ -163,8 +163,8 @@ object BillingConstants {
         PRODUCT_GMDSS_PASS to "₱40 / month",
         PRODUCT_ALL_ACCESS_PASS to "₱80 / month",
         PRODUCT_ENGINE_OIC_EW_PASS to "₱50 / month",
-        PRODUCT_DECK_MGT_PASS to "₱60 / month",
-        PRODUCT_ENGINE_MGT_PASS to "₱60 / month"
+        PRODUCT_DECK_MGT_PASS to "₱100 / month",
+        PRODUCT_ENGINE_MGT_PASS to "₱100 / month"
     )
 
     val DEFAULT_PRICES_WEEKLY = mapOf(
@@ -172,8 +172,8 @@ object BillingConstants {
         PRODUCT_GMDSS_PASS to "₱15 / week",
         PRODUCT_ALL_ACCESS_PASS to "₱35 / week",
         PRODUCT_ENGINE_OIC_EW_PASS to "₱20 / week",
-        PRODUCT_DECK_MGT_PASS to "₱25 / week",
-        PRODUCT_ENGINE_MGT_PASS to "₱25 / week"
+        PRODUCT_DECK_MGT_PASS to "₱40 / week",
+        PRODUCT_ENGINE_MGT_PASS to "₱40 / week"
     )
 
     // Backward-compatible default price map (Yearly)
@@ -182,31 +182,40 @@ object BillingConstants {
     val DEFAULT_SHORT_PRICES_YEARLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱350/yr",
         PRODUCT_GMDSS_PASS to "₱250/yr",
-        PRODUCT_ALL_ACCESS_PASS to "₱500/yr"
+        PRODUCT_ALL_ACCESS_PASS to "₱500/yr",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱350/yr",
+        PRODUCT_DECK_MGT_PASS to "₱700/yr",
+        PRODUCT_ENGINE_MGT_PASS to "₱700/yr"
     )
 
     val DEFAULT_SHORT_PRICES_MONTHLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱50/mo",
         PRODUCT_GMDSS_PASS to "₱40/mo",
-        PRODUCT_ALL_ACCESS_PASS to "₱80/mo"
+        PRODUCT_ALL_ACCESS_PASS to "₱80/mo",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱50/mo",
+        PRODUCT_DECK_MGT_PASS to "₱100/mo",
+        PRODUCT_ENGINE_MGT_PASS to "₱100/mo"
     )
 
     val DEFAULT_SHORT_PRICES_WEEKLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱20/wk",
         PRODUCT_GMDSS_PASS to "₱15/wk",
-        PRODUCT_ALL_ACCESS_PASS to "₱35/wk"
+        PRODUCT_ALL_ACCESS_PASS to "₱35/wk",
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱20/wk",
+        PRODUCT_DECK_MGT_PASS to "₱40/wk",
+        PRODUCT_ENGINE_MGT_PASS to "₱40/wk"
     )
 
     fun getFallbackPrice(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String = when (cycle) {
-        BillingCycle.WEEKLY -> DEFAULT_PRICES_WEEKLY[productId] ?: "₱35 / week"
-        BillingCycle.MONTHLY -> DEFAULT_PRICES_MONTHLY[productId] ?: "₱80 / month"
-        BillingCycle.YEARLY -> DEFAULT_PRICES_YEARLY[productId] ?: "₱500 / year"
+        BillingCycle.WEEKLY -> DEFAULT_PRICES_WEEKLY[productId] ?: "₱20 / week"
+        BillingCycle.MONTHLY -> DEFAULT_PRICES_MONTHLY[productId] ?: "₱50 / month"
+        BillingCycle.YEARLY -> DEFAULT_PRICES_YEARLY[productId] ?: "₱350 / year"
     }
 
     fun getFallbackShortPrice(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String = when (cycle) {
-        BillingCycle.WEEKLY -> DEFAULT_SHORT_PRICES_WEEKLY[productId] ?: "₱35/wk"
-        BillingCycle.MONTHLY -> DEFAULT_SHORT_PRICES_MONTHLY[productId] ?: "₱80/mo"
-        BillingCycle.YEARLY -> DEFAULT_SHORT_PRICES_YEARLY[productId] ?: "₱500/yr"
+        BillingCycle.WEEKLY -> DEFAULT_SHORT_PRICES_WEEKLY[productId] ?: "₱20/wk"
+        BillingCycle.MONTHLY -> DEFAULT_SHORT_PRICES_MONTHLY[productId] ?: "₱50/mo"
+        BillingCycle.YEARLY -> DEFAULT_SHORT_PRICES_YEARLY[productId] ?: "₱350/yr"
     }
 
     val PRODUCT_NAMES = mapOf(

@@ -87,6 +87,36 @@ fun SearchScreen(
     val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsState()
     val isUnlocked by viewModel.isUnlocked.collectAsState()
 
+    fun isTrackLicensed(track: Track): Boolean = when (track) {
+        Track.DECK_OIC_NW -> isOicNwActive
+        Track.GMDSS_GOC -> isGmdssActive
+        Track.ENGINE_OIC_EW -> isEwActive
+        Track.DECK_MGT -> isDmActive
+        Track.ENGINE_MGT -> isEmActive
+    }
+
+    val hasAnyActiveLicense = isOicNwActive || isGmdssActive || isEwActive || isDmActive || isEmActive || isUnlocked
+
+    var showLockedDialog by remember { mutableStateOf(false) }
+    var lockedTrackForDialog by remember { mutableStateOf<Track?>(null) }
+
+    // Auto-switch away from a locked track if the user owns a different active pass
+    androidx.compose.runtime.LaunchedEffect(hasAnyActiveLicense, isOicNwActive, isGmdssActive, isEwActive, isDmActive, isEmActive) {
+        if (hasAnyActiveLicense && !isTrackLicensed(selectedSearchTrack)) {
+            val firstActive = when {
+                isOicNwActive -> Track.DECK_OIC_NW
+                isGmdssActive -> Track.GMDSS_GOC
+                isEwActive -> Track.ENGINE_OIC_EW
+                isDmActive -> Track.DECK_MGT
+                isEmActive -> Track.ENGINE_MGT
+                else -> null
+            }
+            if (firstActive != null) {
+                viewModel.setSearchTrack(firstActive)
+            }
+        }
+    }
+
     val oicCompetencies = listOf("ALL", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12")
     val gmdssCompetencies = listOf("ALL", "C1", "C2")
     val currentCompetencies = when (selectedSearchTrack) {
@@ -106,12 +136,12 @@ fun SearchScreen(
     ) {
         MaritimeTopBar(
             title = "SEARCH QUESTION BANK",
-            subtitle = if (isUnlocked && searchQuery.isNotBlank()) "${searchResults.size} MATCHING ITEMS" else "KEYWORD & TOPIC INDEX",
+            subtitle = if (hasAnyActiveLicense && searchQuery.isNotBlank()) "${searchResults.size} MATCHING ITEMS" else "KEYWORD & TOPIC INDEX",
             showBackButton = false,
             onMenuClick = onOpenDrawer
         )
 
-        if (!isUnlocked) {
+        if (!hasAnyActiveLicense) {
             // Full Lockout State (Zero Active Licenses)
             Box(
                 modifier = Modifier
@@ -145,7 +175,7 @@ fun SearchScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "TERMINAL ACCESS LOCKED: Active license required. Activate an OIC-NW Deck or GMDSS license in Activate Key or Pass Store to unlock the offline search index.",
+                            text = "TERMINAL ACCESS LOCKED: Active license required. Activate an offline key or subscribe in Pass Store to unlock the offline search index.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.muted,
                             textAlign = TextAlign.Center
@@ -228,7 +258,7 @@ fun SearchScreen(
                     )
                 }
 
-                // Tier 1: Track Selection Row
+                // Tier 1: Track Selection Grid (Clean 2-Row Full-Width Layout)
                 item {
                     Column {
                         Text(
@@ -240,56 +270,177 @@ fun SearchScreen(
                             letterSpacing = 1.sp
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // OIC-NW Track Chip
-                            TrackChip(
-                                title = "OIC-NW (DECK)",
-                                isSelected = selectedSearchTrack == Track.DECK_OIC_NW,
-                                isUnlocked = isOicNwActive,
-                                isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.DECK_OIC_NW) }
-                            )
+                            // Row 1: Operational Deck & Radio (50% / 50% split)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                TrackChip(
+                                    title = "OIC-NW (DECK)",
+                                    isSelected = selectedSearchTrack == Track.DECK_OIC_NW,
+                                    isUnlocked = isOicNwActive,
+                                    isDarkMode = isDarkMode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (isOicNwActive) viewModel.setSearchTrack(Track.DECK_OIC_NW)
+                                        else { lockedTrackForDialog = Track.DECK_OIC_NW; showLockedDialog = true }
+                                    }
+                                )
+                                TrackChip(
+                                    title = "GMDSS (GOC)",
+                                    isSelected = selectedSearchTrack == Track.GMDSS_GOC,
+                                    isUnlocked = isGmdssActive,
+                                    isDarkMode = isDarkMode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (isGmdssActive) viewModel.setSearchTrack(Track.GMDSS_GOC)
+                                        else { lockedTrackForDialog = Track.GMDSS_GOC; showLockedDialog = true }
+                                    }
+                                )
+                            }
 
-                            // GMDSS Track Chip
-                            TrackChip(
-                                title = "GMDSS (GOC)",
-                                isSelected = selectedSearchTrack == Track.GMDSS_GOC,
-                                isUnlocked = isGmdssActive,
-                                isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.GMDSS_GOC) }
-                            )
+                            // Row 2: Engine & Management (Equal 3-way split)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                TrackChip(
+                                    title = "ENGINE EW",
+                                    isSelected = selectedSearchTrack == Track.ENGINE_OIC_EW,
+                                    isUnlocked = isEwActive,
+                                    isDarkMode = isDarkMode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (isEwActive) viewModel.setSearchTrack(Track.ENGINE_OIC_EW)
+                                        else { lockedTrackForDialog = Track.ENGINE_OIC_EW; showLockedDialog = true }
+                                    }
+                                )
+                                TrackChip(
+                                    title = "DECK MGT",
+                                    isSelected = selectedSearchTrack == Track.DECK_MGT,
+                                    isUnlocked = isDmActive,
+                                    isDarkMode = isDarkMode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (isDmActive) viewModel.setSearchTrack(Track.DECK_MGT)
+                                        else { lockedTrackForDialog = Track.DECK_MGT; showLockedDialog = true }
+                                    }
+                                )
+                                TrackChip(
+                                    title = "ENGINE MGT",
+                                    isSelected = selectedSearchTrack == Track.ENGINE_MGT,
+                                    isUnlocked = isEmActive,
+                                    isDarkMode = isDarkMode,
+                                    modifier = Modifier.weight(1f),
+                                    onClick = {
+                                        if (isEmActive) viewModel.setSearchTrack(Track.ENGINE_MGT)
+                                        else { lockedTrackForDialog = Track.ENGINE_MGT; showLockedDialog = true }
+                                    }
+                                )
+                            }
+                        }
+                    }
 
-                            // ENGINE OIC-EW Track Chip
-                            TrackChip(
-                                title = "EW",
-                                isSelected = selectedSearchTrack == Track.ENGINE_OIC_EW,
-                                isUnlocked = isEwActive,
-                                isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.ENGINE_OIC_EW) }
-                            )
+                    // Locked Track Intercept Confirmation Dialog
+                    if (showLockedDialog && lockedTrackForDialog != null) {
+                        val trackLabel = when (lockedTrackForDialog) {
+                            Track.DECK_OIC_NW -> "Deck OIC-NW"
+                            Track.GMDSS_GOC -> "GMDSS GOC"
+                            Track.ENGINE_OIC_EW -> "Engine OIC-EW"
+                            Track.DECK_MGT -> "Deck Management"
+                            Track.ENGINE_MGT -> "Engine Management"
+                            else -> "Selected"
+                        }
 
-                            // ENGINE MGT Track Chip
-                            TrackChip(
-                                title = "ENGINE MGT",
-                                isSelected = selectedSearchTrack == Track.ENGINE_MGT,
-                                isUnlocked = isEmActive,
-                                isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.ENGINE_MGT) }
-                            )
-
-                            // DECK MGT Track Chip
-                            TrackChip(
-                                title = "DECK MGT",
-                                isSelected = selectedSearchTrack == Track.DECK_MGT,
-                                isUnlocked = isDmActive,
-                                isDarkMode = isDarkMode,
-                                onClick = { viewModel.setSearchTrack(Track.DECK_MGT) }
-                            )
+                        androidx.compose.ui.window.Dialog(
+                            onDismissRequest = { showLockedDialog = false },
+                            properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+                        ) {
+                            Surface(
+                                shape = RectangleShape,
+                                color = colors.surface,
+                                border = BorderStroke(1.dp, colors.border),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Locked",
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        text = "TRACK LOCKED",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.foreground,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "$trackLabel question bank is locked. Purchase the pass in the Pass Store to unlock search access.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = colors.muted,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        androidx.compose.material3.OutlinedButton(
+                                            onClick = { showLockedDialog = false },
+                                            shape = RectangleShape,
+                                            border = BorderStroke(1.dp, colors.border),
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = colors.foreground
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(42.dp)
+                                        ) {
+                                            Text(
+                                                text = "LATER",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                        Button(
+                                            onClick = {
+                                                showLockedDialog = false
+                                                viewModel.navigateTo(Screen.Store)
+                                            },
+                                            shape = RectangleShape,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = colors.accent,
+                                                contentColor = colors.accentForeground
+                                            ),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(42.dp)
+                                        ) {
+                                            Text(
+                                                text = "STORE",
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 11.sp,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -457,7 +608,9 @@ private fun TrackChip(
         modifier = modifier.clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
@@ -466,16 +619,18 @@ private fun TrackChip(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.ExtraBold,
                 color = textColor,
-                fontSize = 11.sp,
-                letterSpacing = 0.5.sp
+                fontSize = 10.sp,
+                maxLines = 1,
+                softWrap = false,
+                letterSpacing = 0.3.sp
             )
             if (!isUnlocked) {
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "Locked",
                     tint = textColor,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }

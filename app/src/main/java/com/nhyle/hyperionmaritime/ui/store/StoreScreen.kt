@@ -13,7 +13,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.PlayProductItem
+import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.HyperionDrawerButton
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
@@ -81,9 +81,6 @@ import com.nhyle.hyperionmaritime.viewmodel.Screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Theme color tokens dynamically resolving for Light Mode and Dark Mode in StoreScreen.
- */
 data class StoreColors(
     val isDark: Boolean,
     val storeBackground: Color,
@@ -120,7 +117,7 @@ fun rememberStoreColors(isDark: Boolean): StoreColors {
                 cardBackground = Color(0xFFFFFFFF),
                 boxInactiveFill = Color(0xFFE2E8F0),
                 borderInactive = Color(0xFFCBD5E1),
-                accentGreen = Color(0xFF008744), // Accessible, high-contrast dark green in light mode
+                accentGreen = Color(0xFF008744),
                 textPrimary = Color(0xFF0F172A),
                 textSecondary = Color(0xFF475569),
                 textMuted = Color(0xFF64748B),
@@ -130,28 +127,17 @@ fun rememberStoreColors(isDark: Boolean): StoreColors {
     }
 }
 
-/**
- * Screen-level offer selection tracking the chosen product ID and billing cycle.
- * Serializable to ensure bundle survival across configuration changes.
- */
 data class SelectedOffer(
     val productId: String,
     val cycle: BillingCycle
 ) : java.io.Serializable
 
-/**
- * Robust Context unwrapper to resolve Activity instances even when wrapped in ContextWrapper
- * inside Jetpack Compose hierarchies.
- */
 tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
 
-/**
- * Deep-links directly to Google Play's subscription management page.
- */
 fun openGooglePlaySubscriptions(context: Context) {
     val uri = Uri.parse("https://play.google.com/store/account/subscriptions")
     val playStoreIntent = Intent(Intent.ACTION_VIEW, uri).apply {
@@ -170,24 +156,6 @@ fun openGooglePlaySubscriptions(context: Context) {
     }
 }
 
-/**
- * Hyperion Maritime Exam Reviewer — Store Screen ("Pass Store & Upgrades").
- *
- * Implements:
- * - Dynamic Light and Dark Mode terminal theme system.
- * - Standardized HyperionDrawerButton (3-line hamburger menu) opening app drawer.
- * - Global mutually exclusive offer selection: zero or exactly one plan selected across all cards.
- * - Inactive, neutral styling for "ENTER TERMINAL KEY" footer button matching "RESTORE PURCHASES".
- * - Single-line footer rendering for "ENTER TERMINAL KEY" routing directly to Device Registration.
- * - Proper window insets handling (statusBarsPadding with breathing room & navigationBarsPadding).
- * - Action button dynamically enabled only on the card containing the active offer.
- * - Clean title and subtitle: "HYPERION STORE" / "COMPREHENSIVE REVIEWER PASSES".
- * - 100% purge of double-slash ("//") syntax and bracket wrappers.
- * - 100% Zero-Pill, Zero-Rounded-Corner Geometry (Strict RectangleShape).
- * - Simultaneous 3-Cycle side-by-side display per card (Weekly | Monthly | Yearly).
- * - Monospace typography for industrial terminal aesthetic in both modes.
- * - Offline terminal license supremacy and reactive entitlement state observation.
- */
 @Composable
 fun StoreScreen(
     viewModel: ReviewerViewModel,
@@ -209,8 +177,8 @@ fun StoreScreen(
     val colors = rememberStoreColors(isDark = isDark)
 
     val entitlements by billingManager.entitlements.collectAsStateWithLifecycle()
+    val selectedTrack by viewModel.selectedTrack.collectAsState()
 
-    // Global mutually exclusive selection: at most one offer selected across the entire screen
     var selectedOffer by rememberSaveable {
         mutableStateOf<SelectedOffer?>(null)
     }
@@ -273,7 +241,6 @@ fun StoreScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Connection / Error Banner
             AnimatedVisibility(
                 visible = entitlements.errorMessage != null,
                 enter = fadeIn(),
@@ -300,7 +267,6 @@ fun StoreScreen(
                 }
             }
 
-            // Restore Feedback Banner
             AnimatedVisibility(
                 visible = restoreFeedbackMessage != null,
                 enter = fadeIn(),
@@ -327,7 +293,6 @@ fun StoreScreen(
                 }
             }
 
-            // Current Active License Overview Card (Displays for both Offline Keys and Play Store Subscriptions)
             val offlineInfo = LicenseManager.getOfflineLicenseInfo(context)
             val now = System.currentTimeMillis()
 
@@ -366,7 +331,6 @@ fun StoreScreen(
             val hasActiveEm = (effectiveEmExp > now) || isEmOffline || entitlements.engineMgtUnlocked
             val hasSeparateDualTracks = (hasActiveOic && hasActiveGmdss && hasActiveEw && hasActiveDm && hasActiveEm) && !hasDirectAllAccess
 
-            // When candidate has both Deck and Radio via separate passes, All-Access is strictly bounded by the LESSER expiration:
             val effectiveAllAccessExp = if (hasDirectAllAccess) {
                 maxOf(allPlayExp, allOfflineExp)
             } else if (hasSeparateDualTracks) {
@@ -381,6 +345,7 @@ fun StoreScreen(
             val isAnyPlayPlan = entitlements.allAccessUnlocked || entitlements.oicNwUnlocked || entitlements.gmdssUnlocked || entitlements.engineOicEwUnlocked || entitlements.deckMgtUnlocked || entitlements.engineMgtUnlocked
             if (isAnyOffline || isAnyPlayPlan) {
                 ActiveLicenseOverviewCard(
+                    selectedTrack = selectedTrack,
                     isAllAccess = hasActiveAllAccess,
                     isOic = hasActiveOic,
                     isGmdss = hasActiveGmdss,
@@ -414,113 +379,76 @@ fun StoreScreen(
                 )
             }
 
-            // Product Cards (Simultaneous Multi-Cycle display per card with global mutually exclusive selection)
-            BillingConstants.ALL_PRODUCT_IDS.forEach { productId ->
-                val isEntitled = when (productId) {
-                    BillingConstants.PRODUCT_OIC_NW_PASS -> hasActiveOic
-                    BillingConstants.PRODUCT_GMDSS_PASS -> hasActiveGmdss
-                    BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> hasActiveEw
-                    BillingConstants.PRODUCT_DECK_MGT_PASS -> hasActiveDm
-                    BillingConstants.PRODUCT_ENGINE_MGT_PASS -> hasActiveEm
-                    BillingConstants.PRODUCT_ALL_ACCESS_PASS -> hasActiveAllAccess
-                    else -> false
+            BillingConstants.ALL_PRODUCT_IDS
+                .filter { it != BillingConstants.PRODUCT_ALL_ACCESS_PASS }
+                .forEach { productId ->
+                    val isEntitled = when (productId) {
+                        BillingConstants.PRODUCT_OIC_NW_PASS -> hasActiveOic
+                        BillingConstants.PRODUCT_GMDSS_PASS -> hasActiveGmdss
+                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> hasActiveEw
+                        BillingConstants.PRODUCT_DECK_MGT_PASS -> hasActiveDm
+                        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> hasActiveEm
+                        else -> false
+                    }
+
+                    val activeBadgeText = when (productId) {
+                        BillingConstants.PRODUCT_OIC_NW_PASS -> {
+                            if (effectiveOicExp > now) "ACTIVE: ${formatRemainingDuration(effectiveOicExp).uppercase()}"
+                            else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
+                            else "ACTIVE: UNLOCKED"
+                        }
+                        BillingConstants.PRODUCT_GMDSS_PASS -> {
+                            if (effectiveGmdssExp > now) "ACTIVE: ${formatRemainingDuration(effectiveGmdssExp).uppercase()}"
+                            else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
+                            else "ACTIVE: UNLOCKED"
+                        }
+                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
+                            if (effectiveEwExp > now) "ACTIVE: ${formatRemainingDuration(effectiveEwExp).uppercase()}"
+                            else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
+                            else "ACTIVE: UNLOCKED"
+                        }
+                        BillingConstants.PRODUCT_DECK_MGT_PASS -> {
+                            if (effectiveDmExp > now) "ACTIVE: ${formatRemainingDuration(effectiveDmExp).uppercase()}"
+                            else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
+                            else "ACTIVE: UNLOCKED"
+                        }
+                        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
+                            if (effectiveEmExp > now) "ACTIVE: ${formatRemainingDuration(effectiveEmExp).uppercase()}"
+                            else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
+                            else "ACTIVE: UNLOCKED"
+                        }
+                        else -> "ACTIVE: UNLOCKED"
+                    }
+
+                    val isCardSelected = selectedOffer?.productId == productId
+                    val selectedCardCycle = if (isCardSelected) selectedOffer?.cycle else null
+
+                    SharpProductCard(
+                        productId = productId,
+                        billingManager = billingManager,
+                        colors = colors,
+                        isEntitled = isEntitled,
+                        activeBadgeText = activeBadgeText,
+                        isCardSelected = isCardSelected,
+                        selectedCardCycle = selectedCardCycle,
+                        onSelectCycle = { cycle ->
+                            selectedOffer = SelectedOffer(productId, cycle)
+                        },
+                        onPurchaseCycle = { cycle ->
+                            selectedOffer = SelectedOffer(productId, cycle)
+                            val activity = context.findActivity()
+                            val details = billingManager.getProductDetails(productId)
+                            if (details != null && activity != null) {
+                                billingManager.launchBillingFlow(activity, productId, cycle)
+                            } else {
+                                val item = billingManager.getProductItem(productId, cycle)
+                                sandboxConfirmProduct = item
+                                sandboxConfirmCycle = cycle
+                            }
+                        }
+                    )
                 }
 
-                val activeBadgeText = when (productId) {
-                    BillingConstants.PRODUCT_OIC_NW_PASS -> {
-                        if (effectiveOicExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(effectiveOicExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    BillingConstants.PRODUCT_GMDSS_PASS -> {
-                        if (effectiveGmdssExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(effectiveGmdssExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
-                        if (effectiveEwExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(effectiveEwExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    BillingConstants.PRODUCT_DECK_MGT_PASS -> {
-                        if (effectiveDmExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(effectiveDmExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
-                        if (effectiveEmExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(effectiveEmExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
-                        val allAccessExp = if (hasDirectAllAccess) {
-                            effectiveAllAccessExp
-                        } else if (hasSeparateDualTracks) {
-                            minOf(effectiveOicExp, effectiveGmdssExp)
-                        } else {
-                            effectiveAllAccessExp
-                        }
-                        if (allAccessExp > now) {
-                            "ACTIVE: ${formatRemainingDuration(allAccessExp).uppercase()}"
-                        } else if (offlineInfo?.isTampered == true) {
-                            "CLOCK TAMPERED"
-                        } else {
-                            "ACTIVE: UNLOCKED"
-                        }
-                    }
-                    else -> "ACTIVE: UNLOCKED"
-                }
-
-                val isCardSelected = selectedOffer?.productId == productId
-                val selectedCardCycle = if (isCardSelected) selectedOffer?.cycle else null
-
-                SharpProductCard(
-                    productId = productId,
-                    billingManager = billingManager,
-                    colors = colors,
-                    isEntitled = isEntitled,
-                    activeBadgeText = activeBadgeText,
-                    isCardSelected = isCardSelected,
-                    selectedCardCycle = selectedCardCycle,
-                    onSelectCycle = { cycle ->
-                        selectedOffer = SelectedOffer(productId, cycle)
-                    },
-                    onPurchaseCycle = { cycle ->
-                        selectedOffer = SelectedOffer(productId, cycle)
-                        val activity = context.findActivity()
-                        val details = billingManager.getProductDetails(productId)
-                        if (details != null && activity != null) {
-                            billingManager.launchBillingFlow(activity, productId, cycle)
-                        } else {
-                            val item = billingManager.getProductItem(productId, cycle)
-                            sandboxConfirmProduct = item
-                            sandboxConfirmCycle = cycle
-                        }
-                    }
-                )
-            }
-
-            // First-launch scroll cue with strictly a single downward arrow
             AnimatedVisibility(
                 visible = scrollState.canScrollForward && scrollState.value < 40,
                 enter = fadeIn(),
@@ -549,7 +477,6 @@ fun StoreScreen(
                 }
             }
 
-            // Deep-Sea Offline Continuity Notice
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -580,7 +507,6 @@ fun StoreScreen(
                 }
             }
 
-            // Footer Action Buttons (Balanced weights, robust single-line layout)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -678,7 +604,6 @@ fun StoreScreen(
                 }
             }
 
-            // Manage / Cancel Subscription Button (Direct Google Play Deep-Link)
             OutlinedButton(
                 onClick = {
                     openGooglePlaySubscriptions(context)
@@ -716,7 +641,6 @@ fun StoreScreen(
                 )
             }
 
-            // Terms and Conditions Action Button
             OutlinedButton(
                 onClick = onNavigateToTerms,
                 shape = RectangleShape,
@@ -754,7 +678,6 @@ fun StoreScreen(
         }
     }
 
-    // License Expired Notification Dialog Popup
     if (showExpiredPopup) {
         Dialog(
             onDismissRequest = { showExpiredPopup = false },
@@ -884,7 +807,6 @@ fun StoreScreen(
         }
     }
 
-    // Mock Sandbox Simulator Confirmation Dialog
     sandboxConfirmProduct?.let { product ->
         Dialog(
             onDismissRequest = { sandboxConfirmProduct = null },
@@ -996,9 +918,6 @@ fun StoreScreen(
     }
 }
 
-/**
- * Top Bar with standardized 3-line HyperionDrawerButton, proper status bar insets padding, and vertical breathing room.
- */
 @Composable
 private fun SharpTerminalTopBar(
     title: String,
@@ -1057,10 +976,6 @@ private fun SharpTerminalTopBar(
     }
 }
 
-/**
- * Ultra-Dense Sharp Product Card rendering all 3 cycles (Weekly, Monthly, Yearly) simultaneously.
- * Receives global selection state from StoreScreen to ensure strict mutual exclusivity across cards.
- */
 @Composable
 private fun SharpProductCard(
     productId: String,
@@ -1073,8 +988,6 @@ private fun SharpProductCard(
     onSelectCycle: (BillingCycle) -> Unit,
     onPurchaseCycle: (BillingCycle) -> Unit
 ) {
-    val isRecommended = productId == BillingConstants.PRODUCT_ALL_ACCESS_PASS
-
     val cardBorderColor = when {
         isCardSelected -> colors.accentGreen
         isEntitled -> colors.accentGreen.copy(alpha = 0.4f)
@@ -1088,7 +1001,6 @@ private fun SharpProductCard(
         BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE OIC-EW PASS"
         BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT PASS"
         BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT PASS"
-        BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "HYPERION ALL-ACCESS PASS"
         else -> productId.uppercase()
     }
 
@@ -1098,7 +1010,6 @@ private fun SharpProductCard(
         BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "Engine Operational Level • 13 Competencies • Mock Exams • Offline at Sea"
         BillingConstants.PRODUCT_DECK_MGT_PASS -> "Deck Management Level • 18 Competencies • Mock Exams • Offline at Sea"
         BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "Engine Management Level • 14 Competencies • Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "15,000+ Questions • Complete Deck & Engine Tracks • Mock Exams • Offline at Sea"
         else -> ""
     }
 
@@ -1116,7 +1027,6 @@ private fun SharpProductCard(
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Header Row: Track Title & Non-wrapping Flat Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1135,95 +1045,38 @@ private fun SharpProductCard(
                     modifier = Modifier.weight(1f, fill = false)
                 )
 
-                // Flat Horizontal Rectangular Badges
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isRecommended) {
-                        Box(
-                            modifier = Modifier
-                                .background(colors.accentGreen, RectangleShape)
-                                .border(1.dp, colors.accentGreen, RectangleShape)
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "RECOMMENDED",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                color = if (colors.isDark) Color.Black else Color.White,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .background(colors.boxInactiveFill, RectangleShape)
-                                .border(1.dp, colors.accentGreen.copy(alpha = 0.6f), RectangleShape)
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "BEST VALUE",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                color = colors.accentGreen,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else if (productId == BillingConstants.PRODUCT_OIC_NW_PASS) {
-                        Box(
-                            modifier = Modifier
-                                .background(colors.boxInactiveFill, RectangleShape)
-                                .border(1.dp, colors.borderInactive, RectangleShape)
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "DECK TRACK",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                color = colors.textMuted,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else if (productId == BillingConstants.PRODUCT_GMDSS_PASS) {
-                        Box(
-                            modifier = Modifier
-                                .background(colors.boxInactiveFill, RectangleShape)
-                                .border(1.dp, colors.borderInactive, RectangleShape)
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "RADIO TRACK",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                ),
-                                color = colors.textMuted,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                val trackBadge = when (productId) {
+                    BillingConstants.PRODUCT_OIC_NW_PASS -> "DECK TRACK"
+                    BillingConstants.PRODUCT_GMDSS_PASS -> "RADIO TRACK"
+                    BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE TRACK"
+                    BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT"
+                    BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT"
+                    else -> null
+                }
+
+                if (trackBadge != null) {
+                    Box(
+                        modifier = Modifier
+                            .background(colors.boxInactiveFill, RectangleShape)
+                            .border(1.dp, colors.borderInactive, RectangleShape)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = trackBadge,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 8.sp
+                            ),
+                            color = colors.textMuted,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
 
-            // Subtitle features
             Text(
                 text = featureBullets,
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -1236,7 +1089,6 @@ private fun SharpProductCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Inline 3-Column Simultaneous Cycle Boxes (Global mutually exclusive selection)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -1261,7 +1113,6 @@ private fun SharpProductCard(
                 }
             }
 
-            // Action Button: Dynamic depending on entitlement and global offer selection
             if (isEntitled) {
                 Surface(
                     shape = RectangleShape,
@@ -1300,9 +1151,8 @@ private fun SharpProductCard(
                 }
             } else {
                 if (selectedCardCycle == null) {
-                    // Disabled state when no plan box is selected on this card
                     Button(
-                        onClick = { /* Disabled: No-op */ },
+                        onClick = { },
                         enabled = false,
                         shape = RectangleShape,
                         colors = ButtonDefaults.buttonColors(
@@ -1365,9 +1215,6 @@ private fun SharpProductCard(
     }
 }
 
-/**
- * Individual Sharp Cycle Box inside the 3-column inline row.
- */
 @Composable
 private fun SharpCycleBox(
     cycle: BillingCycle,
@@ -1488,12 +1335,16 @@ private fun formatExpiryDateString(expiryEpoch: Long): String {
     return "Expires " + format.format(date)
 }
 
-/**
- * Overview card displaying the currently active license on the Store page with identical
- * industrial bridge styling for both Offline Hardware Keys and Google Play Store passes.
- */
+private data class ActivePassSummary(
+    val title: String,
+    val activeExp: Long,
+    val isOffline: Boolean,
+    val isPlay: Boolean
+)
+
 @Composable
 private fun ActiveLicenseOverviewCard(
+    selectedTrack: Track,
     isAllAccess: Boolean,
     isOic: Boolean,
     isGmdss: Boolean,
@@ -1528,45 +1379,71 @@ private fun ActiveLicenseOverviewCard(
     val isTampered = offlineInfo?.isTampered == true
     val now = System.currentTimeMillis()
 
-    val title = when {
-        hasDirectAllAccess || hasSeparateDualTracks -> "HYPERION ALL-ACCESS PASS"
-        isOic -> "OIC-NW DECK PASS"
-        isGmdss -> "GMDSS GOC PASS"
-        isEw -> "OIC-EW ENGINE PASS"
-        isDm -> "DECK MANAGEMENT PASS"
-        isEm -> "ENGINE MANAGEMENT PASS"
-        else -> "MARITIME CANDIDATE PASS"
+    val activePasses = remember(
+        isOic, isGmdss, isEw, isDm, isEm,
+        effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp,
+        oicOfflineExp, gmdssOfflineExp, ewOfflineExp, dmOfflineExp, emOfflineExp,
+        oicPlayExp, gmdssPlayExp, ewPlayExp, dmPlayExp, emPlayExp,
+        entitlements.oicNwUnlocked, entitlements.gmdssUnlocked,
+        entitlements.engineOicEwUnlocked, entitlements.deckMgtUnlocked, entitlements.engineMgtUnlocked
+    ) {
+        val list = mutableListOf<ActivePassSummary>()
+        if (isOic) {
+            list.add(
+                ActivePassSummary(
+                    title = "DECK OIC-NW PASS",
+                    activeExp = effectiveOicExp,
+                    isOffline = oicOfflineExp > now,
+                    isPlay = (oicPlayExp > now) || entitlements.oicNwUnlocked
+                )
+            )
+        }
+        if (isGmdss) {
+            list.add(
+                ActivePassSummary(
+                    title = "GMDSS GOC PASS",
+                    activeExp = effectiveGmdssExp,
+                    isOffline = gmdssOfflineExp > now,
+                    isPlay = (gmdssPlayExp > now) || entitlements.gmdssUnlocked
+                )
+            )
+        }
+        if (isEw) {
+            list.add(
+                ActivePassSummary(
+                    title = "ENGINE OIC-EW PASS",
+                    activeExp = effectiveEwExp,
+                    isOffline = ewOfflineExp > now,
+                    isPlay = (ewPlayExp > now) || entitlements.engineOicEwUnlocked
+                )
+            )
+        }
+        if (isDm) {
+            list.add(
+                ActivePassSummary(
+                    title = "DECK MANAGEMENT PASS",
+                    activeExp = effectiveDmExp,
+                    isOffline = dmOfflineExp > now,
+                    isPlay = (dmPlayExp > now) || entitlements.deckMgtUnlocked
+                )
+            )
+        }
+        if (isEm) {
+            list.add(
+                ActivePassSummary(
+                    title = "ENGINE MANAGEMENT PASS",
+                    activeExp = effectiveEmExp,
+                    isOffline = emOfflineExp > now,
+                    isPlay = (emPlayExp > now) || entitlements.engineMgtUnlocked
+                )
+            )
+        }
+        list
     }
 
-    val channelLabel = when {
-        isOffline && isPlay -> "OFFLINE + PLAY STORE"
-        isOffline -> "OFFLINE LICENSE KEY"
-        else -> "GOOGLE PLAY STORE"
-    }
-
-    val activeExp = when {
-        hasDirectAllAccess -> effectiveAllAccessExp
-        hasSeparateDualTracks -> minOf(effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp)
-        isOic -> effectiveOicExp
-        isGmdss -> effectiveGmdssExp
-        isEw -> effectiveEwExp
-        isDm -> effectiveDmExp
-        isEm -> effectiveEmExp
-        else -> 0L
-    }
-
-    val durationText = when {
-        isTampered -> "CLOCK ROLLBACK DETECTED"
-        activeExp > 0L -> "ACTIVE: ${formatRemainingDuration(activeExp).uppercase()}"
-        offlineInfo != null && offlineInfo.isActive -> "ACTIVE: ${offlineInfo.getFormattedTimeRemaining().uppercase()}"
-        else -> "ACTIVE REVIEWER PASS"
-    }
-
-    val expirySubtitle = when {
-        isTampered -> "ERROR: System time set earlier than verification record. Restore correct device time."
-        activeExp > 0L -> "Valid until ${formatExpiryDateString(activeExp)}"
-        offlineInfo != null && offlineInfo.isActive -> "Valid offline at sea • ${offlineInfo.getFormattedExpiryDate()}"
-        else -> "Active terminal authorization"
+    val headerTitle = when {
+        activePasses.size > 1 -> "CURRENT ACTIVE LICENSES (${activePasses.size} ACTIVE)"
+        else -> "CURRENT ACTIVE LICENSE"
     }
 
     val borderColor = if (isTampered) colors.failRed else colors.accentGreen
@@ -1603,7 +1480,7 @@ private fun ActiveLicenseOverviewCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "CURRENT ACTIVE LICENSE",
+                        text = headerTitle,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.ExtraBold,
@@ -1631,62 +1508,103 @@ private fun ActiveLicenseOverviewCard(
                 }
             }
 
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.5.sp
-                ),
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (activePasses.isNotEmpty()) {
+                activePasses.forEachIndexed { index, pass ->
+                    if (index > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(colors.borderInactive)
+                                .padding(vertical = 4.dp)
+                        )
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = durationText,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp
-                    ),
-                    color = if (isTampered) colors.failRed else colors.accentGreen,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                    val durationText = when {
+                        isTampered -> "CLOCK ROLLBACK DETECTED"
+                        pass.activeExp > 0L -> "ACTIVE: ${formatRemainingDuration(pass.activeExp).uppercase()}"
+                        offlineInfo != null && offlineInfo.isActive -> "ACTIVE: ${offlineInfo.getFormattedTimeRemaining().uppercase()}"
+                        else -> "ACTIVE REVIEWER PASS"
+                    }
 
-                Box(
-                    modifier = Modifier
-                        .background(colors.boxInactiveFill, RectangleShape)
-                        .border(1.dp, colors.borderInactive, RectangleShape)
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = channelLabel,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 8.5.sp
-                        ),
-                        color = colors.textMuted
-                    )
+                    val channelLabel = when {
+                        pass.isOffline && pass.isPlay -> "OFFLINE + PLAY STORE"
+                        pass.isOffline -> "OFFLINE LICENSE KEY"
+                        else -> "GOOGLE PLAY STORE"
+                    }
+
+                    val expirySubtitle = when {
+                        isTampered -> "ERROR: System time set earlier than verification record. Restore correct device time."
+                        pass.activeExp > 0L -> "Valid until ${formatExpiryDateString(pass.activeExp)}"
+                        offlineInfo != null && offlineInfo.isActive -> "Valid offline at sea • ${offlineInfo.getFormattedExpiryDate()}"
+                        else -> "Active terminal authorization"
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = if (index > 0) 4.dp else 0.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(
+                            text = pass.title,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            ),
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = durationText,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.5.sp
+                                ),
+                                color = if (isTampered) colors.failRed else colors.accentGreen,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .background(colors.boxInactiveFill, RectangleShape)
+                                    .border(1.dp, colors.borderInactive, RectangleShape)
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = channelLabel,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 8.sp
+                                    ),
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = expirySubtitle,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 9.5.sp,
+                                lineHeight = 12.sp
+                            ),
+                            color = if (isTampered) colors.failRed else colors.textSecondary
+                        )
+                    }
                 }
             }
-
-            Text(
-                text = expirySubtitle,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    lineHeight = 13.sp
-                ),
-                color = if (isTampered) colors.failRed else colors.textSecondary
-            )
         }
     }
 }

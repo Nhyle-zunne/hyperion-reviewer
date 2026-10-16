@@ -163,15 +163,33 @@ fun PracticeCompetenceSelectScreen(
             .background(colors.background)
     ) {
         val isGmdssOpReview = (selectedTrack == Track.GMDSS_GOC) && isOperationalReview
-        val totalTrackQuestions = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isCrpMode, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
+        val totalTrackQuestions = if (isCrpMode && selectedTrack != Track.DECK_OIC_NW && selectedTrack != Track.GMDSS_GOC) {
+            MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
+        } else {
+            MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isCrpMode, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
+        }
         val formattedTotalQuestions = if (totalTrackQuestions >= 1000) "%,d".format(totalTrackQuestions) else totalTrackQuestions.toString()
 
+        val screenTitle = if (isGmdssOpReview) {
+            "GMDSS OPERATIONAL REVIEW"
+        } else if (isCrpMode) {
+            when (selectedTrack) {
+                Track.DECK_OIC_NW -> "MARINA CRP PRACTICE"
+                Track.ENGINE_OIC_EW -> "ENGINE OIC-EW STANDARD REVIEW"
+                Track.DECK_MGT -> "DECK MANAGEMENT STANDARD REVIEW"
+                Track.ENGINE_MGT -> "ENGINE MANAGEMENT STANDARD REVIEW"
+                else -> "STANDARD REVIEW"
+            }
+        } else {
+            "PRACTICE ALL QUESTIONS"
+        }
+
         MaritimeTopBar(
-            title = if (isGmdssOpReview) "GMDSS OPERATIONAL REVIEW" else if (isCrpMode) "MARINA CRP PRACTICE" else "PRACTICE ALL QUESTIONS",
+            title = screenTitle,
             subtitle = if (isGmdssOpReview) {
                 "GMDSS General Operator Certificate • $formattedTotalQuestions questions available"
             } else if (isCrpMode) {
-                "STEP 1: SELECT COMPETENCE • ${selectedTrack.name.replace('_', ' ')} ($formattedTotalQuestions questions)"
+                "STEP 1: SELECT COMPETENCE • ${selectedTrack.title} ($formattedTotalQuestions questions)"
             } else {
                 "Practice across all ${competences.size} competencies ($formattedTotalQuestions questions available)"
             },
@@ -218,7 +236,9 @@ fun PracticeCompetenceSelectScreen(
                         containerColor = Color.Transparent,
                         border = BorderStroke(1.5.dp, sweepBorderBrush),
                         onClick = {
-                            viewModel.navigateTo(Screen.PracticeConfig(competenceId = null, isCrpMode = isCrpMode, isOperationalReview = isOperationalReview))
+                            if (!isCrpMode) {
+                                viewModel.navigateTo(Screen.PracticeConfig(competenceId = null, isCrpMode = isCrpMode, isOperationalReview = isOperationalReview))
+                            }
                         }
                     ) {
                         Column(
@@ -228,7 +248,7 @@ fun PracticeCompetenceSelectScreen(
                                 .padding(18.dp)
                         ) {
                             Text(
-                                text = if (isGmdssOpReview) "GMDSS OPERATIONAL REVIEW" else if (isCrpMode) "MARINA CRP REFERENCE PRACTICE" else "PRACTICE ALL QUESTIONS",
+                                text = if (isGmdssOpReview) "GMDSS OPERATIONAL REVIEW" else if (isCrpMode) screenTitle else "PRACTICE ALL QUESTIONS",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = if (isDark) Color.White else Color(0xFF0F172A),
@@ -238,8 +258,10 @@ fun PracticeCompetenceSelectScreen(
                             Text(
                                 text = if (isGmdssOpReview) {
                                     "Practice across all competencies ($formattedTotalQuestions questions available)."
-                                } else if (isCrpMode) {
+                                } else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) {
                                     "Select an official STCW competence below to begin sequential or customized practice drilling ($formattedTotalQuestions total questions)."
+                                } else if (isCrpMode) {
+                                    "Select an STCW competence below to begin standard practice drilling ($formattedTotalQuestions total questions)."
                                 } else {
                                     "Practice across all ${competences.size} competencies ($formattedTotalQuestions questions available)."
                                 },
@@ -256,7 +278,9 @@ fun PracticeCompetenceSelectScreen(
             }
 
             items(competences) { comp ->
-                val formattedCount = MaritimeCompetenceRegistry.getFormattedQuestionCount(comp.id, selectedTrack, isCrpMode, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
+                val isNewTrack = selectedTrack == Track.ENGINE_OIC_EW || selectedTrack == Track.DECK_MGT || selectedTrack == Track.ENGINE_MGT
+                val isProForCount = if (isCrpMode && isNewTrack) false else isTrackLicensed
+                val formattedCount = MaritimeCompetenceRegistry.getFormattedQuestionCount(comp.id, selectedTrack, isCrpMode, isProUnlocked = isProForCount, isOperationalReview = isOperationalReview)
 
                 MianRuleCard(
                     ruleColor = colors.border,

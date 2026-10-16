@@ -216,11 +216,18 @@ fun PracticeConfigScreen(
             } else {
                 MaritimeCompetenceRegistry.CRP_DECK_DISTRIBUTION[competenceId] ?: 100
             }
+        } else if (isCrpMode) {
+            // New tracks Standard Review: ALWAYS 40% fixed pool for everyone
+            if (competenceId == null) {
+                MaritimeQuestionBank.getNewTrackStandardReviewQuestions(selectedTrack, isProUnlocked = false).size
+            } else {
+                MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack, isProUnlocked = false).size
+            }
         } else {
             if (competenceId == null) {
-                MaritimeQuestionBank.getQuestionsByTrack(selectedTrack, isProUnlocked = true).size
+                MaritimeQuestionBank.getQuestionsByTrack(selectedTrack, isProUnlocked = isTrackLicensed).size
             } else {
-                MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack, isProUnlocked = true).size
+                MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack, isProUnlocked = isTrackLicensed).size
             }
         }
     }.coerceAtLeast(1)
@@ -267,32 +274,54 @@ fun PracticeConfigScreen(
         endTextFieldValue = clampedEnd.toString()
     }
 
+    val isNewTrack = selectedTrack == Track.ENGINE_OIC_EW || selectedTrack == Track.DECK_MGT || selectedTrack == Track.ENGINE_MGT
+
     val greetingTitle = if (compInfo != null) {
         if (isGmdssOpReview) "GMDSS Drill: ${compInfo.code} - ${compInfo.title}"
-        else if (isCrpMode) "MARINA CRP Drill: ${compInfo.code} - ${compInfo.title}"
+        else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "MARINA CRP Drill: ${compInfo.code} - ${compInfo.title}"
+        else if (isCrpMode) "Standard Review: ${compInfo.code} - ${compInfo.title}"
         else "Configure Drill: ${compInfo.code} - ${compInfo.title}"
     } else {
         if (isGmdssOpReview) "GMDSS Drill: All Competencies"
-        else if (isCrpMode) "MARINA CRP Drill: All Competencies"
+        else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "MARINA CRP Drill: All Competencies"
+        else if (isCrpMode) "Standard Review: All Competencies"
         else "Configure Drill: All Competencies"
     }
 
     val greetingSubtitle = if (compInfo != null) {
         if (isGmdssOpReview) {
             "GMDSS Radio Operations • $maxAvailable Items"
-        } else if (isCrpMode) {
+        } else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) {
             "MARINA CRP REFERENCE DRILL • $maxAvailable Official Review Questions"
+        } else if (isCrpMode) {
+            "STANDARD REVIEW DRILL • $maxAvailable Review Questions"
         } else {
             "${compInfo.functionName} • $maxAvailable Items"
         }
     } else {
         if (isGmdssOpReview) {
             "GMDSS General Operator Certificate • Full Pool ($maxAvailable Items Available)"
-        } else if (isCrpMode) {
+        } else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) {
             "MARINA CRP REFERENCE DRILL • $maxAvailable Official Review Questions"
+        } else if (isCrpMode) {
+            "STANDARD REVIEW DRILL • $maxAvailable Review Questions"
         } else {
             "${selectedTrack.title} • Full Pool ($maxAvailable Items Available)"
         }
+    }
+
+    val configScreenTitle = if (isGmdssOpReview) {
+        "GMDSS OPERATIONAL REVIEW"
+    } else if (isCrpMode) {
+        when (selectedTrack) {
+            Track.DECK_OIC_NW -> "MARINA CRP PRACTICE"
+            Track.ENGINE_OIC_EW -> "ENGINE OIC-EW STANDARD REVIEW"
+            Track.DECK_MGT -> "DECK MANAGEMENT STANDARD REVIEW"
+            Track.ENGINE_MGT -> "ENGINE MANAGEMENT STANDARD REVIEW"
+            else -> "STANDARD REVIEW"
+        }
+    } else {
+        "PRACTICE ALL QUESTIONS"
     }
 
     Column(
@@ -302,7 +331,7 @@ fun PracticeConfigScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = if (isGmdssOpReview) "GMDSS OPERATIONAL REVIEW" else if (isCrpMode) "MARINA CRP PRACTICE" else "PRACTICE ALL QUESTIONS",
+            title = configScreenTitle,
             subtitle = if (compInfo != null) compInfo.code else "All Competencies",
             showBackButton = false,
             onMenuClick = { viewModel.openDrawer() },
@@ -317,7 +346,6 @@ fun PracticeConfigScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (isCrpMode && !isGmdssOpReview) {
-                // Prominent Legal Disclaimer Banner
                 item {
                     Surface(
                         shape = RectangleShape,
@@ -325,8 +353,13 @@ fun PracticeConfigScreen(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        val disclaimerText = if (selectedTrack == Track.DECK_OIC_NW) {
+                            "Note: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool."
+                        } else {
+                            "Note: This free standard review mode is an independently developed study tool and is not an official MARINA-endorsed examination tool."
+                        }
                         Text(
-                            text = "Note: This free practice mode is independently developed based on MARINA CRP references and is not an official MARINA-endorsed examination tool.",
+                            text = disclaimerText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 11.5.sp,
@@ -355,7 +388,7 @@ fun PracticeConfigScreen(
                             border = BorderStroke(1.dp, if (showFixedPool) PassGreen else MaterialTheme.colorScheme.outline)
                         ) {
                             Text(
-                                text = if (isGmdssOpReview) "STEP 2 OF 2 • GMDSS OPERATIONAL REVIEW" else if (isCrpMode) "STEP 2 OF 2 · MARINA CRP PRACTICE" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
+                                text = if (isGmdssOpReview) "STEP 2 OF 2 • GMDSS OPERATIONAL REVIEW" else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "STEP 2 OF 2 · MARINA CRP PRACTICE" else if (isCrpMode) "STEP 2 OF 2 • STANDARD REVIEW" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (showFixedPool) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1525,7 +1558,8 @@ fun PracticeConfigScreen(
             item {
                 val launchLabel = when {
                     selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE -> "Start Reviewing (Intensive Mode)"
-                    isCrpMode -> "Start Reviewing (MARINA CRP)"
+                    isCrpMode && selectedTrack == Track.DECK_OIC_NW -> "Start Reviewing (MARINA CRP)"
+                    isCrpMode -> "Start Reviewing (Standard Review)"
                     isGmdssOpReview -> "Start Reviewing (GMDSS Drill)"
                     else -> "Start Reviewing ($selectedItemCount Items: #$startItem–#$endItem)"
                 }

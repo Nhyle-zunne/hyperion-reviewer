@@ -2262,12 +2262,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
             Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
                 if (competenceId != null) {
-                    MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isPro)
+                    MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = false)
                 } else {
-                    // Standard Review All for new tracks: collect 40% (if unlicensed) from each competence
                     val allComps = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
                     allComps.flatMap { comp ->
-                        MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = isPro)
+                        MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = false)
                     }
                 }
             }
@@ -2459,9 +2458,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
                 Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
                     if (competenceId != null) {
-                        MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isPro)
+                        MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = false)
                     } else {
-                        MaritimeQuestionBank.getNewTrackStandardReviewQuestions(track, isProUnlocked = isPro)
+                        MaritimeQuestionBank.getNewTrackStandardReviewQuestions(track, isProUnlocked = false)
                     }
                 }
                 else -> emptyList()

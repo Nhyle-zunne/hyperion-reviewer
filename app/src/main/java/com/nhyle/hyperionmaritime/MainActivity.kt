@@ -6,6 +6,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -163,110 +168,117 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
         Surface(
             modifier = Modifier.fillMaxSize()
         ) {
-            when (val screen = currentScreen) {
-                is Screen.TermsOnboarding -> TermsOnboardingScreen(
-                    viewModel = viewModel
-                )
-                is Screen.TermsAndDisclaimer -> TermsAndDisclaimerScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.TrackSelection -> TrackSelectionScreen(
-                    viewModel = viewModel
-                )
-                is Screen.Home -> HomeScreen(
-                    viewModel = viewModel
-                )
-                is Screen.PracticeCompetenceSelect -> PracticeCompetenceSelectScreen(
-                    viewModel = viewModel,
-                    isCrpMode = screen.isCrpMode,
-                    isOperationalReview = screen.isOperationalReview
-                )
-                is Screen.PracticeConfig -> PracticeConfigScreen(
-                    viewModel = viewModel,
-                    competenceId = screen.competenceId,
-                    isCrpMode = screen.isCrpMode,
-                    isOperationalReview = screen.isOperationalReview
-                )
-                is Screen.Flashcards -> FlashcardScreen(
-                    viewModel = viewModel
-                )
-                is Screen.Topics -> TopicScreen(
-                    viewModel = viewModel
-                )
-                is Screen.Quiz -> QuizScreen(
-                    viewModel = viewModel
-                )
-                is Screen.MockHub -> MockExamHubScreen(
-                    viewModel = viewModel
-                )
-                is Screen.MockCompetence -> MockCompetenceScreen(
-                    viewModel = viewModel,
-                    competenceId = screen.competenceId
-                )
-                is Screen.Results -> ResultsScreen(
-                    viewModel = viewModel
-                )
-                is Screen.Vault -> VaultScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.Bookmarks -> BookmarksScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.Search -> SearchScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.History -> HistoryScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.FreePractice -> FreePracticeScreen(
-                    viewModel = viewModel
-                )
-                is Screen.Activation -> ActivationScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.HowToAvail -> HowToAvailScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.License -> LicenseScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.ExamGuidelines -> ExamGuidelinesScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.QuickScanCompetenceSelect -> QuickScanCompetenceSelectScreen(
-                    viewModel = viewModel,
-                    track = screen.track
-                )
-                is Screen.QuickScanViewer -> QuickScanViewerScreen(
-                    viewModel = viewModel,
-                    competenceId = screen.competenceId,
-                    track = screen.track
-                )
-                is Screen.Store -> StoreScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.Streak -> StreakScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.StudyTime -> StudyTimeScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
-                is Screen.About -> AboutScreen(
-                    viewModel = viewModel,
-                    onOpenDrawer = { viewModel.openDrawer() }
-                )
+            AnimatedContent(
+                targetState = currentScreen,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                },
+                label = "screen_transition"
+            ) { screen ->
+                when (screen) {
+                    is Screen.TermsOnboarding -> TermsOnboardingScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.TermsAndDisclaimer -> TermsAndDisclaimerScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.TrackSelection -> TrackSelectionScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.Home -> HomeScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.PracticeCompetenceSelect -> PracticeCompetenceSelectScreen(
+                        viewModel = viewModel,
+                        isCrpMode = screen.isCrpMode,
+                        isOperationalReview = screen.isOperationalReview
+                    )
+                    is Screen.PracticeConfig -> PracticeConfigScreen(
+                        viewModel = viewModel,
+                        competenceId = screen.competenceId,
+                        isCrpMode = screen.isCrpMode,
+                        isOperationalReview = screen.isOperationalReview
+                    )
+                    is Screen.Flashcards -> FlashcardScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.Topics -> TopicScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.Quiz -> QuizScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.MockHub -> MockExamHubScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.MockCompetence -> MockCompetenceScreen(
+                        viewModel = viewModel,
+                        competenceId = screen.competenceId
+                    )
+                    is Screen.Results -> ResultsScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.Vault -> VaultScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.Bookmarks -> BookmarksScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.Search -> SearchScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.History -> HistoryScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.FreePractice -> FreePracticeScreen(
+                        viewModel = viewModel
+                    )
+                    is Screen.Activation -> ActivationScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.HowToAvail -> HowToAvailScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.License -> LicenseScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.QuickScanCompetenceSelect -> QuickScanCompetenceSelectScreen(
+                        viewModel = viewModel,
+                        track = screen.track
+                    )
+                    is Screen.QuickScanViewer -> QuickScanViewerScreen(
+                        viewModel = viewModel,
+                        competenceId = screen.competenceId,
+                        track = screen.track
+                    )
+                    is Screen.Store -> StoreScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.Streak -> StreakScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.StudyTime -> StudyTimeScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    is Screen.About -> AboutScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
+                    else -> TrackSelectionScreen(
+                        viewModel = viewModel
+                    )
+                }
             }
         }
     }

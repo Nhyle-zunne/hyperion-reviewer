@@ -101,7 +101,7 @@ fun ActivationScreen(
     val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
     val isHyperionProUnlocked by viewModel.isHyperionProUnlocked.collectAsState()
 
-    var selectedTier by remember { mutableStateOf(ProTier.HYPERION_PRO) }
+    var selectedTier by remember { mutableStateOf(ProTier.OIC_NW_PRO) }
     var keyInput by remember { mutableStateOf("") }
     var validationMessage by remember { mutableStateOf<String?>(null) }
     var isValidationSuccess by remember { mutableStateOf(false) }
@@ -398,7 +398,7 @@ fun ActivationScreen(
             // Tier Selector
             MianSectionHeader(title = "SELECT LICENSE TIER")
 
-            ProTier.values().forEach { tier ->
+            ProTier.values().filter { it != ProTier.HYPERION_PRO }.forEach { tier ->
                 val isTierSelected = selectedTier == tier
                 val isAllAccessActive = regState.isAllAccessLicensed || (regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed)
                 val isTierUnlocked = when (tier) {
@@ -444,14 +444,29 @@ fun ActivationScreen(
                                 color = colors.muted,
                                 fontSize = 11.sp
                             )
-                            if (tier.questionCount.isNotEmpty()) {
+                            val tierTrack = when (tier) {
+                                ProTier.OIC_NW_PRO -> com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW
+                                ProTier.GMDSS_PRO -> com.nhyle.hyperionmaritime.data.model.Track.GMDSS_GOC
+                                ProTier.ENGINE_OIC_EW_PRO -> com.nhyle.hyperionmaritime.data.model.Track.ENGINE_OIC_EW
+                                ProTier.DECK_MGT_PRO -> com.nhyle.hyperionmaritime.data.model.Track.DECK_MGT
+                                ProTier.ENGINE_MGT_PRO -> com.nhyle.hyperionmaritime.data.model.Track.ENGINE_MGT
+                                else -> null
+                            }
+                            val displayQuestionCount = if (tier.questionCount.isNotBlank()) {
+                                tier.questionCount
+                            } else if (tierTrack != null) {
+                                val total = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalTrackQuestionCount(tierTrack)
+                                "Total Question Bank: %,d questions".format(total)
+                            } else ""
+
+                            if (displayQuestionCount.isNotEmpty()) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Surface(
                                     shape = RoundedCornerShape(2.dp),
                                     color = colors.surface2
                                 ) {
                                     Text(
-                                        text = tier.questionCount,
+                                        text = displayQuestionCount,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                         style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.ExtraBold,
