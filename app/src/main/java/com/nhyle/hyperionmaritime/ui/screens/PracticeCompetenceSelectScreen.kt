@@ -53,7 +53,6 @@ import com.nhyle.hyperionmaritime.data.model.CompetenceInfo
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
-// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
@@ -163,10 +162,10 @@ fun PracticeCompetenceSelectScreen(
             .background(colors.background)
     ) {
         val isGmdssOpReview = (selectedTrack == Track.GMDSS_GOC) && isOperationalReview
-        val totalTrackQuestions = if (isCrpMode && selectedTrack != Track.DECK_OIC_NW && selectedTrack != Track.GMDSS_GOC) {
+        val totalTrackQuestions = if (isCrpMode) {
             MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
         } else {
-            MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isCrpMode, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
+            MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isCrpMode = false, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
         }
         val formattedTotalQuestions = if (totalTrackQuestions >= 1000) "%,d".format(totalTrackQuestions) else totalTrackQuestions.toString()
 
@@ -278,8 +277,7 @@ fun PracticeCompetenceSelectScreen(
             }
 
             items(competences) { comp ->
-                val isNewTrack = selectedTrack == Track.ENGINE_OIC_EW || selectedTrack == Track.DECK_MGT || selectedTrack == Track.ENGINE_MGT
-                val isProForCount = if (isCrpMode && isNewTrack) false else isTrackLicensed
+                val isProForCount = if (isCrpMode) false else isTrackLicensed
                 val formattedCount = MaritimeCompetenceRegistry.getFormattedQuestionCount(comp.id, selectedTrack, isCrpMode, isProUnlocked = isProForCount, isOperationalReview = isOperationalReview)
 
                 MianRuleCard(

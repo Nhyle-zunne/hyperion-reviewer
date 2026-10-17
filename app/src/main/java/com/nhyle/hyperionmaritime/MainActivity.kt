@@ -44,6 +44,45 @@ import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 
 class MainActivity : ComponentActivity() {
     private val viewModel: ReviewerViewModel by viewModels()
@@ -318,5 +357,176 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
             viewModel = viewModel,
             onDismiss = { viewModel.dismissDailyCheckInDialog() }
         )
+    }
+
+    val isRepoWarming by viewModel.isRepoWarming.collectAsStateWithLifecycle()
+    if (isRepoWarming && termsAccepted) {
+        TerminalLoadingDialog()
+    }
+}
+
+@Composable
+fun TerminalLoadingDialog() {
+    val colors = LocalSpaghettiColors.current
+    val stepState = remember { mutableIntStateOf(0) }
+
+    BackHandler(enabled = true) { /* Intercept back press while indexing */ }
+
+    LaunchedEffect(Unit) {
+        delay(280L)
+        stepState.intValue = 1
+        delay(350L)
+        stepState.intValue = 2
+        delay(350L)
+        stepState.intValue = 3
+    }
+
+    val transition = rememberInfiniteTransition(label = "terminalLoading")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotate"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background.copy(alpha = 0.88f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .widthIn(max = 420.dp)
+                .background(colors.surface)
+                .border(BorderStroke(1.5.dp, colors.border), RectangleShape)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(colors.accent)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(colors.surface2)
+                            .border(1.dp, colors.border),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .rotate(rotation)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column {
+                        Text(
+                            text = "HYPERION BRIDGE TERMINAL",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.foreground,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "INDEXING QUESTION BANKS...",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.accent,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surface2)
+                        .border(1.dp, colors.border)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Text(
+                        text = "> [SYS] MOUNTING LOCAL STORAGE",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = colors.foreground,
+                        fontSize = 11.sp
+                    )
+                    if (stepState.intValue >= 1) {
+                        Text(
+                            text = "> [DB] WARMING QUESTION REPOSITORY...",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = colors.foreground,
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (stepState.intValue >= 2) {
+                        Text(
+                            text = "> [SEC] HARDWARE CREDENTIALS VERIFIED",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = colors.success,
+                            fontSize = 11.sp
+                        )
+                    }
+                    if (stepState.intValue >= 3) {
+                        Text(
+                            text = "> [OK] INTERFACE READY",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = colors.success,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Surface(
+                    shape = RectangleShape,
+                    color = colors.surface2,
+                    border = BorderStroke(1.dp, colors.border),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "PLEASE WAIT · SYSTEM INITIALIZING",
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.muted,
+                        letterSpacing = 1.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
     }
 }

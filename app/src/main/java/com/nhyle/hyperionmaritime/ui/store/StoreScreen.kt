@@ -425,6 +425,7 @@ fun StoreScreen(
 
                     SharpProductCard(
                         productId = productId,
+                        viewModel = viewModel,
                         billingManager = billingManager,
                         colors = colors,
                         isEntitled = isEntitled,
@@ -981,6 +982,7 @@ private fun SharpTerminalTopBar(
 @Composable
 private fun SharpProductCard(
     productId: String,
+    viewModel: ReviewerViewModel,
     billingManager: com.nhyle.hyperionmaritime.data.billing.BillingManager,
     colors: StoreColors,
     isEntitled: Boolean,
@@ -1006,12 +1008,22 @@ private fun SharpProductCard(
         else -> productId.uppercase()
     }
 
+    val track = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> Track.DECK_OIC_NW
+        BillingConstants.PRODUCT_GMDSS_PASS -> Track.GMDSS_GOC
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> Track.ENGINE_OIC_EW
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> Track.DECK_MGT
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> Track.ENGINE_MGT
+        else -> null
+    }
+    val countText = if (track != null) viewModel.getTrackQuestionCountFormatted(track) else "Full Question Bank"
+
     val featureBullets = when (productId) {
-        BillingConstants.PRODUCT_OIC_NW_PASS -> "6,445 Questions • All 12 Competencies • Timed Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_GMDSS_PASS -> "2,260 Questions • Radio Protocols & Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "Engine Operational Level • 13 Competencies • Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_DECK_MGT_PASS -> "Deck Management Level • 18 Competencies • Mock Exams • Offline at Sea"
-        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "Engine Management Level • 14 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "$countText • All 12 Competencies • Timed Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "$countText • Radio Protocols & Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "$countText • 13 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "$countText • 18 Competencies • Mock Exams • Offline at Sea"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "$countText • 14 Competencies • Mock Exams • Offline at Sea"
         else -> ""
     }
 

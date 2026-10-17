@@ -65,6 +65,18 @@ object MaritimeQuestionBankDeckF1 {
     }
 
     fun openAssetStream(assetPath: String): java.io.InputStream? {
+        val encrypted = openRawAssetStream("$assetPath.enc")
+        if (encrypted != null) {
+            return try {
+                com.nhyle.hyperionmaritime.data.util.AssetCrypto.decryptStream(encrypted)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return openRawAssetStream(assetPath)
+    }
+
+    private fun openRawAssetStream(assetPath: String): java.io.InputStream? {
         return try {
             val classLoader = MaritimeQuestionBankDeckF1::class.java.classLoader
             classLoader?.getResourceAsStream(assetPath)
@@ -753,7 +765,7 @@ object MaritimeQuestionBankDeckF1 {
                 else -> Difficulty.DIFFICULT
             }
             Question(
-                id = "O-F1-C7-${String.format("%03d", i)}",
+                id = "FALLBACK-F1-C7-${String.format("%03d", i)}",
                 track = Track.DECK_OIC_NW,
                 functionId = "F1",
                 competenceId = "C7",
@@ -820,7 +832,7 @@ object MaritimeQuestionBankDeckF1 {
                 }
             }
         }
-        return list
+        return list.filterNot { it.id.startsWith("FALLBACK-") }
     }
 
     private fun getFallbackC7Questions(): List<Question> {
@@ -918,7 +930,7 @@ object MaritimeQuestionBankDeckF1 {
                 else -> Difficulty.DIFFICULT
             }
             Question(
-                id = "O-F1-C9-${String.format("%03d", i)}",
+                id = "FALLBACK-F1-C9-${String.format("%03d", i)}",
                 track = Track.DECK_OIC_NW,
                 functionId = "F1",
                 competenceId = "C9",
@@ -985,7 +997,7 @@ object MaritimeQuestionBankDeckF1 {
                 }
             }
         }
-        return list
+        return list.filterNot { it.id.startsWith("FALLBACK-") }
     }
 
     private fun getFallbackC9Questions(): List<Question> {

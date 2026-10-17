@@ -34,7 +34,6 @@ import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBankGmdss
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
 import com.nhyle.hyperionmaritime.data.repository.ReviewerRepository
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
-// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
@@ -584,12 +583,19 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _checkInFeedbackMessage = MutableStateFlow<String?>(null)
     val checkInFeedbackMessage: StateFlow<String?> = _checkInFeedbackMessage.asStateFlow()
 
+    private val _isRepoWarming = MutableStateFlow(false)
+    val isRepoWarming: StateFlow<Boolean> = _isRepoWarming.asStateFlow()
+
     init {
         LicenseManager.init(application)
         MaritimeQuestionBank.init(application)
         loadCurrentLicense(application)
         checkLicenseOnLaunch(application)
         refreshUnlockStates()
+
+        if (prefs.getBoolean("has_accepted_terms", false)) {
+            warmUpQuestionRepositories()
+        }
 
         viewModelScope.launch {
             combine(
@@ -1511,6 +1517,33 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _hasAcceptedTerms.value = true
         backStack.clear()
         _currentScreen.value = Screen.TrackSelection
+        warmUpQuestionRepositories()
+    }
+
+    fun warmUpQuestionRepositories() {
+        if (_isRepoWarming.value) return
+        _isRepoWarming.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+            try {
+                MaritimeQuestionBank.ALL_QUESTIONS
+                val context = getApplication<Application>()
+                MaritimeQuestionBankGmdss.getQuestions(context)
+                Track.entries.forEach { track ->
+                    MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+                }
+            } catch (_: Exception) {}
+
+            // Minimum 1.2s duration gives the user clean visual feedback while threads finish indexing
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed < 1200L) {
+                delay(1200L - elapsed)
+            }
+
+            withContext(Dispatchers.Main) {
+                _isRepoWarming.value = false
+            }
+        }
     }
 
     // Navigation State & History Back Stack
@@ -4201,6 +4234,39 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             triggerPaywall(_selectedTrack.value)
         }
         return if (isPro) questions else questions.take(5)
+    }
+
+    private val trackQuestionCountCache = java.util.concurrent.ConcurrentHashMap<Track, Int>()
+
+    fun getTrackTotalQuestionCount(track: Track): Int {
+        return trackQuestionCountCache.getOrPut(track) {
+            val context = getApplication<Application>()
+            try {
+                when (track) {
+                    Track.DECK_OIC_NW -> MaritimeQuestionBank.getQuestionsByTrack(Track.DECK_OIC_NW, isProUnlocked = true).size
+                    Track.GMDSS_GOC -> {
+                        val c1 = ProQuestionRepository.loadAllRawCompetenceQuestions(context, "C1").size
+                        val c2 = ProQuestionRepository.loadAllRawCompetenceQuestions(context, "C2").size
+                        val total = c1 + c2
+                        if (total > 0) total else MaritimeQuestionBankGmdss.getQuestions(context).size
+                    }
+                    Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
+                        MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
+                    }
+                }
+            } catch (_: Exception) {
+                0
+            }
+        }
+    }
+
+    fun getTrackQuestionCountFormatted(track: Track): String {
+        val count = getTrackTotalQuestionCount(track)
+        return if (count > 0) {
+            "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).format(count)} Questions"
+        } else {
+            "Full Question Bank"
+        }
     }
 }
 

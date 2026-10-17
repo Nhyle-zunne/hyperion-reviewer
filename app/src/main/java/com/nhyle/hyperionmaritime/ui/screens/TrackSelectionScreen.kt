@@ -46,7 +46,6 @@ import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.outlined.CalendarMonth
-// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import android.app.DatePickerDialog
@@ -266,10 +265,12 @@ fun TrackSelectionScreen(
 
             // 5. 2x2 Grid of Square Tiles
             item {
+                val deckTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW)
+                val gmdssTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC)
                 val deckSeenCount = viewModel.getSeenQuestionIds(Track.DECK_OIC_NW).size
                 val gmdssSeenCount = viewModel.getSeenQuestionIds(Track.GMDSS_GOC).size
-                val deckProgress = (deckSeenCount.toFloat() / 6445f * 100).toInt().coerceIn(0, 100)
-                val gmdssProgress = (gmdssSeenCount.toFloat() / 2260f * 100).toInt().coerceIn(0, 100)
+                val deckProgress = if (deckTotal > 0) ((deckSeenCount.toFloat() / deckTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
+                val gmdssProgress = if (gmdssTotal > 0) ((gmdssSeenCount.toFloat() / gmdssTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
 
                 DashboardGrid(
                     viewModel = viewModel,
@@ -468,6 +469,9 @@ private fun DashboardGrid(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        val deckTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW)
+        val gmdssTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC)
+
         // Row 1: Deck & GMDSS
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -478,7 +482,7 @@ private fun DashboardGrid(
                     track = Track.DECK_OIC_NW,
                     title = "DECK OIC-NW",
                     regulation = "STCW REGULATION II/1",
-                    questionNumber = "6,445",
+                    questionNumber = if (deckTotal >= 1000) "%,d".format(deckTotal) else deckTotal.toString(),
                     competencyAndMock = "12 COMPETENCIES · 200-ITEM MOCK",
                     progressPercent = deckProgress,
                     isUnlocked = isOicNwProUnlocked,
@@ -494,7 +498,7 @@ private fun DashboardGrid(
                     track = Track.GMDSS_GOC,
                     title = "GMDSS RADIO (GOC)",
                     regulation = "STCW REGULATION IV/2",
-                    questionNumber = "2,260",
+                    questionNumber = if (gmdssTotal >= 1000) "%,d".format(gmdssTotal) else gmdssTotal.toString(),
                     competencyAndMock = "2 COMPETENCIES · 100-ITEM MOCK",
                     progressPercent = gmdssProgress,
                     isUnlocked = isGmdssProUnlocked,
@@ -907,7 +911,7 @@ private fun PassStoreTile(
         border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.6f)),
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(205.dp)
             .clickable { onClick() }
     ) {
         Column(
@@ -924,8 +928,8 @@ private fun PassStoreTile(
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .background(colors.accent.copy(alpha = 0.15f), RectangleShape)
-                        .border(1.dp, colors.accent, RectangleShape),
+                        .background(colors.surface2, RectangleShape)
+                        .border(1.dp, colors.border, RectangleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -943,13 +947,14 @@ private fun PassStoreTile(
                 ) {
                     Text(
                         text = "PASS STORE",
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
                         color = colors.accent,
-                        fontSize = 8.sp,
-                        letterSpacing = 0.5.sp,
-                        softWrap = true
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -964,41 +969,91 @@ private fun PassStoreTile(
                     letterSpacing = (-0.2).sp,
                     softWrap = true
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(1.dp))
                 Text(
-                    text = "Full question rationales & offline MARINA reviewer pass",
+                    text = "ALL LICENSURE TRACKS",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.muted,
                     fontSize = 9.sp,
-                    softWrap = true,
-                    lineHeight = 12.sp
+                    softWrap = true
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "PRO PASS",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.accent,
+                    fontSize = 21.sp,
+                    softWrap = true
+                )
+                Text(
+                    text = "FULL RATIONALES & MOCKS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp,
+                    softWrap = true
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "5 TRACKS · OFFLINE AT SEA",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.muted,
+                    fontSize = 10.sp,
+                    softWrap = true
                 )
             }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
             ) {
-                Surface(
-                    shape = RectangleShape,
-                    color = colors.accent,
-                    modifier = Modifier.clickable { onClick() }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Text(
+                        text = "HYPERION STORE",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = colors.muted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        softWrap = true
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.surface2, RectangleShape)
                     ) {
-                        Text(
-                            text = "STORE →",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.accentForeground,
-                            fontSize = 10.sp,
-                            letterSpacing = 0.5.sp,
-                            softWrap = true
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(1f)
+                                .background(colors.accent, RectangleShape)
                         )
                     }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(colors.accent, RectangleShape)
+                        .clickable { onClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Pass Store",
+                        tint = colors.accentForeground,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -1015,14 +1070,8 @@ private fun TrackDetailsPopup(
 ) {
     val colors = LocalSpaghettiColors.current
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
-    val totalQuestions = when (track) {
-        Track.DECK_OIC_NW -> "6,445"
-        Track.GMDSS_GOC -> "2,260"
-        else -> {
-            val count = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
-            if (count >= 1000) "%,d".format(count) else count.toString()
-        }
-    }
+    val count = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+    val totalQuestions = if (count >= 1000) "%,d".format(count) else count.toString()
     val mockSize = when (track) {
         Track.DECK_OIC_NW -> 200
         Track.GMDSS_GOC -> 100

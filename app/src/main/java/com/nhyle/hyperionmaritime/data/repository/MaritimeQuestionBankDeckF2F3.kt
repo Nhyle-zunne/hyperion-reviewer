@@ -61,6 +61,18 @@ object MaritimeQuestionBankDeckF2F3 {
     }
 
     fun openAssetStream(assetPath: String): java.io.InputStream? {
+        val encrypted = openRawAssetStream("$assetPath.enc")
+        if (encrypted != null) {
+            return try {
+                com.nhyle.hyperionmaritime.data.util.AssetCrypto.decryptStream(encrypted)
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return openRawAssetStream(assetPath)
+    }
+
+    private fun openRawAssetStream(assetPath: String): java.io.InputStream? {
         return try {
             val classLoader = MaritimeQuestionBankDeckF2F3::class.java.classLoader
             classLoader?.getResourceAsStream(assetPath)
@@ -113,7 +125,7 @@ object MaritimeQuestionBankDeckF2F3 {
                 else -> Difficulty.DIFFICULT
             }
             Question(
-                id = "O-$functionId-$competenceId-${String.format("%03d", i)}",
+                id = "FALLBACK-$functionId-$competenceId-${String.format("%03d", i)}",
                 track = Track.DECK_OIC_NW,
                 functionId = functionId,
                 competenceId = competenceId,
@@ -219,7 +231,7 @@ object MaritimeQuestionBankDeckF2F3 {
                 }
             }
         }
-        return list
+        return list.filterNot { it.id.startsWith("FALLBACK-") }
     }
 
     private fun parseCsvText(text: String): List<List<String>> {

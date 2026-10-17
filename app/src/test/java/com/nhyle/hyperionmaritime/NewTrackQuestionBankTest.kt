@@ -33,7 +33,7 @@ class NewTrackQuestionBankTest {
 
             for (comp in competences) {
                 val compNum = comp.competenceId.removePrefix("C")
-                val relativePath = "questions/$folder/${prefix}_c$compNum.csv"
+                val relativePath = "questions/$folder/${prefix}_c$compNum.csv.enc"
                 val csvFile = File("app/src/main/assets/$relativePath").let {
                     if (it.exists()) it else File("src/main/assets/$relativePath")
                 }
@@ -101,7 +101,7 @@ class NewTrackQuestionBankTest {
     }
 
     private fun countCsvDataRows(file: File): Int {
-        val text = file.readText(Charsets.UTF_8)
+        val text = com.nhyle.hyperionmaritime.data.util.AssetCrypto.decrypt(file.readBytes()).toString(Charsets.UTF_8)
             .replace("&#39;", "'")
             .replace("/'", "'")
             .replace("&amp;", "&")

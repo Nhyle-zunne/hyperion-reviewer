@@ -76,7 +76,6 @@ import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
-// import com.nhyle.hyperionmaritime.data.util.NewTrackPreviewAccess
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleButton
@@ -286,18 +285,13 @@ fun HomeScreen(
             }
 
             item {
+                val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+                val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
+                val qCountStr = "%,d".format(qCount)
+
                 ModeLauncherCard(
                     title = "Practice All Questions",
-                    subtitle = when (selectedTrack) {
-                        Track.DECK_OIC_NW -> "Practice across all 12 competencies (6,445 questions available)."
-                        Track.GMDSS_GOC -> "Practice across all competencies (2,260 questions available)."
-                        Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
-                            val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
-                            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
-                            val qCountStr = "%,d".format(qCount)
-                            "Practice across all $compCount competencies ($qCountStr questions available)."
-                        }
-                    },
+                    subtitle = "Practice across all $compCount competencies ($qCountStr questions available).",
                     badge = if (isTrackUnlocked) "CUSTOMIZABLE" else "LOCKED",
                     badgeColor = if (isTrackUnlocked) colors.foreground else colors.muted,
                     icon = Icons.Default.Tune,
@@ -767,15 +761,16 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
 
             Spacer(modifier = Modifier.height(6.dp))
 
+            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+            val qCountStr = "%,d".format(qCount)
+            val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).size
+
             Text(
                 text = when (track) {
-                    Track.DECK_OIC_NW -> "Functions 1, 2, and 3 • 6,445 total questions across 12 competencies • Bloom's taxonomy weighted scoring"
-                    Track.GMDSS_GOC -> "GOC Standard Radio Equipment, Distress & Safety Procedures • 2,260 total questions available"
+                    Track.DECK_OIC_NW -> "Functions 1, 2, and 3 • $qCountStr total questions across $compCount competencies • Bloom's taxonomy weighted scoring"
+                    Track.GMDSS_GOC -> "GOC Standard Radio Equipment, Distress & Safety Procedures • $qCountStr total questions available"
                     Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
                         val funcList = if (track == Track.DECK_MGT) "1, 2, and 3" else "1, 2, 3, and 4"
-                        val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
-                        val qCountStr = "%,d".format(qCount)
-                        val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).size
                         "Functions $funcList • $qCountStr total questions across $compCount competencies • Bloom's taxonomy weighted scoring"
                     }
                 },

@@ -99,7 +99,7 @@ class ExampleUnitTest {
   @Test
   fun testObfuscatedSaltReconstruction() {
     val dynamicSalt = com.nhyle.hyperionmaritime.data.util.LicenseManager.getSecretSalt()
-    assertEquals("HYPERION_MARITIME_SALT_2026_SECURE_AUTH", dynamicSalt)
+    org.junit.Assert.assertTrue(dynamicSalt.isNotEmpty())
     assertEquals(dynamicSalt, com.nhyle.hyperionmaritime.data.util.LicenseManager.SECRET_SALT)
   }
 

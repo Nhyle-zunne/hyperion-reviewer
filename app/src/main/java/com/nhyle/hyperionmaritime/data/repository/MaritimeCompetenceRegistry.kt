@@ -311,23 +311,27 @@ object MaritimeCompetenceRegistry {
             return MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
         }
         if (track == Track.GMDSS_GOC) {
-            return if (isOperationalReview) {
-                when (competenceId) {
+            if (isOperationalReview) {
+                return when (competenceId) {
                     "C1" -> OPERATIONAL_REVIEW_LIMIT_C1
                     "C2" -> OPERATIONAL_REVIEW_LIMIT_C2
                     else -> OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
                 }
-            } else {
-                when (competenceId) {
-                    "C1" -> 1911
-                    "C2" -> 349
-                    else -> 2260
-                }
+            }
+            val dynamicGmdssCount = MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
+            if (dynamicGmdssCount > 0) return dynamicGmdssCount
+            return when (competenceId) {
+                "C1" -> 1911
+                "C2" -> 349
+                else -> 2260
             }
         }
         if (isCrpMode) {
             return getOfficialCrpQuestionCount(competenceId, track)
         }
+        val dynamicDeckCount = MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
+        if (dynamicDeckCount > 0) return dynamicDeckCount
+
         return when (competenceId) {
             "C1" -> 831
             "C2" -> 570
@@ -341,10 +345,7 @@ object MaritimeCompetenceRegistry {
             "C12" -> 351
             "C13" -> 888
             "C17" -> 628
-            else -> {
-                val count = MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = true).size
-                if (count > 0) count else (CRP_DECK_DISTRIBUTION[competenceId] ?: 100)
-            }
+            else -> CRP_DECK_DISTRIBUTION[competenceId] ?: 100
         }
     }
 
@@ -354,8 +355,9 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getTotalTrackQuestionCount(track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
-        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
-            return MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = isProUnlocked).size
+        val dynamicCount = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = isProUnlocked).size
+        if (dynamicCount > 0) {
+            return dynamicCount
         }
         if (track == Track.GMDSS_GOC) {
             if (isOperationalReview) {
@@ -369,8 +371,7 @@ object MaritimeCompetenceRegistry {
         if (track == Track.DECK_OIC_NW) {
             return 6445
         }
-        val count = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
-        return if (count > 0) count else 6444
+        return 6444
     }
 
     fun getTotalStandardReviewQuestionCount(track: Track, isProUnlocked: Boolean): Int {

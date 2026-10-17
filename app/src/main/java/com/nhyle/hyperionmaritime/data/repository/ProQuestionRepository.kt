@@ -93,18 +93,26 @@ object ProQuestionRepository {
         val assetPath = "questions/pro/${normComp.lowercase()}_part$part.csv"
         val questions = try {
             val ctx = context ?: appContext
-            val stream = try {
-                ctx?.assets?.open(assetPath)
-            } catch (_: Exception) {
-                null
-            } ?: run {
-                val classLoader = ProQuestionRepository::class.java.classLoader
-                classLoader?.getResourceAsStream(assetPath)
-                    ?: classLoader?.getResourceAsStream("assets/$assetPath")
-                    ?: java.io.File("app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
-                    ?: java.io.File("src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
-                    ?: java.io.File("/app/src/main/assets/$assetPath").takeIf { it.exists() }?.inputStream()
-            } ?: return emptyList()
+            val classLoader = ProQuestionRepository::class.java.classLoader
+            fun openRaw(path: String): java.io.InputStream? {
+                val fromAssets = try {
+                    ctx?.assets?.open(path)
+                } catch (_: Exception) {
+                    null
+                }
+                return fromAssets
+                    ?: classLoader?.getResourceAsStream(path)
+                    ?: classLoader?.getResourceAsStream("assets/$path")
+                    ?: java.io.File("app/src/main/assets/$path").takeIf { it.exists() }?.inputStream()
+                    ?: java.io.File("src/main/assets/$path").takeIf { it.exists() }?.inputStream()
+                    ?: java.io.File("/app/src/main/assets/$path").takeIf { it.exists() }?.inputStream()
+            }
+            val encryptedStream = openRaw("$assetPath.enc")
+            val stream = (if (encryptedStream != null) {
+                com.nhyle.hyperionmaritime.data.util.AssetCrypto.decryptStream(encryptedStream)
+            } else {
+                openRaw(assetPath)
+            }) ?: return emptyList()
 
             val content = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val rows = parseCsvText(content)
