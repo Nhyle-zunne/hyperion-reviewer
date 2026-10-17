@@ -19,6 +19,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,6 +41,8 @@ import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -51,12 +54,17 @@ class MainActivity : ComponentActivity() {
         MaritimeQuestionBank.init(applicationContext)
         LicenseManager.init(applicationContext)
 
+        // Warm up the question bank on an I/O thread so opening a track is instant
+        lifecycleScope.launch(Dispatchers.IO) {
+            MaritimeQuestionBank.ALL_QUESTIONS
+        }
+
         appUpdateManager = AppUpdateManagerFactory.create(this)
         checkForInAppUpdates()
 
         enableEdgeToEdge()
         setContent {
-            val isDarkMode by viewModel.isDarkMode.collectAsState()
+            val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
             AppTheme(isDarkMode = isDarkMode) {
                 HyperionApp(viewModel = viewModel)
             }
@@ -139,12 +147,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HyperionApp(viewModel: ReviewerViewModel) {
-    val currentScreen by viewModel.currentScreen.collectAsState()
+    val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    val showPaywall by viewModel.showPaywallDialog.collectAsState()
-    val showDailyCheckIn by viewModel.showDailyCheckInDialog.collectAsState()
+    val showPaywall by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
+    val showDailyCheckIn by viewModel.showDailyCheckInDialog.collectAsStateWithLifecycle()
 
     // Handle drawer opening events emitted from ViewModel
     LaunchedEffect(Unit) {
@@ -302,7 +310,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
         )
     }
 
-    val termsAccepted by viewModel.hasAcceptedTerms.collectAsState()
+    val termsAccepted by viewModel.hasAcceptedTerms.collectAsStateWithLifecycle()
     val isDashboard = currentScreen is Screen.TrackSelection || currentScreen is Screen.Home
 
     if (showDailyCheckIn && termsAccepted && isDashboard) {

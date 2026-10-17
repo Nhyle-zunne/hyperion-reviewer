@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,17 +76,17 @@ fun SearchScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
-    val isDarkMode by viewModel.isDarkMode.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
-    val selectedCompetenceFilter by viewModel.selectedCompetenceFilter.collectAsState()
-    val selectedSearchTrack by viewModel.selectedSearchTrack.collectAsState()
-    val isOicNwActive by viewModel.isOicNwActive.collectAsState()
-    val isGmdssActive by viewModel.isGmdssActive.collectAsState()
-    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsState()
-    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsState()
-    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsState()
-    val isUnlocked by viewModel.isUnlocked.collectAsState()
+    val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val selectedCompetenceFilter by viewModel.selectedCompetenceFilter.collectAsStateWithLifecycle()
+    val selectedSearchTrack by viewModel.selectedSearchTrack.collectAsStateWithLifecycle()
+    val isOicNwActive by viewModel.isOicNwActive.collectAsStateWithLifecycle()
+    val isGmdssActive by viewModel.isGmdssActive.collectAsStateWithLifecycle()
+    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsStateWithLifecycle()
+    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsStateWithLifecycle()
+    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsStateWithLifecycle()
+    val isUnlocked by viewModel.isUnlocked.collectAsStateWithLifecycle()
 
     fun isTrackLicensed(track: Track): Boolean = when (track) {
         Track.DECK_OIC_NW -> isOicNwActive
@@ -563,7 +564,10 @@ fun SearchScreen(
                         MianSectionHeader(title = "MATCHING QUESTIONS (${searchResults.size})")
                     }
 
-                    items(searchResults) { question ->
+                    items(
+                        items = searchResults,
+                        key = { "${it.competenceId}_${it.id}" }
+                    ) { question ->
                         SearchResultCard(question = question)
                     }
 
@@ -642,7 +646,9 @@ private fun SearchResultCard(
     question: Question
 ) {
     val colors = LocalSpaghettiColors.current
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by androidx.compose.runtime.saveable.rememberSaveable(question.id) { 
+        mutableStateOf(false) 
+    }
 
     MianRuleCard(
         ruleColor = colors.border,

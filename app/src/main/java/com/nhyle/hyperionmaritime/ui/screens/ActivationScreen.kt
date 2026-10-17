@@ -781,7 +781,8 @@ fun ActivationScreen(
 
             MianRuleCard(
                 ruleColor = colors.accent,
-                containerColor = colors.surface
+                containerColor = colors.surface,
+                modifier = Modifier.bringIntoViewRequester(promoBringIntoViewRequester)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -822,27 +823,12 @@ fun ActivationScreen(
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .bringIntoViewRequester(promoBringIntoViewRequester)
-                            .onGloballyPositioned { coordinates ->
-                                promoFieldSize = coordinates.size
-                            }
                             .onFocusChanged { focusState ->
                                 if (focusState.isFocused) {
                                     coroutineScope.launch {
-                                        val extraBottom = with(density) { 12.dp.toPx() }
-                                        val width = promoFieldSize.width.toFloat()
-                                        val height = promoFieldSize.height.toFloat()
-                                        val targetRect = if (height > 0f) {
-                                            Rect(
-                                                left = 0f,
-                                                top = 0f,
-                                                right = width,
-                                                bottom = height + extraBottom
-                                            )
-                                        } else null
-                                        promoBringIntoViewRequester.bringIntoView(targetRect)
-                                        kotlinx.coroutines.delay(200)
-                                        promoBringIntoViewRequester.bringIntoView(targetRect)
+                                        delay(250)
+                                        promoBringIntoViewRequester.bringIntoView()
+                                        scrollState.animateScrollTo(scrollState.maxValue)
                                     }
                                 }
                             }
@@ -913,6 +899,9 @@ fun ActivationScreen(
                     }
                 }
             }
+
+            // Generous scroll clearance above soft keyboard
+            Spacer(modifier = Modifier.height(120.dp))
         }
     }
 }

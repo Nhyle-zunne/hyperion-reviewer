@@ -397,13 +397,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isHypeRadio = hypePass != null && (hypePass.coversRadio || hypePass.coversAll) && !hypePass.isExpired()
         val isHypeAll = hypePass != null && hypePass.coversAll && !hypePass.isExpired()
 
-        val newOic = if (isClockTampered) false else (offlineOic || playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || isHypeDeck)
-        val newGmdss = if (isClockTampered) false else (offlineGmdss || playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || isHypeRadio)
-        val newEw = if (isClockTampered) false else (offlineEw || playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked)
-        val newDm = if (isClockTampered) false else (offlineDm || playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked)
-        val newEm = if (isClockTampered) false else (offlineEm || playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked)
-        val newHyp = if (isClockTampered) false else (offlineHyp || playEnt.allAccessUnlocked || isHypeAll || (newOic && newGmdss && newEw && newDm && newEm))
-        val newAct = if (isClockTampered) false else (newOic || newGmdss || newEw || newDm || newEm)
+        // Google Play Subscriptions are server-authoritative and immune to local clock tamper
+        val newOic = playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineOic || isHypeDeck))
+        val newGmdss = playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineGmdss || isHypeRadio))
+        val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEw)
+        val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineDm)
+        val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEm)
+        val newHyp = playEnt.allAccessUnlocked || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
+        val newAct = newOic || newGmdss || newEw || newDm || newEm
 
         if (_isOicNwProUnlocked.value != newOic) _isOicNwProUnlocked.value = newOic
         if (_isGmdssProUnlocked.value != newGmdss) _isGmdssProUnlocked.value = newGmdss
@@ -417,15 +418,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val gmdssPlan = playEnt.getActivePlanForTrack(Track.GMDSS_GOC)
         val allAccessPlan = playEnt.allAccessPlan
 
-        val isSub = (playEnt.allAccessUnlocked || playEnt.oicNwUnlocked || playEnt.gmdssUnlocked)
+        val isSub = (playEnt.allAccessUnlocked || playEnt.oicNwUnlocked || playEnt.gmdssUnlocked || playEnt.engineOicEwUnlocked || playEnt.deckMgtUnlocked || playEnt.engineMgtUnlocked)
         val isHypeActive = hypePass != null && !hypePass.isExpired()
 
+        // Strict Priority: Google Play Subscription > Offline Key > Promo Pass > Hype Check-in Pass
         val licenseType = when {
-            isClockTampered -> "RESTRICTED"
-            isOfflineActive -> "OFFLINE_PASS"
             isSub -> "SUBSCRIPTION"
-            isHypeActive -> "HYPE_PASS"
+            isOfflineActive -> "OFFLINE_PASS"
             _registrationUiState.value.licenseType == "PROMO_PASS" && newAct -> "PROMO_PASS"
+            isHypeActive -> "HYPE_PASS"
+            isClockTampered -> "RESTRICTED"
             else -> if (newAct) "OFFLINE_PASS" else "RESTRICTED"
         }
 
@@ -437,23 +439,31 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             else -> "NONE"
         }
 
-        val oicOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "OIC_NW", "ALL", "OIC"))
-        val gmdssOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "GMDSS_GOC", "ALL", "GOC"))
-        val ewOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_OIC_EW", "ALL", "EW"))
-        val dmOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "DECK_MGT", "ALL", "DM"))
-        val emOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_MGT", "ALL", "EM"))
-        val allAccessOfflineActive = !isClockTampered && offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ALL"))
+        val oicOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineOicNwUnlocked(app))
+        val gmdssOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineGmdssUnlocked(app))
+        val ewOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineEngineOicEwUnlocked(app))
+        val dmOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineDeckMgtUnlocked(app))
+        val emOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineEngineMgtUnlocked(app))
+        val allAccessOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineHyperionUnlocked(app))
 
         val oicTimeLeft = when {
-            oicOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             oicPlan != null && !oicPlan.isExpired -> "${oicPlan.getFormattedTimeRemaining()} (${oicPlan.getFormattedExpiryDate()})"
+            oicOfflineActive && app != null -> {
+                val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_OIC_NW)
+                val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_OIC_NW)
+                if (rem != null && exp != null) "$rem ($exp)" else null
+            }
             isHypeDeck -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             else -> null
         }
 
         val gmdssTimeLeft = when {
-            gmdssOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             gmdssPlan != null && !gmdssPlan.isExpired -> "${gmdssPlan.getFormattedTimeRemaining()} (${gmdssPlan.getFormattedExpiryDate()})"
+            gmdssOfflineActive && app != null -> {
+                val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.GMDSS_GOC)
+                val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.GMDSS_GOC)
+                if (rem != null && exp != null) "$rem ($exp)" else null
+            }
             isHypeRadio -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             else -> null
         }
@@ -463,18 +473,32 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val emPlan = playEnt.getActivePlanForTrack(Track.ENGINE_MGT)
 
         val ewTimeLeft = when {
-            ewOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             ewPlan != null && !ewPlan.isExpired -> "${ewPlan.getFormattedTimeRemaining()} (${ewPlan.getFormattedExpiryDate()})"
+            ewOfflineActive && app != null -> {
+                val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_OIC_EW)
+                val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_OIC_EW)
+                if (rem != null && exp != null) "$rem ($exp)" else null
+            }
             else -> null
         }
+
         val dmTimeLeft = when {
-            dmOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             dmPlan != null && !dmPlan.isExpired -> "${dmPlan.getFormattedTimeRemaining()} (${dmPlan.getFormattedExpiryDate()})"
+            dmOfflineActive && app != null -> {
+                val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_MGT)
+                val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_MGT)
+                if (rem != null && exp != null) "$rem ($exp)" else null
+            }
             else -> null
         }
+
         val emTimeLeft = when {
-            emOfflineActive -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             emPlan != null && !emPlan.isExpired -> "${emPlan.getFormattedTimeRemaining()} (${emPlan.getFormattedExpiryDate()})"
+            emOfflineActive && app != null -> {
+                val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_MGT)
+                val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_MGT)
+                if (rem != null && exp != null) "$rem ($exp)" else null
+            }
             else -> null
         }
 
@@ -699,11 +723,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     } else if (track == Track.GMDSS_GOC) {
                         if (prefs.getBoolean("is_gmdss_unlocked", false)) return true
                     } else if (track == Track.ENGINE_OIC_EW) {
-                        if (prefs.getBoolean("is_ew_unlocked", false)) return true
+                        if (prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false)) return true
                     } else if (track == Track.DECK_MGT) {
-                        if (prefs.getBoolean("is_dm_unlocked", false)) return true
+                        if (prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false)) return true
                     } else if (track == Track.ENGINE_MGT) {
-                        if (prefs.getBoolean("is_em_unlocked", false)) return true
+                        if (prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false)) return true
                     }
                 }
                 if (LicenseManager.isTrackProUnlocked(app, track) ||
@@ -751,10 +775,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     when (module) {
                         com.nhyle.hyperionmaritime.data.util.LicenseTier.OIC_NW -> if (prefs.getBoolean("is_oic_unlocked", false)) return true
                         com.nhyle.hyperionmaritime.data.util.LicenseTier.GMDSS -> if (prefs.getBoolean("is_gmdss_unlocked", false)) return true
-                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_OIC_EW -> if (prefs.getBoolean("is_ew_unlocked", false)) return true
-                        com.nhyle.hyperionmaritime.data.util.LicenseTier.DECK_MGT -> if (prefs.getBoolean("is_dm_unlocked", false)) return true
-                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_MGT -> if (prefs.getBoolean("is_em_unlocked", false)) return true
-                        com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> if (prefs.getBoolean("is_oic_unlocked", false) && prefs.getBoolean("is_gmdss_unlocked", false) && prefs.getBoolean("is_ew_unlocked", false) && prefs.getBoolean("is_dm_unlocked", false) && prefs.getBoolean("is_em_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_OIC_EW -> if (prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.DECK_MGT -> if (prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.ENGINE_MGT -> if (prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false)) return true
+                        com.nhyle.hyperionmaritime.data.util.LicenseTier.HYPERION_ALL_ACCESS -> {
+                            val hasOic = prefs.getBoolean("is_oic_unlocked", false)
+                            val hasGmdss = prefs.getBoolean("is_gmdss_unlocked", false)
+                            val hasEw = prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false)
+                            val hasDm = prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false)
+                            val hasEm = prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false)
+                            if (hasOic && hasGmdss && hasEw && hasDm && hasEm) return true
+                        }
                     }
                 }
                 return LicenseManager.hasAccessTo(app, module)
@@ -769,34 +800,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         if (result.isSuccess) {
             try {
                 val prefs = app.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-                val editor = prefs.edit()
-                
-                val prevOic = prefs.getBoolean("is_oic_unlocked", false)
-                val prevGmdss = prefs.getBoolean("is_gmdss_unlocked", false)
-
-                val oicUnlocked = (result == com.nhyle.hyperionmaritime.data.util.UnlockResult.OIC_NW_UNLOCKED || result == com.nhyle.hyperionmaritime.data.util.UnlockResult.HYPERION_UNLOCKED || result == com.nhyle.hyperionmaritime.data.util.UnlockResult.TERMINAL_ACTIVATED || prevOic)
-                val gmdssUnlocked = (result == com.nhyle.hyperionmaritime.data.util.UnlockResult.GMDSS_UNLOCKED || result == com.nhyle.hyperionmaritime.data.util.UnlockResult.HYPERION_UNLOCKED || result == com.nhyle.hyperionmaritime.data.util.UnlockResult.TERMINAL_ACTIVATED || prevGmdss)
-                val allUnlocked = (result == com.nhyle.hyperionmaritime.data.util.UnlockResult.HYPERION_UNLOCKED || result == com.nhyle.hyperionmaritime.data.util.UnlockResult.TERMINAL_ACTIVATED || (oicUnlocked && gmdssUnlocked))
-
-                val resolvedTier = if (allUnlocked) "ALL_ACCESS" else if (gmdssUnlocked) "GMDSS_GOC" else "OIC_NW"
-
-                editor.putBoolean("is_full_access_unlocked", allUnlocked)
-                editor.putBoolean("is_oic_unlocked", oicUnlocked)
-                editor.putBoolean("is_gmdss_unlocked", gmdssUnlocked)
-                editor.putBoolean("is_all_access_unlocked", allUnlocked)
-                editor.putBoolean("is_licensed", true)
-                editor.putBoolean("is_offline_license", true)
-                editor.putString("license_type", "OFFLINE_PASS")
-                editor.putString("active_license_tier", resolvedTier)
-                editor.remove("active_promo_code")
-                editor.remove("promo_expiry_epoch")
-                editor.remove("is_hardware_lifetime")
-                editor.remove("is_fully_activated")
-                editor.apply()
-
-                if (oicUnlocked) LicenseManager.setOicNwProUnlocked(app, true)
-                if (gmdssUnlocked) LicenseManager.setGmdssProUnlocked(app, true)
-                if (allUnlocked) LicenseManager.setHyperionProUnlocked(app, true)
+                val oicUnlocked = prefs.getBoolean("is_oic_unlocked", false)
+                val gmdssUnlocked = prefs.getBoolean("is_gmdss_unlocked", false)
+                val ewUnlocked = prefs.getBoolean("is_engine_ew_unlocked", false)
+                val dmUnlocked = prefs.getBoolean("is_deck_mgt_unlocked", false)
+                val emUnlocked = prefs.getBoolean("is_engine_mgt_unlocked", false)
+                val allUnlocked = prefs.getBoolean("is_all_access_unlocked", false) || (oicUnlocked && gmdssUnlocked && ewUnlocked && dmUnlocked && emUnlocked)
 
                 val offlineInfo = LicenseManager.getOfflineLicenseInfo(app)
                 val formattedStatus = if (offlineInfo != null) {
@@ -812,6 +821,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                         isSuccess = true,
                         isOicLicensed = oicUnlocked,
                         isGmdssLicensed = gmdssUnlocked,
+                        isEwLicensed = ewUnlocked,
+                        isDmLicensed = dmUnlocked,
+                        isEmLicensed = emUnlocked,
                         isAllAccessLicensed = allUnlocked,
                         statusMessage = formattedStatus,
                         promoError = null,
@@ -821,6 +833,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 }
             } catch (_: Exception) {}
             ProQuestionRepository.clearCache()
+            refreshUnlockStates()
         }
         return result
     }
@@ -834,13 +847,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         if (prefs != null) {
             val isOic = prefs.getBoolean("is_oic_unlocked", false)
             val isGmdss = prefs.getBoolean("is_gmdss_unlocked", false)
+            val isEw = prefs.getBoolean("is_engine_ew_unlocked", false)
+            val isDm = prefs.getBoolean("is_deck_mgt_unlocked", false)
+            val isEm = prefs.getBoolean("is_engine_mgt_unlocked", false)
             val isAll = prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
             val isOffline = prefs.getBoolean("is_offline_license", false)
             val type = prefs.getString("license_type", "RESTRICTED") ?: "RESTRICTED"
             val expiryEpoch = prefs.getLong("promo_expiry_epoch", 0L)
             val now = System.currentTimeMillis()
 
-            val hasAnyLicense = isOic || isGmdss || isAll
+            val hasAnyLicense = isOic || isGmdss || isEw || isDm || isEm || isAll
 
             // 1. Promo Pass
             if (type == "PROMO_PASS" && hasAnyLicense) {
@@ -854,13 +870,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                         licenseType = "PROMO_PASS",
                         isOicLicensed = true,
                         isGmdssLicensed = true,
+                        isEwLicensed = true,
+                        isDmLicensed = true,
+                        isEmLicensed = true,
                         isAllAccessLicensed = true,
                         statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)",
                         keyError = null,
                         promoError = null
                     )
                 }
-            } else if (isOffline && (isOic || isGmdss || isAll)) {
+            } else if (isOffline && hasAnyLicense) {
                 // 2. Offline Hardware Licenses (Time-bound 1W, 1M, 1Y)
                 val offlineInfo = LicenseManager.getOfflineLicenseInfo(context)
                 if (offlineInfo != null && offlineInfo.isActive) {
@@ -870,6 +889,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                             licenseType = "OFFLINE_PASS",
                             isOicLicensed = isOic || isAll,
                             isGmdssLicensed = isGmdss || isAll,
+                            isEwLicensed = isEw || isAll,
+                            isDmLicensed = isDm || isAll,
+                            isEmLicensed = isEm || isAll,
                             isAllAccessLicensed = isAll,
                             statusMessage = "ACTIVE (${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})",
                             keyError = null,
@@ -921,11 +943,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val type = prefs.getString("license_type", "") ?: ""
         val isOic = prefs.getBoolean("is_oic_unlocked", false)
         val isGmdss = prefs.getBoolean("is_gmdss_unlocked", false)
+        val isEw = prefs.getBoolean("is_engine_ew_unlocked", false)
+        val isDm = prefs.getBoolean("is_deck_mgt_unlocked", false)
+        val isEm = prefs.getBoolean("is_engine_mgt_unlocked", false)
         val isAll = prefs.getBoolean("is_all_access_unlocked", false)
+
+        val hasAnyTrack = isOic || isGmdss || isEw || isDm || isEm || isAll
 
         // OFFLINE KEYS: Immediate exit after anti-tamper and expiry validation. Never query Firebase.
         val offlineInfo = LicenseManager.getOfflineLicenseInfo(context)
-        if (isOffline && offlineInfo != null && offlineInfo.isActive && (isOic || isGmdss || isAll)) {
+        if (isOffline && offlineInfo != null && offlineInfo.isActive && hasAnyTrack) {
             _registrationUiState.update {
                 it.copy(
                     isVerifyingLicense = false,
@@ -935,6 +962,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     licenseType = "OFFLINE_PASS",
                     isOicLicensed = isOic || isAll,
                     isGmdssLicensed = isGmdss || isAll,
+                    isEwLicensed = isEw || isAll,
+                    isDmLicensed = isDm || isAll,
+                    isEmLicensed = isEm || isAll,
                     isAllAccessLicensed = isAll,
                     statusMessage = "ACTIVE (${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
                 )
@@ -1415,7 +1445,21 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun revokePromoAccess(context: Context) {
-        revokeAllAccess(context)
+        val prefs = try {
+            context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
+        } catch (_: Exception) {
+            null
+        }
+        // Only strip the promo pass fields so offline keys & Play Store subscriptions remain untouched
+        prefs?.edit()
+            ?.remove("active_promo_code")
+            ?.remove("promo_expiry_epoch")
+            ?.apply()
+
+        if (prefs?.getString("license_type", "") == "PROMO_PASS") {
+            prefs.edit().putString("license_type", "RESTRICTED").apply()
+        }
+        refreshUnlockStates()
     }
 
     suspend fun activateTerminal(inputKey: String): Pair<Boolean, String> {
@@ -4020,7 +4064,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val userAnswers = SessionJsonHelper.deserializeAnswers(record.answersJson)
 
         val qIds = record.questionIds.split(",").filter { it.isNotBlank() }
-        val questions = qIds.mapNotNull { id -> MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == id } }
+        val questionsById = MaritimeQuestionBank.ALL_QUESTIONS.associateBy { it.id }
+        val questions = qIds.mapNotNull { id -> questionsById[id] }
         _activeQuestions.value = questions
         _userQuestionStates.value = userAnswers
         _isExamSubmitted.value = true

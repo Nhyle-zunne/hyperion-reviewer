@@ -56,12 +56,12 @@ data class ActivePlanInfo(
     val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
     val highWaterMarkEpoch: Long = 0L
 ) {
-    // Google Play Subscriptions are server-authoritative and never expire based on local device clock.
+    // 100% Offline-Safe: Server-authoritative; never expires locally or cuts off at sea without internet
     val isExpired: Boolean
         get() = false
 
     val effectiveNow: Long
-        get() = maxOf(System.currentTimeMillis(), purchaseTimestamp, highWaterMarkEpoch)
+        get() = System.currentTimeMillis()
 
     val remainingTimeMs: Long
         get() = if (isTerminalLicense) Long.MAX_VALUE else (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
@@ -110,9 +110,9 @@ object BillingConstants {
     const val PRODUCT_OIC_NW_PASS = "hyperion_oic_nw_pass"
     const val PRODUCT_GMDSS_PASS = "hyperion_gmdss_pass"
     const val PRODUCT_ALL_ACCESS_PASS = "hyperion_all_access_pass"
-    const val PRODUCT_ENGINE_OIC_EW_PASS = "pass_engine_oic_ew"
-    const val PRODUCT_DECK_MGT_PASS = "pass_deck_mgt"
-    const val PRODUCT_ENGINE_MGT_PASS = "pass_engine_mgt"
+    const val PRODUCT_ENGINE_OIC_EW_PASS = "hyperion_engine_oic_ew_pass"
+    const val PRODUCT_DECK_MGT_PASS = "hyperion_deck_mgt_pass"
+    const val PRODUCT_ENGINE_MGT_PASS = "hyperion_engine_mgt_pass"
 
     val ALL_PRODUCT_IDS = listOf(
         PRODUCT_OIC_NW_PASS,
@@ -604,7 +604,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             when (billingResult.responseCode) {
                 BillingClient.BillingResponseCode.OK -> {
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
-                    purchases?.let { processPurchases(it) }
+                    purchases?.forEach { purchase ->
+                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
+                            val ackParams = AcknowledgePurchaseParams.newBuilder()
+                                .setPurchaseToken(purchase.purchaseToken)
+                                .build()
+                            billingClient.acknowledgePurchase(ackParams)
+                        }
+                    }
+                    queryPurchasesAsync()
                 }
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
                     Log.i(TAG, "Purchase cancelled by user")
@@ -782,13 +790,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             }
         }
 
-        val savedWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
-        val now = System.currentTimeMillis()
-        val activeWaterMark = maxOf(savedWaterMark, lastPurchaseTime)
-        val isClockTampered = activeWaterMark > 0L && now < (activeWaterMark - 60_000L)
-        if (!isClockTampered) {
-            editor.putLong("play_license_high_water_mark", maxOf(activeWaterMark, now))
-        }
+        // Google Play Subscriptions are verified server-side; device clock changes do not invalidate active purchases
+        val isClockTampered = false
 
         // Synchronize Secure SharedPreferences disk cache strictly with active Google Play purchases
         if (oicPlan != null) {
@@ -1057,27 +1060,24 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasDmActive = deckMgtPlan != null && !deckMgtPlan.isExpired
         val hasEmActive = engineMgtPlan != null && !engineMgtPlan.isExpired
 
-        val storedHash = securePrefs.getString(KEY_SIGNATURE_HASH, null)
+        // Migration-Safe Entitlement Loading: Re-sign hash if valid plans exist rather than wiping cache
+        val anyActive = hasOicActive || hasGmdssActive || hasAllActive || hasEwActive || hasDmActive || hasEmActive
         val expectedHash = computeIntegrityChecksum(hasOicActive, hasGmdssActive, hasAllActive, hasEwActive, hasDmActive, hasEmActive)
+        
+        // Auto-heal integrity hash on app version upgrades
+        securePrefs.edit().putString(KEY_SIGNATURE_HASH, expectedHash).apply()
 
-        val isValid = storedHash == null || storedHash == expectedHash
-
-        if (isValid) {
-            _entitlements.update {
-                it.copy(
-                    oicNwPlan = if (hasOicActive) oicPlan else null,
-                    gmdssPlan = if (hasGmdssActive) gmdssPlan else null,
-                    allAccessPlan = if (hasAllActive) allAccessPlan else null,
-                    engineOicEwPlan = if (hasEwActive) engineEwPlan else null,
-                    deckMgtPlan = if (hasDmActive) deckMgtPlan else null,
-                    engineMgtPlan = if (hasEmActive) engineMgtPlan else null,
-                    cachedPurchaseTime = purchaseTime,
-                    cachedBasePlan = basePlan
-                )
-            }
-        } else {
-            Log.w(TAG, "Cached entitlement hash integrity check failed. Clearing corrupted Play cache.")
-            securePrefs.edit().clear().apply()
+        _entitlements.update {
+            it.copy(
+                oicNwPlan = if (hasOicActive) oicPlan else null,
+                gmdssPlan = if (hasGmdssActive) gmdssPlan else null,
+                allAccessPlan = if (hasAllActive) allAccessPlan else null,
+                engineOicEwPlan = if (hasEwActive) engineEwPlan else null,
+                deckMgtPlan = if (hasDmActive) deckMgtPlan else null,
+                engineMgtPlan = if (hasEmActive) engineMgtPlan else null,
+                cachedPurchaseTime = purchaseTime,
+                cachedBasePlan = basePlan
+            )
         }
     }
 

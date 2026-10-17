@@ -438,9 +438,16 @@ fun StreakScreen(
 
                                     Spacer(modifier = Modifier.height(2.dp))
 
-                                    if (isRewardSlot) {
+                                    if (isChecked) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Checked",
+                                            tint = colors.accentGreen,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    } else if (isRewardSlot) {
                                         Text(
-                                            text = "+20 HYPE",
+                                            text = "+20",
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 fontFamily = FontFamily.Monospace,
                                                 fontWeight = FontWeight.Bold,
@@ -449,13 +456,6 @@ fun StreakScreen(
                                             color = Color(0xFF00FF66),
                                             maxLines = 1,
                                             softWrap = false
-                                        )
-                                    } else if (isChecked) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Checked",
-                                            tint = colors.accentGreen,
-                                            modifier = Modifier.size(16.dp)
                                         )
                                     } else if (isTodayTarget) {
                                         Text(
@@ -577,7 +577,7 @@ fun StreakScreen(
                 ) {
                     Column {
                         Text(
-                            text = "HYPE REDEMPTION // ACCESS PASSES",
+                            text = "HYPE REDEMPTION // REWARDS",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
@@ -587,32 +587,97 @@ fun StreakScreen(
                             color = colors.textPrimary
                         )
                         Text(
-                            text = "Trade earned Hype for temporary full reviewer access. Overlapping licenses block redemption.",
+                            text = "Earn Hype via daily study check-ins to unlock future exclusive rewards and passes.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
                             color = colors.textSecondary
                         )
                     }
                 }
 
-                // Reward Cards
-                HypePassManager.availableOptions.forEach { option ->
-                    val blockReason = HypePassManager.evaluateBlockReason(
-                        option = option,
-                        isDeckActive = isOicNwProUnlocked,
-                        isRadioActive = isGmdssProUnlocked,
-                        isAllAccessActive = isHyperionProUnlocked,
-                        activePass = activePass,
-                        userBalance = hypeBalance
-                    )
-
-                    RedemptionRewardCard(
-                        option = option,
-                        blockReason = blockReason,
-                        colors = colors,
-                        onRedeemClick = {
-                            selectedOptionToRedeem = option
+                // Clean "COMING SOON" Card
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(BorderStroke(1.dp, colors.borderInactive), RectangleShape),
+                    shape = RectangleShape,
+                    color = colors.cardBackground
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(colors.boxInactiveFill, RectangleShape)
+                                .border(1.dp, colors.borderInactive, RectangleShape)
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "STREAK REWARDS",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                ),
+                                color = colors.accentGreen
+                            )
                         }
-                    )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "REWARD REDEMPTION // COMING SOON",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.sp,
+                                fontSize = 13.sp
+                            ),
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "Keep building your study streak and accumulating Hype in your offline vault. Redemptions and special unlockables will be enabled in the upcoming update.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 16.sp),
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .background(colors.boxInactiveFill, RectangleShape)
+                                .border(1.dp, colors.borderInactive, RectangleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = colors.textMuted,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "LOCKED // IN ACTIVE DEVELOPMENT",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp
+                                    ),
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

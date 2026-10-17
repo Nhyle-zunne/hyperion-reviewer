@@ -312,7 +312,7 @@ fun TermsAndDisclaimerScreenContent(
                 }
             }
 
-            MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
+MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
 
             MianRuleCard(
                 ruleColor = colors.accent,
@@ -342,6 +342,40 @@ fun TermsAndDisclaimerScreenContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.foreground,
                         lineHeight = 19.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "5. OFFLINE ACCESS & HARDWARE INTEGRITY")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = null,
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "OFFLINE LICENSING & MARITIME PERSISTENCE",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.accent,
+                            fontSize = 11.5.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Offline activation passes (1-Week, 1-Month, 1-Year, Custom) are cryptographically bound to the unique hardware token of this terminal and are non-transferable. Google Play subscriptions and offline passes maintain local persistence to guarantee uninterrupted study access during deep-sea voyages without active internet connectivity. System time manipulation or clock tampering triggers security latches requiring system time restoration.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
                     )
                 }
             }

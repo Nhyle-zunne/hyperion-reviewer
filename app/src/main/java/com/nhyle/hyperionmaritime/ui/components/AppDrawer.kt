@@ -47,6 +47,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,15 +81,15 @@ fun HyperionDrawerContent(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
-    val currentScreen by viewModel.currentScreen.collectAsState()
-    val isActivated by viewModel.isActivated.collectAsState()
-    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
-    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
-    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsState()
-    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsState()
-    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsState()
-    val isUnlocked by viewModel.isUnlocked.collectAsState()
-    val isDarkMode by viewModel.isDarkMode.collectAsState()
+    val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val isActivated by viewModel.isActivated.collectAsStateWithLifecycle()
+    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsStateWithLifecycle()
+    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsStateWithLifecycle()
+    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsStateWithLifecycle()
+    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsStateWithLifecycle()
+    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsStateWithLifecycle()
+    val isUnlocked by viewModel.isUnlocked.collectAsStateWithLifecycle()
+    val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
 
     val hasAnyActiveLicense = isOicNwProUnlocked || isGmdssProUnlocked || isEwActive || isDmActive || isEmActive || isActivated || isUnlocked
     var showSearchLockDialog by remember { mutableStateOf(false) }

@@ -7,25 +7,22 @@
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 
     <application
-        android:allowBackup="true"
-        android:icon="@drawable/hyperion_official_logo"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/hyperion_official_logo"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Hyperion">
         <activity
             android:name="com.nhyle.hyperionmaritime.MainActivity"
             android:exported="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Hyperion">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity-alias
-            android:name="com.example.MainActivity"
-            android:targetActivity="com.nhyle.hyperionmaritime.MainActivity"
-            android:exported="true" />
     </application>
 
 </manifest>

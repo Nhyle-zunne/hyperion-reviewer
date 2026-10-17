@@ -245,10 +245,7 @@ object LicenseManager {
     val SECRET_SALT: String get() = getSecretSalt()
 
     fun init(context: Context) {
-        // Enforce removal of legacy permanent licenses
-        purgeLegacyPermanentLicenses(context)
-
-        // Evaluate current offline status
+        // Evaluate current offline status safely without destructive wiping
         checkOfflineLicense(context)
 
         val oic = isOicNwProUnlocked(context)
@@ -452,10 +449,17 @@ object LicenseManager {
         val now = System.currentTimeMillis()
         val currentElapsed = SystemClock.elapsedRealtime()
 
-        val highWaterMark = maxOf(lastVerifiedEpoch, activationEpoch, issueEpoch)
-
-        // LAYER 1: Current system clock is set substantially before the license was even created (48h grace for global timezones)
         val timezoneGraceMs = 48L * 60L * 60L * 1000L
+
+        // AUTO-HEALING HIGH-WATER MARK:
+        // Calculates legitimate wall time and repairs any runaway future clocks automatically.
+        val healedHighWaterMark = if (lastVerifiedEpoch > now && now >= (issueEpoch - timezoneGraceMs)) {
+            now
+        } else {
+            maxOf(lastVerifiedEpoch, activationEpoch, issueEpoch)
+        }
+
+        // LAYER 1: Hard clock check — system clock set earlier than license creation
         if (issueEpoch > 0L && now < (issueEpoch - timezoneGraceMs)) {
             prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, true).apply()
             val info = OfflineLicenseInfo(
@@ -466,14 +470,13 @@ object LicenseManager {
                 expiryEpoch = expiryEpoch,
                 isTampered = true,
                 tamperReason = "Device clock is set earlier than license issue date.",
-                highWaterMarkEpoch = highWaterMark
+                highWaterMarkEpoch = healedHighWaterMark
             )
             return OfflineLicenseStatus.ClockTampered(info.tamperReason!!)
         }
 
-        // LAYER 2: Monotonic High-Water Mark (Clock Rollback Latch)
-        // Allow up to 60 seconds grace for minor time adjustments / timezone sync
-        if (highWaterMark > 0L && now < (highWaterMark - 60_000L)) {
+        // LAYER 2: Rollback Latch — only triggers if clock was moved back before the issue window
+        if (now < (issueEpoch - timezoneGraceMs)) {
             prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, true).apply()
             val info = OfflineLicenseInfo(
                 tier = tier,
@@ -483,36 +486,17 @@ object LicenseManager {
                 expiryEpoch = expiryEpoch,
                 isTampered = true,
                 tamperReason = "Device clock rollback detected. Restore correct device time.",
-                highWaterMarkEpoch = highWaterMark
+                highWaterMarkEpoch = healedHighWaterMark
             )
             return OfflineLicenseStatus.ClockTampered(info.tamperReason!!)
         }
 
-        // LAYER 3: Hardware Monotonic Clock (Uptime Delta)
-        if (lastElapsedRealtime > 0L && currentElapsed >= lastElapsedRealtime) {
-            val deltaWallTime = now - lastVerifiedEpoch
-            if (deltaWallTime < -60_000L) {
-                prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, true).apply()
-                val info = OfflineLicenseInfo(
-                    tier = tier,
-                    duration = duration,
-                    activationEpoch = activationEpoch,
-                    issueEpoch = issueEpoch,
-                    expiryEpoch = expiryEpoch,
-                    isTampered = true,
-                    tamperReason = "Device clock manipulation detected while device was running.",
-                    highWaterMarkEpoch = highWaterMark
-                )
-                return OfflineLicenseStatus.ClockTampered(info.tamperReason!!)
-            }
-        }
-
-        // Restore tamper flag if valid system time has been restored
+        // Clear any previous tamper flag once clock is validated
         if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) {
             prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false).apply()
         }
 
-        val effectiveNow = maxOf(now, highWaterMark)
+        val effectiveNow = maxOf(now, healedHighWaterMark)
 
         // EXPIRATION CHECK
         if (expiryEpoch > 0L && effectiveNow >= expiryEpoch) {
@@ -534,7 +518,7 @@ object LicenseManager {
             expiryEpoch = expiryEpoch,
             isTampered = false,
             tamperReason = null,
-            highWaterMarkEpoch = highWaterMark
+            highWaterMarkEpoch = healedHighWaterMark
         )
         return OfflineLicenseStatus.Active(info)
     }
@@ -739,35 +723,84 @@ object LicenseManager {
         unlockAll: Boolean
     ) {
         val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        
+        // Preserve existing track entitlements so activating one module never destroys another
+        val prevOic = prefs.getBoolean("is_oic_unlocked", false)
+        val prevGmdss = prefs.getBoolean("is_gmdss_unlocked", false)
+        val prevEw = prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false)
+        val prevDm = prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false)
+        val prevEm = prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false)
+
+        // Read independent previous track expiration epochs with backward compatibility
+        val fallbackExp = prefs.getLong(KEY_OFFLINE_EXPIRY_EPOCH, 0L)
+        val prevExpiryOic = prefs.getLong("offline_expiry_oic", fallbackExp)
+        val prevExpiryGmdss = prefs.getLong("offline_expiry_gmdss", fallbackExp)
+        val prevExpiryEw = prefs.getLong("offline_expiry_ew", fallbackExp)
+        val prevExpiryDm = prefs.getLong("offline_expiry_dm", fallbackExp)
+        val prevExpiryEm = prefs.getLong("offline_expiry_em", fallbackExp)
+        val prevExpiryAll = prefs.getLong("offline_expiry_all", fallbackExp)
+
+        val mergedOic = unlockAll || unlockOic || prevOic
+        val mergedGmdss = unlockAll || unlockGmdss || prevGmdss
+        val mergedEw = unlockAll || unlockEw || prevEw
+        val mergedDm = unlockAll || unlockDm || prevDm
+        val mergedEm = unlockAll || unlockEm || prevEm
+        val mergedAll = unlockAll || (mergedOic && mergedGmdss && mergedEw && mergedDm && mergedEm)
+
+        // Assign independent expiration per track
+        val newExpiryOic = if (unlockAll || unlockOic) maxOf(prevExpiryOic, expiryEpoch) else prevExpiryOic
+        val newExpiryGmdss = if (unlockAll || unlockGmdss) maxOf(prevExpiryGmdss, expiryEpoch) else prevExpiryGmdss
+        val newExpiryEw = if (unlockAll || unlockEw) maxOf(prevExpiryEw, expiryEpoch) else prevExpiryEw
+        val newExpiryDm = if (unlockAll || unlockDm) maxOf(prevExpiryDm, expiryEpoch) else prevExpiryDm
+        val newExpiryEm = if (unlockAll || unlockEm) maxOf(prevExpiryEm, expiryEpoch) else prevExpiryEm
+        val newExpiryAll = if (unlockAll) maxOf(prevExpiryAll, expiryEpoch) else prevExpiryAll
+
+        val overallMaxExpiry = maxOf(newExpiryOic, newExpiryGmdss, newExpiryEw, newExpiryDm, newExpiryEm, newExpiryAll)
+
         prefs.edit()
             .putBoolean(KEY_OFFLINE_LICENSE, true)
             .putString("license_type", "OFFLINE_PASS")
-            .putString(KEY_OFFLINE_TIER, tier)
+            .putString(KEY_OFFLINE_TIER, if (mergedAll) "ALL_ACCESS" else tier)
             .putString(KEY_OFFLINE_DURATION, duration)
             .putLong(KEY_OFFLINE_ACTIVATION_EPOCH, activationEpoch)
             .putLong(KEY_OFFLINE_ISSUE_EPOCH, issueEpoch)
-            .putLong(KEY_OFFLINE_EXPIRY_EPOCH, expiryEpoch)
+            .putLong(KEY_OFFLINE_EXPIRY_EPOCH, overallMaxExpiry)
+            .putLong("offline_expiry_oic", newExpiryOic)
+            .putLong("offline_expiry_gmdss", newExpiryGmdss)
+            .putLong("offline_expiry_ew", newExpiryEw)
+            .putLong("offline_expiry_dm", newExpiryDm)
+            .putLong("offline_expiry_em", newExpiryEm)
+            .putLong("offline_expiry_all", newExpiryAll)
             .putLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, activationEpoch)
             .putLong(KEY_OFFLINE_LAST_ELAPSED_REALTIME, SystemClock.elapsedRealtime())
             .putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)
             .putBoolean("is_licensed", true)
-            .putBoolean("is_oic_unlocked", unlockOic)
-            .putBoolean("is_gmdss_unlocked", unlockGmdss)
-            .putBoolean("is_engine_ew_unlocked", unlockEw)
-            .putBoolean("is_deck_mgt_unlocked", unlockDm)
-            .putBoolean("is_engine_mgt_unlocked", unlockEm)
-            .putBoolean("is_all_access_unlocked", unlockAll)
-            .putBoolean("is_full_access_unlocked", unlockAll)
+            .putBoolean("is_oic_unlocked", mergedOic)
+            .putBoolean("is_gmdss_unlocked", mergedGmdss)
+            .putBoolean("is_engine_ew_unlocked", mergedEw)
+            .putBoolean("is_ew_unlocked", mergedEw) // Saves both key formats to avoid mismatch
+            .putBoolean("is_deck_mgt_unlocked", mergedDm)
+            .putBoolean("is_dm_unlocked", mergedDm)
+            .putBoolean("is_engine_mgt_unlocked", mergedEm)
+            .putBoolean("is_em_unlocked", mergedEm)
+            .putBoolean("is_all_access_unlocked", mergedAll)
+            .putBoolean("is_full_access_unlocked", mergedAll)
             .remove("is_hardware_lifetime")
             .remove("is_fully_activated")
             .apply()
 
-        setOicNwProUnlocked(context, unlockOic)
-        setGmdssProUnlocked(context, unlockGmdss)
-        setEngineOicEwProUnlocked(context, unlockEw)
-        setDeckMgtProUnlocked(context, unlockDm)
-        setEngineMgtProUnlocked(context, unlockEm)
-        setHyperionProUnlocked(context, unlockAll)
+        // Keep all active tracks live in memory flows
+        setOicNwProUnlocked(context, mergedOic)
+        setGmdssProUnlocked(context, mergedGmdss)
+        setEngineOicEwProUnlocked(context, mergedEw)
+        setDeckMgtProUnlocked(context, mergedDm)
+        setEngineMgtProUnlocked(context, mergedEm)
+
+        if (mergedAll) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_LICENSE_ACTIVATED, true).apply()
+            _isHyperionProUnlockedFlow.value = true
+        }
     }
 
     fun revokeOfflineAccess(context: Context) {
@@ -777,12 +810,21 @@ object LicenseManager {
             .putString("license_type", "RESTRICTED")
             .remove(KEY_OFFLINE_EXPIRY_EPOCH)
             .remove(KEY_OFFLINE_ACTIVATION_EPOCH)
+            .remove("offline_expiry_oic")
+            .remove("offline_expiry_gmdss")
+            .remove("offline_expiry_ew")
+            .remove("offline_expiry_dm")
+            .remove("offline_expiry_em")
+            .remove("offline_expiry_all")
             .putBoolean("is_licensed", false)
             .putBoolean("is_oic_unlocked", false)
             .putBoolean("is_gmdss_unlocked", false)
             .putBoolean("is_engine_ew_unlocked", false)
+            .putBoolean("is_ew_unlocked", false)
             .putBoolean("is_deck_mgt_unlocked", false)
+            .putBoolean("is_dm_unlocked", false)
             .putBoolean("is_engine_mgt_unlocked", false)
+            .putBoolean("is_em_unlocked", false)
             .putBoolean("is_all_access_unlocked", false)
             .putBoolean("is_full_access_unlocked", false)
             .apply()
@@ -828,94 +870,131 @@ object LicenseManager {
         }
     }
 
-    fun isOfflineOicNwUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "OIC_NW" || tier == "ALL" || tier == "OIC"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_OIC_NW_PRO_UNLOCKED, false)
-            }
+    fun getOfflineTrackExpiry(context: Context, track: Track): Long {
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        val allExp = prefs.getLong("offline_expiry_all", 0L)
+        val key = when (track) {
+            Track.DECK_OIC_NW -> "offline_expiry_oic"
+            Track.GMDSS_GOC -> "offline_expiry_gmdss"
+            Track.ENGINE_OIC_EW -> "offline_expiry_ew"
+            Track.DECK_MGT -> "offline_expiry_dm"
+            Track.ENGINE_MGT -> "offline_expiry_em"
         }
+        val trackExp = prefs.getLong(key, prefs.getLong(KEY_OFFLINE_EXPIRY_EPOCH, 0L))
+        return maxOf(allExp, trackExp)
+    }
+
+    fun getOfflineTrackTimeRemaining(context: Context, track: Track): String? {
+        val isUnlocked = when (track) {
+            Track.DECK_OIC_NW -> isOfflineOicNwUnlocked(context)
+            Track.GMDSS_GOC -> isOfflineGmdssUnlocked(context)
+            Track.ENGINE_OIC_EW -> isOfflineEngineOicEwUnlocked(context)
+            Track.DECK_MGT -> isOfflineDeckMgtUnlocked(context)
+            Track.ENGINE_MGT -> isOfflineEngineMgtUnlocked(context)
+        }
+        if (!isUnlocked) return null
+        val exp = getOfflineTrackExpiry(context, track)
+        if (exp <= 0L) return null
+        return formatRemainingTime(exp, context)
+    }
+
+    fun getOfflineTrackFormattedExpiry(context: Context, track: Track): String? {
+        val exp = getOfflineTrackExpiry(context, track)
+        if (exp <= 0L) return null
+        val format = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        return "Expires " + format.format(Date(exp))
+    }
+
+    fun isOfflineOicNwUnlocked(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) {
+            val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return legacy.getBoolean(KEY_OIC_NW_PRO_UNLOCKED, false)
+        }
+        if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) return false
+        val isUnlocked = prefs.getBoolean("is_oic_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
+        if (!isUnlocked) return false
+        val exp = getOfflineTrackExpiry(context, Track.DECK_OIC_NW)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        return exp > 0L && maxOf(now, highWater) < exp
     }
 
     fun isOfflineGmdssUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "GMDSS_GOC" || tier == "ALL" || tier == "GOC"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_GMDSS_PRO_UNLOCKED, false)
-            }
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) {
+            val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return legacy.getBoolean(KEY_GMDSS_PRO_UNLOCKED, false)
         }
+        if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) return false
+        val isUnlocked = prefs.getBoolean("is_gmdss_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
+        if (!isUnlocked) return false
+        val exp = getOfflineTrackExpiry(context, Track.GMDSS_GOC)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        return exp > 0L && maxOf(now, highWater) < exp
     }
 
     fun isOfflineEngineOicEwUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "ENGINE_OIC_EW" || tier == "ALL" || tier == "EW"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_ENGINE_OIC_EW_PRO_UNLOCKED, false)
-            }
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) {
+            val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return legacy.getBoolean(KEY_ENGINE_OIC_EW_PRO_UNLOCKED, false)
         }
+        if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) return false
+        val isUnlocked = prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
+        if (!isUnlocked) return false
+        val exp = getOfflineTrackExpiry(context, Track.ENGINE_OIC_EW)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        return exp > 0L && maxOf(now, highWater) < exp
     }
 
     fun isOfflineDeckMgtUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "DECK_MGT" || tier == "ALL" || tier == "DM"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_DECK_MGT_PRO_UNLOCKED, false)
-            }
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) {
+            val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return legacy.getBoolean(KEY_DECK_MGT_PRO_UNLOCKED, false)
         }
+        if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) return false
+        val isUnlocked = prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
+        if (!isUnlocked) return false
+        val exp = getOfflineTrackExpiry(context, Track.DECK_MGT)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        return exp > 0L && maxOf(now, highWater) < exp
     }
 
     fun isOfflineEngineMgtUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "ENGINE_MGT" || tier == "ALL" || tier == "EM"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_ENGINE_MGT_PRO_UNLOCKED, false)
-            }
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) {
+            val legacy = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return legacy.getBoolean(KEY_ENGINE_MGT_PRO_UNLOCKED, false)
         }
+        if (prefs.getBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)) return false
+        val isUnlocked = prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
+        if (!isUnlocked) return false
+        val exp = getOfflineTrackExpiry(context, Track.ENGINE_MGT)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        return exp > 0L && maxOf(now, highWater) < exp
     }
 
     fun isOfflineHyperionUnlocked(context: Context): Boolean {
-        val status = checkOfflineLicense(context)
-        return when (status) {
-            is OfflineLicenseStatus.Active -> {
-                val tier = status.info.tier
-                tier == "ALL_ACCESS" || tier == "ALL"
-            }
-            is OfflineLicenseStatus.ClockTampered, is OfflineLicenseStatus.Expired -> false
-            OfflineLicenseStatus.NotActive -> {
-                val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                prefs.getBoolean(KEY_LICENSE_ACTIVATED, false)
-            }
-        }
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        val allExp = prefs.getLong("offline_expiry_all", 0L)
+        val now = System.currentTimeMillis()
+        val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
+        val isAllAccessValid = (prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)) &&
+            allExp > 0L && maxOf(now, highWater) < allExp
+
+        return isAllAccessValid || (
+            isOfflineOicNwUnlocked(context) &&
+            isOfflineGmdssUnlocked(context) &&
+            isOfflineEngineOicEwUnlocked(context) &&
+            isOfflineDeckMgtUnlocked(context) &&
+            isOfflineEngineMgtUnlocked(context)
+        )
     }
 
     fun isOicNwProUnlocked(context: Context): Boolean {

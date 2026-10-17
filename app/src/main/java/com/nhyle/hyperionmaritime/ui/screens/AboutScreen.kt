@@ -105,9 +105,10 @@ fun AboutScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Professional licensure examination reviewer designed for Filipino Merchant Marine Officers and GOC Radio Operators.",
+                        text = "Comprehensive STCW theoretical examination reviewer engineered for Filipino Merchant Marine Officers: Deck Operational (OIC-NW), Radio (GMDSS GOC), Engine Operational (OIC-EW), Deck Management, and Engine Management levels.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted
+                        color = colors.muted,
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -128,7 +129,7 @@ fun AboutScreen(
 
             AboutItemCard(
                 title = "HARDWARE-BOUND INTEGRITY",
-                description = "Cryptographic terminal licensing paired with installation tokens to ensure zero cloud lock-in.",
+                description = "Hardware-bound cryptographic licensing and cached Play Store subscriptions engineered for 100% offline persistence at sea.",
                 icon = Icons.Default.Security
             )
 

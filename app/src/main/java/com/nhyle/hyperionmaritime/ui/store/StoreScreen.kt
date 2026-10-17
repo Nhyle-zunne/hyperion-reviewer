@@ -438,7 +438,9 @@ fun StoreScreen(
                             selectedOffer = SelectedOffer(productId, cycle)
                             val activity = context.findActivity()
                             val details = billingManager.getProductDetails(productId)
-                            if (details != null && activity != null) {
+                            if (activity != null && details != null) {
+                                billingManager.launchBillingFlow(activity, productId, cycle)
+                            } else if (activity != null && !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
                                 billingManager.launchBillingFlow(activity, productId, cycle)
                             } else {
                                 val item = billingManager.getProductItem(productId, cycle)

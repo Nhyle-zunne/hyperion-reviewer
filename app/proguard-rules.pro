@@ -4,12 +4,8 @@
 
 # Jetpack Room
 -keep class androidx.room.** { *; }
--keep class * extends androidx.room.RoomDatabase
 -dontwarn androidx.room.**
-
-# App Data Models & Question Entities
--keepclassmembers class com.nhyle.hyperionmaritime.** { *; }
--keep enum com.nhyle.hyperionmaritime.** { *; }
+-keep class * extends androidx.room.RoomDatabase
 
 # Room Database & SQLite Reflection
 -keepclassmembers class * {
@@ -17,7 +13,12 @@
     @androidx.room.* <methods>;
 }
 
-# Data Models, Serialization & Licensing Objects
+# App Data Models & Question Entities
+-keep class com.nhyle.hyperionmaritime.data.model.** { *; }
+-keepclassmembers class com.nhyle.hyperionmaritime.data.model.** { *; }
+-keep enum com.nhyle.hyperionmaritime.** { *; }
+
+# Serialization & Licensing Objects
 -keepattributes Signature
 -keepattributes *Annotation*
 -keepclassmembers class * implements java.io.Serializable {
@@ -27,6 +28,7 @@
     !private <fields>;
     !private <methods>;
 }
+
 -keepclassmembers enum * {
     public static **[] values();
     public static ** valueOf(java.lang.String);
@@ -34,12 +36,6 @@
 
 # Preserve Licensing Key, Security Tokens & Question Bank Models
 -keep class com.nhyle.hyperionmaritime.** { *; }
--keep class com.hyperion.maritime.data.** { *; }
--keep class com.hyperion.maritime.model.** { *; }
--keep class com.example.data.** { *; }
--keep class com.example.model.** { *; }
--keep class com.example.data.model.** { *; }
--keep class com.example.data.local.** { *; }
 
 # Automated Debug Log Stripping (Remove logging overhead in production)
 -assumenosideeffects class android.util.Log {
@@ -56,8 +52,5 @@
 # Google Play Core Billing & Entitlement Cache
 -keep class com.android.billingclient.api.** { *; }
 -keep interface com.android.billingclient.api.** { *; }
--keep class com.example.billing.** { *; }
--keep class com.example.data.billing.** { *; }
--keepclassmembers class com.example.data.billing.TrackEntitlements { *; }
--keepclassmembers class com.example.data.billing.PlayProductItem { *; }
--keepclassmembers class com.example.data.billing.ActivePlanInfo { *; }
+-keep class com.nhyle.hyperionmaritime.data.billing.** { *; }
+-keepclassmembers class com.nhyle.hyperionmaritime.data.billing.** { *; }

@@ -1,79 +1,59 @@
-# Hyperion Maritime CRP
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android-0C0C0C?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android" />
-  <img src="https://img.shields.io/badge/Kotlin-2.0+-0C0C0C?style=for-the-badge&logo=kotlin&logoColor=7F52FF" alt="Kotlin" />
-  <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-0C0C0C?style=for-the-badge&logo=jetpackcompose&logoColor=4285F4" alt="Jetpack Compose" />
-  <img src="https://img.shields.io/badge/Architecture-Clean%20%2F%20MVVM-0C0C0C?style=for-the-badge" alt="Clean MVVM" />
-  <img src="https://img.shields.io/badge/Licensure-MARINA%20%7C%20OIC--NW%20%7C%20GMDSS-0C0C0C?style=for-the-badge&color=FF5A67" alt="Licensure" />
-</p>
+# Hyperion Maritime Licensure Reviewer
 
-An offline-first Android review and diagnostic terminal engineered for maritime deck officers and radio operators preparing for MARINA Competence Recognition Process (CRP), Officer-in-Charge of a Navigational Watch (OIC-NW), and GMDSS licensure examinations.
+![Android](https://img.shields.io/badge/Platform-Android-0C0C0C?style=for-the-badge&logo=android&logoColor=3DDC84)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-0C0C0C?style=for-the-badge&logo=kotlin&logoColor=7F52FF)
+![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-0C0C0C?style=for-the-badge&logo=jetpackcompose&logoColor=4285F4)
+![Clean MVVM](https://img.shields.io/badge/Architecture-Clean%20%2F%20MVVM-0C0C0C?style=for-the-badge)
+![STCW Compliance](https://img.shields.io/badge/STCW-Deck%20%7C%20Engine%20%7C%20Radio-0C0C0C?style=for-the-badge&color=FF5A67)
 
-Built using an industrial, high-contrast bridge terminal interface ("Spaghetti UI") focused on low-latency drilling, intensive retention loops, and compliance readiness.
+An enterprise-grade, offline-first Android review and diagnostic terminal engineered for Filipino Merchant Marine Officers and GMDSS Radio Operators preparing for official licensure and STCW Competence Recognition examinations. Built using an industrial high-contrast bridge terminal interface ("Spaghetti UI") designed for low-latency drilling, mistake remediation, and complete offline autonomy at sea.
 
----
+## Key Licensure Tracks (Operational & Management)
 
-## Key Modules & Licensure Tracks
-
-* **MARINA CRP Competence Engine:** Systematic breakdown of operational and management-level assessment matrices.
-* **OIC-NW Question Banks:** Comprehensive deck officer bank coverage across Terrestrial/Celestial Navigation, Cargo Handling, Ship Handling, and Watchkeeping.
-* **GMDSS Operations:** Radio communication procedures, distress frequencies, SOLAS protocols, and equipment fault identification.
-
----
+* **Deck Operational (OIC-NW):** Full STCW Regulation II/1 coverage across 12 competencies (6,445 items), timed mock examinations, and rationales.
+* **GOC Radio Operator (GMDSS):** STCW Regulation IV/2 radio communication protocols, distress frequencies, and SOLAS operating procedures across 2 competencies (2,260 items).
+* **Engine Operational (OIC-EW):** STCW Regulation III/1 marine engineering competencies (13 competencies), electrical systems, and auxiliary machinery diagnostics.
+* **Deck Management Level:** STCW Regulation II/2 advanced navigation, ship handling, stability, and maritime law across 18 competencies.
+* **Engine Management Level:** STCW Regulation III/2 marine engineering management, automation, propulsion plant, and troubleshooting across 14 competencies.
 
 ## Technical Architecture
 
 ```text
-com.example
+com.nhyle.hyperionmaritime
 ├── data
-│   ├── local        # Room Database, SQLite DAOs, pre-seeded JSON engines
-│   └── repository   # Offline-first repositories with reactive Kotlin Flow
-├── domain
-│   ├── model        # Competence, Question, DrillConfiguration, LicenseTier
-│   └── usecase      # Session generators, queue recycling, verification logic
+│   ├── billing      # Google Play Billing 8.0.0 integration & sea-voyage persistence cache
+│   ├── local        # Room database, SQLite DAOs, pre-seeded CSV question banks
+│   ├── model        # Domain models, Track enum, Legal texts, and licensing tiers
+│   └── util         # 3-Layer anti-tamper engine & cryptographic hardware token validation
 ├── ui
-│   ├── components   # Spaghetti design terminal cards, monospace inputs, badges
-│   ├── config       # Multi-step drill configuration & clearance overlays
-│   ├── exam         # Active drill runner, queue dispatcher, diagnostics
-│   └── theme        # Industrial palette (#0C0C0C, #141414, #FF5A67)
+│   ├── components   # Monospace terminal HUD elements, status cards, and custom buttons
+│   ├── screens      # Compose screens (Search, Store, Streak, History, Practice, Terms)
+│   └── theme        # High-contrast night-vision palette (#0C0C0C canvas, #FF5A67 / #00FF66)
 └── viewmodel        # Unidirectional StateFlow (MVI/MVVM) screen coordinators
 ```
 
 ### Engineering Highlights
-* **High-Performance Room Search:** Instant debounced full-text search matching both questions, answer options (A/B/C/D), and rationale keys.
-* **Intensive Mode Recycling Queue:** Dynamic queue manager that cycles incorrect items back into active drill sets until true candidate mastery is attained.
-* **Granular Session Customization:** Full control over question order (Sequential/Randomized), option shuffling, and subset limits.
-* **Clearance Gating:** Tier-based token validation system managing institutional seats without using non-compliant commercial in-app purchase triggers.
 
----
+- **100% Maritime Offline Persistence:** Subscriptions and offline pass keys are anchored locally to allow uninterrupted study during deep-sea voyages without requiring active internet connectivity.
+- **Multi-Track License Coexistence:** Independent per-track licensing allows candidates to unlock individual modules or bundle passes without entitlement collision.
+- **Auto-Healing Anti-Tamper Engine:** 3-layer security system that protects against system clock rollback manipulation while automatically recovering if a runaway system clock is restored.
+- **High-Performance Full-Text Search:** Instant debounced search querying question prompts, choices (A/B/C/D), and rationales with composite keys preventing recomposition stutter.
 
-## Visual Design Specification
+## Build & Environment Specifications
 
-The UI strictly adheres to a high-contrast maritime bridge workstation design language:
-* **Background Canvas:** `#0C0C0C` (Absolute Night)
-* **Surface Containers:** `#141414` with `#2A2A2A` 1dp structural borders
-* **Primary Accent:** `#FF5A67` (Night-vision tactical red)
-* **Status Badges:** Sharp 2dp rounded container bounds, uppercase monospace typography (`[LOCKED]`, `[SEQUENTIAL]`, `[VERIFIED]`).
+- **Android Studio:** Ladybug / Iguana or later
+- **JDK:** OpenJDK 17
+- **Minimum SDK:** Android 7.0 (API Level 24)
+- **Target / Compile SDK:** Android 16 (API Level 36)
+- **Kotlin:** 2.0+ with Jetpack Compose Compiler plugin
 
----
+### Compilation Commands
 
-## Build & Setup
+Bash
 
-### Environment Requirements
-* **Android Studio:** Ladybug / Iguana or later
-* **JDK:** OpenJDK 17 or higher
-* **Minimum Android Version:** Android 8.0 (API Level 26)
-* **Target Android Version:** Android 14+ (API Level 34)
-
-### Clone & Compile
-
-```bash
-# Clone the repository
-git clone https://github.com/your-username/hyperion-maritime.git
-cd hyperion-maritime
-
-# Clean build directory
+```
+# Clean build workspace
 ./gradlew clean
 
 # Compile Debug APK
@@ -83,24 +63,16 @@ cd hyperion-maritime
 ./gradlew :app:bundleRelease --no-daemon --stacktrace
 ```
 
-The compiled release bundle will be available at:
-`app/build/outputs/bundle/release/app-release.aab`
+The compiled release bundle will be generated at: `app/build/outputs/bundle/release/app-release.aab`
 
-## Release Signing & Deployment
+## Security & Billing Compliance
 
-Production builds are configured via Gradle Kotlin DSL (`app/build.gradle.kts`). To sign releases, configure your `release.keystore` in the root workspace or provide environment secrets for CI/CD runners:
+1. **Dual Licensing Pipeline:** Full support for Google Play auto-renewing subscriptions (Weekly, Monthly, Yearly) along with hardware-bound offline activation keys (`HYPE-XXXX-XXXX-XXXX`).
+2. **Data Privacy & Zero Tracking:** Candidate test results, study streaks, and diagnostic records remain strictly on the local device. No advertising trackers, marketing SDKs, or external telemetry are embedded.
+3. **Google Play Policy Compliant:** Clear subscription disclosures, transparent pricing matrices, and direct Google Play subscription management workflows.
 
-```bash
-keytool -genkey -v -keystore release.keystore -alias hyperion_release \
-  -keyalg RSA -keysize 2048 -validity 10000
-```
-
-## Security & Privacy Compliance
-
-1. **100% Offline Capability:** Candidate test histories, study logs, and search queries remain on the local device.
-2. **Google Play Policy Compliant:** Free of commercial in-app purchase SDKs; candidate access is handled through institutional validation.
-3. **Zero Analytics/Ad Trackers:** No third-party marketing SDKs or tracking pixels.
-
-## License
-
-Institutional / Candidate License. All exam matrices, item formats, and operational reference data are designed to comply with STCW 1978, as amended, and national maritime evaluation standards.
+The modified file list confirms the updates are in order[cite: 10]:
+* `app/build.gradle.kts` contains the `versionName = "1.0.0"` update[cite: 10].
+* `app/proguard-rules.pro` contains the closing bracket fixes[cite: 10].
+* `metadata.json` reflects the 5-track scope[cite: 10].
+* `my-upload-key.jks` is ready for release signing[cite: 10].
