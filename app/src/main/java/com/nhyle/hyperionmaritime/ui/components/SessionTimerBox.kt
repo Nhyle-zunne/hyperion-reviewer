@@ -37,7 +37,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import com.nhyle.hyperionmaritime.data.studytime.StudyTimeTracker
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
@@ -146,7 +146,7 @@ fun AreYouStillThereDialog(
     val dialogBorder = if (isDark) Color(0xFF334155) else Color(0xFF94A3B8)
     val accentColor = if (isDark) Color(0xFF22C55E) else Color(0xFF16A34A)
 
-    Dialog(
+    HyperionDialog(
         onDismissRequest = { /* Modal: does not dismiss on tap outside */ },
         properties = DialogProperties(
             dismissOnBackPress = false,

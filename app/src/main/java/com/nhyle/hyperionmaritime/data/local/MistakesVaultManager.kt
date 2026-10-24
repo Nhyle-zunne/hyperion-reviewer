@@ -164,14 +164,30 @@ object MistakesVaultManager {
         saveEntries(context, entries)
     }
 
-    fun recordAttempt(context: Context, questionId: String, isCorrect: Boolean) {
+    private const val PREFS_NAME = "hyperion_mistakes_prefs"
+    private const val KEY_REQUIRED_PASSES = "mistakes_required_passes"
+
+    fun getRequiredPasses(context: Context): Int {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_REQUIRED_PASSES, 2)
+    }
+
+    fun setRequiredPasses(context: Context, passes: Int) {
+        val clamped = passes.coerceIn(1, 5)
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_REQUIRED_PASSES, clamped)
+            .apply()
+    }
+
+    fun recordAttempt(context: Context, questionId: String, isCorrect: Boolean, requiredPasses: Int = getRequiredPasses(context)) {
         val entries = loadEntries(context).toMutableList()
         val index = entries.indexOfFirst { it.questionId == questionId }
         if (index >= 0) {
             val existing = entries[index]
             if (isCorrect) {
                 val newStreak = existing.consecutiveCorrect + 1
-                if (newStreak >= 2) {
+                if (newStreak >= requiredPasses) {
                     entries.removeAt(index)
                 } else {
                     entries[index] = existing.copy(consecutiveCorrect = newStreak)

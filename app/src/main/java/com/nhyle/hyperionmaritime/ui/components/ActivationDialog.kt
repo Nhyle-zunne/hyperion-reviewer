@@ -66,7 +66,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.data.util.ProTier
 import com.nhyle.hyperionmaritime.data.util.UnlockResult
@@ -581,7 +581,7 @@ fun ActivationDialog(
     var keyInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    Dialog(onDismissRequest = onDismissRequest) {
+    HyperionDialog(onDismissRequest = onDismissRequest) {
         Surface(
             shape = RectangleShape,
             color = dialogCanvas,

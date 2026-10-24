@@ -123,31 +123,6 @@ object BillingConstants {
         PRODUCT_ENGINE_MGT_PASS
     )
 
-    // Base Plan IDs mapped in Google Play Console
-    const val BASE_PLAN_OIC_WEEKLY = "oic-nw-weekly"
-    const val BASE_PLAN_OIC_MONTHLY = "oic-nw-monthly"
-    const val BASE_PLAN_OIC_YEARLY = "oic-nw-yearly"
-
-    const val BASE_PLAN_GMDSS_WEEKLY = "gmdss-weekly"
-    const val BASE_PLAN_GMDSS_MONTHLY = "gmdss-monthly"
-    const val BASE_PLAN_GMDSS_YEARLY = "gmdss-yearly"
-
-    const val BASE_PLAN_ALL_ACCESS_WEEKLY = "all-access-weekly"
-    const val BASE_PLAN_ALL_ACCESS_MONTHLY = "all-access-monthly"
-    const val BASE_PLAN_ALL_ACCESS_YEARLY = "all-access-yearly"
-
-    const val BASE_PLAN_EW_WEEKLY = "engine-ew-weekly"
-    const val BASE_PLAN_EW_MONTHLY = "engine-ew-monthly"
-    const val BASE_PLAN_EW_YEARLY = "engine-ew-yearly"
-
-    const val BASE_PLAN_DM_WEEKLY = "deck-mgt-weekly"
-    const val BASE_PLAN_DM_MONTHLY = "deck-mgt-monthly"
-    const val BASE_PLAN_DM_YEARLY = "deck-mgt-yearly"
-
-    const val BASE_PLAN_EM_WEEKLY = "engine-mgt-weekly"
-    const val BASE_PLAN_EM_MONTHLY = "engine-mgt-monthly"
-    const val BASE_PLAN_EM_YEARLY = "engine-mgt-yearly"
-
     // Standard Fallback Display Prices across billing cycles
     val DEFAULT_PRICES_YEARLY = mapOf(
         PRODUCT_OIC_NW_PASS to "₱350 / year",
@@ -230,7 +205,7 @@ object BillingConstants {
     val PRODUCT_DESCRIPTIONS = mapOf(
         PRODUCT_OIC_NW_PASS to "Unlocks all 12 competencies, full question bank (6,445 items), rationale, and mock exams for Deck OIC-NW.",
         PRODUCT_GMDSS_PASS to "Unlocks all GMDSS competencies, radio communications bank (2,260 items), and mock exams.",
-        PRODUCT_ALL_ACCESS_PASS to "Unlocks both Deck OIC-NW and GMDSS GOC tracks with full rationale and offline access.",
+        PRODUCT_ALL_ACCESS_PASS to "Unlocks all 5 tracks (Deck OIC-NW, GMDSS GOC, Engine OIC-EW, Deck Management, Engine Management) with full rationale and offline access.",
         PRODUCT_ENGINE_OIC_EW_PASS to "Unlocks all Engine OIC-EW competencies, full question bank, and mock exams.",
         PRODUCT_DECK_MGT_PASS to "Unlocks all Deck Management competencies, full question bank, and mock exams.",
         PRODUCT_ENGINE_MGT_PASS to "Unlocks all Engine Management competencies, full question bank, and mock exams."

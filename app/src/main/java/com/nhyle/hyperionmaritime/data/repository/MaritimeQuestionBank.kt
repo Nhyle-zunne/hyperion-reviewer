@@ -3,6 +3,7 @@ package com.nhyle.hyperionmaritime.data.repository
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.model.classifyQuestionDifficulty
 
 import kotlin.math.roundToInt
 
@@ -15,22 +16,37 @@ object MaritimeQuestionBank {
         ProQuestionRepository.init(context)
     }
 
-    val ALL_QUESTIONS: List<Question> by lazy {
-        val lists = (MaritimeQuestionBankDeckF1.getQuestions() +
-                MaritimeQuestionBankDeckF2F3.getQuestions() +
-                MaritimeQuestionBankGmdss.getQuestions(appContext) +
-                NewTrackQuestionBank.getQuestions())
-        lists.filter { q ->
-            val text = q.questionText.trim()
-            val isHeader = text.equals("Question", ignoreCase = true) || text.isBlank()
-            val isDummyOptions = q.options.size == 4 &&
-                    q.options[0].trim() == "A" &&
-                    q.options[1].trim() == "B" &&
-                    q.options[2].trim() == "C" &&
-                    q.options[3].trim() == "D"
-            !isHeader && !isDummyOptions
+    @Volatile
+    private var _cachedQuestions: List<Question>? = null
+
+    val isLoaded: Boolean
+        get() = _cachedQuestions != null
+
+    val ALL_QUESTIONS: List<Question>
+        get() {
+            _cachedQuestions?.let { return it }
+            return synchronized(this) {
+                _cachedQuestions?.let { return it }
+                val lists = (MaritimeQuestionBankDeckF1.getQuestions() +
+                        MaritimeQuestionBankDeckF2F3.getQuestions() +
+                        MaritimeQuestionBankGmdss.getQuestions(appContext) +
+                        NewTrackQuestionBank.getQuestions())
+                val result = lists.filter { q ->
+                    val text = q.questionText.trim()
+                    val isHeader = text.equals("Question", ignoreCase = true) || text.isBlank()
+                    val isDummyOptions = q.options.size == 4 &&
+                            q.options[0].trim() == "A" &&
+                            q.options[1].trim() == "B" &&
+                            q.options[2].trim() == "C" &&
+                            q.options[3].trim() == "D"
+                    !isHeader && !isDummyOptions
+                }.map { q ->
+                    q.copy(difficulty = classifyQuestionDifficulty(q.questionText, q.options))
+                }
+                _cachedQuestions = result
+                result
+            }
         }
-    }
 
     fun getQuestionsByTrack(track: Track, isProUnlocked: Boolean = true): List<Question> {
         val list = ALL_QUESTIONS.filter { it.track == track }
@@ -61,26 +77,29 @@ object MaritimeQuestionBank {
      * Enforces the official MARINA permit distribution (Deck: exactly 200 items, GMDSS: 100 items).
      * If unactivated, returns an empty list to prevent unauthorized access.
      */
-    fun getMockExamDataset(track: Track, isProUnlocked: Boolean): List<Question> {
+    fun getMockExamDataset(
+        track: Track,
+        isProUnlocked: Boolean,
+        selectedFunctions: Set<String>? = null
+    ): List<Question> {
         if (!isProUnlocked) return emptyList()
         val allTrackQuestions = getQuestionsByTrack(track, isProUnlocked = true)
-        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
-            val distribution = MaritimeCompetenceRegistry.getPermitDistribution(track)
-            val sampled = mutableListOf<Question>()
-            for ((compId, quota) in distribution) {
-                val compQuestions = allTrackQuestions.filter { it.competenceId == compId }.shuffled()
-                sampled.addAll(compQuestions.take(quota))
-            }
-            return sampled
-        }
-        val distribution = if (track == Track.DECK_OIC_NW) {
-            MaritimeCompetenceRegistry.OFFICIAL_DECK_PERMIT_DISTRIBUTION
+        val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
+        val allowedCompIds = if (!selectedFunctions.isNullOrEmpty()) {
+            competences.filter { it.functionId in selectedFunctions }.map { it.competenceId }.toSet()
         } else {
-            MaritimeCompetenceRegistry.OFFICIAL_GMDSS_PERMIT_DISTRIBUTION
+            null
+        }
+
+        val distribution = MaritimeCompetenceRegistry.getPermitDistribution(track)
+        val filteredDistribution = if (allowedCompIds != null) {
+            distribution.filterKeys { it in allowedCompIds }
+        } else {
+            distribution
         }
 
         val sampled = mutableListOf<Question>()
-        for ((compId, quota) in distribution) {
+        for ((compId, quota) in filteredDistribution) {
             val compQuestions = allTrackQuestions.filter { it.competenceId == compId }.shuffled()
             sampled.addAll(compQuestions.take(quota))
         }

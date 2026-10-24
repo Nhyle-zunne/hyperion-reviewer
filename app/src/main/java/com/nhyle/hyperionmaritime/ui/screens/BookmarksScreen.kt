@@ -1,6 +1,7 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkRemove
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,6 +34,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -74,6 +81,22 @@ fun BookmarksScreen(
     val bookmarkedQuestions = remember(bookmarkedIds, isActivated) {
         val list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
         if (isActivated) list else list.take(5)
+    }
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredQuestions = remember(bookmarkedQuestions, searchQuery) {
+        if (searchQuery.isBlank()) {
+            bookmarkedQuestions
+        } else {
+            val query = searchQuery.trim().lowercase()
+            bookmarkedQuestions.filter { q ->
+                q.questionText.lowercase().contains(query) ||
+                q.id.lowercase().contains(query) ||
+                q.functionId.lowercase().contains(query) ||
+                q.competenceId.lowercase().contains(query) ||
+                q.options.any { it.lowercase().contains(query) } ||
+                q.explanation.lowercase().contains(query)
+            }
+        }
     }
     var showClearDialog by remember { mutableStateOf(false) }
 
@@ -213,10 +236,7 @@ fun BookmarksScreen(
                             Spacer(modifier = Modifier.height(14.dp))
                             MianButton(
                                 onClick = {
-                                    viewModel.startQuiz(
-                                        questions = bookmarkedQuestions,
-                                        mode = QuizMode.PRACTICE
-                                    )
+                                    viewModel.navigateTo(Screen.PracticeConfig(isBookmarksMode = true))
                                 },
                                 accent = true,
                                 modifier = Modifier.fillMaxWidth()
@@ -228,7 +248,7 @@ fun BookmarksScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "PRACTICE ALL BOOKMARKS",
+                                    text = "START BOOKMARKS DRILL",
                                     fontWeight = FontWeight.ExtraBold,
                                     fontSize = 12.sp,
                                     letterSpacing = 1.sp
@@ -239,14 +259,79 @@ fun BookmarksScreen(
                 }
 
                 item {
-                    MianSectionHeader(title = "BOOKMARKED ITEMS")
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = {
+                            Text(
+                                text = "SEARCH BOOKMARKS...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.muted,
+                                fontSize = 12.sp
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search",
+                                tint = colors.foreground,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Clear",
+                                        tint = colors.foreground,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RectangleShape,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = colors.surface,
+                            unfocusedContainerColor = colors.surface,
+                            focusedBorderColor = colors.accent,
+                            unfocusedBorderColor = colors.border,
+                            focusedTextColor = colors.foreground,
+                            unfocusedTextColor = colors.foreground,
+                            cursorColor = colors.accent
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
 
-                items(bookmarkedQuestions) { question ->
-                    BookmarkedQuestionCard(
-                        question = question,
-                        onRemove = { viewModel.removeBookmark(question.id) }
-                    )
+                item {
+                    MianSectionHeader(title = if (searchQuery.isBlank()) "BOOKMARKED ITEMS" else "SEARCH RESULTS (${filteredQuestions.size})")
+                }
+
+                if (filteredQuestions.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "NO MATCHING BOOKMARKS FOUND",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.muted
+                            )
+                        }
+                    }
+                } else {
+                    items(filteredQuestions) { question ->
+                        BookmarkedQuestionCard(
+                            question = question,
+                            onRemove = { viewModel.removeBookmark(question.id) }
+                        )
+                    }
                 }
 
                 item {
@@ -263,10 +348,14 @@ private fun BookmarkedQuestionCard(
     onRemove: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
+    var isExpanded by androidx.compose.runtime.saveable.rememberSaveable(question.id) { 
+        mutableStateOf(false) 
+    }
 
     MianRuleCard(
         ruleColor = colors.border,
-        containerColor = colors.surface
+        containerColor = colors.surface,
+        onClick = { isExpanded = !isExpanded }
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -291,15 +380,25 @@ private fun BookmarkedQuestionCard(
                     )
                 }
 
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onRemove,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BookmarkRemove,
+                            contentDescription = "Remove bookmark",
+                            tint = colors.accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     Icon(
-                        imageVector = Icons.Default.BookmarkRemove,
-                        contentDescription = "Remove bookmark",
-                        tint = colors.accent,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Expand choices",
+                        tint = colors.muted
                     )
                 }
             }
@@ -311,47 +410,115 @@ private fun BookmarkedQuestionCard(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = colors.foreground,
-                lineHeight = 20.sp
+                lineHeight = 20.sp,
+                maxLines = if (isExpanded) Int.MAX_VALUE else 2
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
-            val correctOptLetter = listOf("A", "B", "C", "D").getOrElse(question.correctAnswerIndex) { "?" }
-
-            Surface(
-                shape = RoundedCornerShape(2.dp),
-                color = colors.surface2,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(colors.success),
-                        contentAlignment = Alignment.Center
+                    val letters = listOf("A", "B", "C", "D", "E", "F")
+                    val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
+                    val correctOptLetter = letters.getOrElse(question.correctAnswerIndex) { "?" }
+                    val otherOptions = question.options.mapIndexed { idx, text -> idx to text }
+                        .filter { (idx, text) -> idx != question.correctAnswerIndex && text.isNotBlank() }
+
+                    // 1. Correct Answer: Listed first and emphasized
+                    Surface(
+                        shape = RectangleShape,
+                        color = colors.surface2,
+                        border = BorderStroke(1.dp, colors.success.copy(alpha = 0.6f)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            text = correctOptLetter,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp,
-                            color = colors.primaryForeground
-                        )
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .clip(RectangleShape)
+                                    .background(colors.success),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = correctOptLetter,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 11.sp,
+                                    color = colors.primaryForeground
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = colors.success,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "CORRECT ANSWER",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.success,
+                                        fontSize = 9.sp,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = correctOptText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.foreground,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text(
-                        text = correctOptText,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.success,
-                        maxLines = 2
-                    )
+                    // 2. Other Options: Listed below the correct answer
+                    otherOptions.forEach { (idx, optText) ->
+                        val optLetter = letters.getOrElse(idx) { "?" }
+                        Surface(
+                            shape = RectangleShape,
+                            color = colors.surface2.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, colors.border.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(RectangleShape)
+                                        .background(colors.surface),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = optLetter,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = colors.muted
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = optText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.foreground,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

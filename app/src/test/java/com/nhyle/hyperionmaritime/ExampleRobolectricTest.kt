@@ -101,12 +101,6 @@ class ExampleRobolectricTest {
     assertEquals("Token must remain stable across calls", token1, token2)
     assertEquals("Request code must remain stable across calls", reqCode1, reqCode2)
 
-    // 3. Key generation math works identically
-    val key1 = com.nhyle.hyperionmaritime.data.util.LicenseManager.computeValidKey(reqCode1)
-    val keyRegex = Regex("^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$")
-    assertTrue("Key must follow XXXX-XXXX-XXXX-XXXX format", keyRegex.matches(key1))
-    assertTrue("Validation must pass for computeValidKey", com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode1, key1))
-
     // 4. Verify seed-based generateRequestCode format
     val seedReq = com.nhyle.hyperionmaritime.data.util.LicenseManager.generateRequestCode("SEED_DEVICE_TEST")
     val seedRegex = Regex("^HYP-[0-9A-F]{4}-[0-9A-F]{4}$")

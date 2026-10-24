@@ -24,7 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -134,11 +134,18 @@ fun PracticeConfigScreen(
     competenceId: String? = null,
     isCrpMode: Boolean = false,
     isOperationalReview: Boolean = false,
+    isBookmarksMode: Boolean = false,
+    isMistakesMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val isActivated by viewModel.isActivated.collectAsState()
     val isDarkModePref by viewModel.isDarkMode.collectAsState()
+    val isMTestMDrill by viewModel.isMTestMDrillActive.collectAsState()
+    val activeImportedSheet by viewModel.activeImportedSheet.collectAsState()
+    val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
+    val mistakeEntries by viewModel.mistakeEntries.collectAsState()
+    val savedMistakePasses by viewModel.requiredMistakePasses.collectAsState()
     val context = LocalContext.current
     val colors = LocalSpaghettiColors.current
     val isDarkState = isDarkModePref
@@ -148,10 +155,17 @@ fun PracticeConfigScreen(
     var showRecentlyDeletedDialog by remember { mutableStateOf(false) }
     var sessionToPermanentlyDelete by remember { mutableStateOf<DeletedSession?>(null) }
 
-    // Back navigation pops back to previous screen (Competence Selection), or cancels active delete dialog
+    // Back navigation pops back to previous screen (Competence Selection, Bookmarks, Mistakes, or MTestM Import), or cancels active delete dialog
     BackHandler {
         if (sessionPendingDeleteId != null) {
             sessionPendingDeleteId = null
+        } else if (isMTestMDrill) {
+            viewModel.exitMTestMDrill()
+            viewModel.navigateTo(Screen.MTestMImport)
+        } else if (isBookmarksMode) {
+            viewModel.navigateTo(Screen.Bookmarks)
+        } else if (isMistakesMode) {
+            viewModel.navigateTo(Screen.Vault)
         } else {
             viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = isCrpMode, isOperationalReview = isOperationalReview))
         }
@@ -170,16 +184,29 @@ fun PracticeConfigScreen(
     val isGmdssLicensed by viewModel.isGmdssProUnlocked.collectAsState()
     val isHyperionLicensed by viewModel.isHyperionProUnlocked.collectAsState()
     val isTrackLicensedVm by viewModel.isTrackLicensed.collectAsState()
-    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed
+    val isTrackLicensed = isTrackLicensedVm || isHyperionLicensed || isMTestMDrill
     val isVerified = isTrackLicensed
     val isFreeTier = !isVerified
-    // showFixedPool should be true for CRP Mode OR GMDSS Operational Review (unconditionally per latest request)
-    val showFixedPool = isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview)
+    // showFixedPool should be true for CRP Mode OR GMDSS Operational Review, but never for imported sheets
+    val showFixedPool = !isMTestMDrill && (isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview))
     var showVerificationDialog by remember { mutableStateOf(false) }
     val isAdvancedLocked = !isVerified
+    val isRangeUnlocked = isActivated || isVerified || isMTestMDrill
 
     // Dynamic max available questions
-    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isCrpMode, context, isTrackLicensed, isOperationalReview) {
+    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isCrpMode, context, isTrackLicensed, isOperationalReview, isMTestMDrill, activeImportedSheet, isBookmarksMode, isMistakesMode, bookmarkedIds, mistakeEntries) {
+        if (isBookmarksMode) {
+            val list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
+            (if (isTrackLicensed) list.size else minOf(list.size, 5)).coerceAtLeast(1)
+        } else if (isMistakesMode) {
+            val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
+            val questions = trackMistakes.mapNotNull { entry ->
+                MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId }
+            }
+            questions.size.coerceAtLeast(1)
+        } else if (isMTestMDrill) {
+            activeImportedSheet?.questions?.size ?: 1
+        } else {
         val part = selectedPart
         if (selectedTrack == Track.GMDSS_GOC) {
             if (isOperationalReview) {
@@ -229,6 +256,7 @@ fun PracticeConfigScreen(
                 MaritimeQuestionBank.getQuestionsByCompetence(competenceId, selectedTrack, isProUnlocked = isTrackLicensed).size
             }
         }
+        }
     }.coerceAtLeast(1)
 
     // Step 2: Delivery Format (Standard Drill vs Intensive Mode)
@@ -240,14 +268,15 @@ fun PracticeConfigScreen(
     // Step 3: Randomization Controls (Two switches)
     // In CRP Mode: Randomize Questions is disabled/locked, Shuffled Choices is enabled (ON) by default
     var randomizeQuestionOrder by remember { mutableStateOf(false) } // Default Sequential
-    var shuffleChoices by remember { mutableStateOf(if (isCrpMode) true else isActivated) } // Default Shuffle choices ON for CRP / Pro
+    var shuffleChoices by remember { mutableStateOf(if (isCrpMode || isMTestMDrill) true else isActivated) } // Default Shuffle choices ON for CRP / Pro / Imported
+    var mistakePassesRequired by remember(savedMistakePasses) { mutableIntStateOf(savedMistakePasses) }
 
     // Step 4: Dual Range state (Start and End Item Selector) - Fixed in CRP Mode & GMDSS
     // Note: showFixedPool is defined above for consistent scoping
 
     var startItem by remember(maxAvailable) { mutableIntStateOf(1) }
-    var endItem by remember(maxAvailable, isActivated, showFixedPool) {
-        mutableIntStateOf(if (showFixedPool) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable)
+    var endItem by remember(maxAvailable, isRangeUnlocked, showFixedPool, isMTestMDrill) {
+        mutableIntStateOf(if (isMTestMDrill) maxAvailable else if (showFixedPool) maxAvailable else if (!isRangeUnlocked) minOf(5, maxAvailable) else maxAvailable)
     }
     var startTextFieldValue by remember(startItem) {
         mutableStateOf(startItem.toString())
@@ -256,15 +285,15 @@ fun PracticeConfigScreen(
         mutableStateOf(endItem.toString())
     }
 
-    androidx.compose.runtime.LaunchedEffect(maxAvailable, showFixedPool) {
+    androidx.compose.runtime.LaunchedEffect(maxAvailable, showFixedPool, isMTestMDrill, isRangeUnlocked) {
         startItem = 1
-        endItem = if (showFixedPool) maxAvailable else if (!isActivated) minOf(5, maxAvailable) else maxAvailable
+        endItem = if (isMTestMDrill) maxAvailable else if (showFixedPool) maxAvailable else if (!isRangeUnlocked) minOf(5, maxAvailable) else maxAvailable
         startTextFieldValue = "1"
         endTextFieldValue = endItem.toString()
     }
 
     fun updateRange(newStart: Int, newEnd: Int) {
-        if (showFixedPool || !isActivated) return
+        if (showFixedPool || !isRangeUnlocked) return
         val clampedStart = newStart.coerceIn(1, maxAvailable)
         val clampedEnd = newEnd.coerceIn(clampedStart, maxAvailable)
         startItem = clampedStart
@@ -275,7 +304,13 @@ fun PracticeConfigScreen(
 
     val isNewTrack = selectedTrack == Track.ENGINE_OIC_EW || selectedTrack == Track.DECK_MGT || selectedTrack == Track.ENGINE_MGT
 
-    val greetingTitle = if (compInfo != null) {
+    val greetingTitle = if (isBookmarksMode) {
+        "Bookmarks Drill: Saved Questions"
+    } else if (isMistakesMode) {
+        "Mistakes Vault: Redemption Practice"
+    } else if (isMTestMDrill) {
+        "Imported Sheet: ${activeImportedSheet?.title ?: "Questions"}"
+    } else if (compInfo != null) {
         if (isGmdssOpReview) "GMDSS Drill: ${compInfo.code} - ${compInfo.title}"
         else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "MARINA CRP Drill: ${compInfo.code} - ${compInfo.title}"
         else if (isCrpMode) "Standard Review: ${compInfo.code} - ${compInfo.title}"
@@ -287,7 +322,13 @@ fun PracticeConfigScreen(
         else "Configure Drill: All Competencies"
     }
 
-    val greetingSubtitle = if (compInfo != null) {
+    val greetingSubtitle = if (isBookmarksMode) {
+        "Saved Questions • $maxAvailable Items Available"
+    } else if (isMistakesMode) {
+        "Vault Redemption • $maxAvailable Items to Redeem"
+    } else if (isMTestMDrill) {
+        "Imported Question Bank • $maxAvailable Total Items"
+    } else if (compInfo != null) {
         if (isGmdssOpReview) {
             "GMDSS Radio Operations • $maxAvailable Items"
         } else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) {
@@ -309,7 +350,11 @@ fun PracticeConfigScreen(
         }
     }
 
-    val configScreenTitle = if (isGmdssOpReview) {
+    val configScreenTitle = if (isBookmarksMode) {
+        "BOOKMARKS DRILL CONFIG"
+    } else if (isMistakesMode) {
+        "MISTAKES DRILL CONFIG"
+    } else if (isGmdssOpReview) {
         "GMDSS OPERATIONAL REVIEW"
     } else if (isCrpMode) {
         when (selectedTrack) {
@@ -330,9 +375,19 @@ fun PracticeConfigScreen(
             .navigationBarsPadding()
     ) {
         MaritimeTopBar(
-            title = configScreenTitle,
-            subtitle = if (compInfo != null) compInfo.code else "All Competencies",
-            showBackButton = false,
+            title = if (isMTestMDrill) "IMPORTED DRILL CONFIG" else configScreenTitle,
+            subtitle = if (isMTestMDrill) (activeImportedSheet?.title ?: "Imported Sheet") else if (isBookmarksMode) "Bookmarked Questions" else if (isMistakesMode) "Mistakes Notebook" else if (compInfo != null) compInfo.code else "All Competencies",
+            showBackButton = isMTestMDrill || isBookmarksMode || isMistakesMode,
+            onBackClick = {
+                if (isMTestMDrill) {
+                    viewModel.exitMTestMDrill()
+                    viewModel.navigateTo(Screen.MTestMImport)
+                } else if (isBookmarksMode) {
+                    viewModel.navigateTo(Screen.Bookmarks)
+                } else if (isMistakesMode) {
+                    viewModel.navigateTo(Screen.Vault)
+                }
+            },
             onMenuClick = { viewModel.openDrawer() },
             onLegalClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
         )
@@ -387,7 +442,7 @@ fun PracticeConfigScreen(
                             border = BorderStroke(1.dp, if (showFixedPool) PassGreen else MaterialTheme.colorScheme.outline)
                         ) {
                             Text(
-                                text = if (isGmdssOpReview) "STEP 2 OF 2 • GMDSS OPERATIONAL REVIEW" else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "STEP 2 OF 2 · MARINA CRP PRACTICE" else if (isCrpMode) "STEP 2 OF 2 • STANDARD REVIEW" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
+                                text = if (isBookmarksMode) "STEP 1 OF 1 • BOOKMARKS DRILL SETUP" else if (isMistakesMode) "STEP 1 OF 1 • MISTAKES VAULT SETUP" else if (isMTestMDrill) "IMPORTED SHEET DRILL SETUP" else if (isGmdssOpReview) "STEP 2 OF 2 • GMDSS OPERATIONAL REVIEW" else if (isCrpMode && selectedTrack == Track.DECK_OIC_NW) "STEP 2 OF 2 · MARINA CRP PRACTICE" else if (isCrpMode) "STEP 2 OF 2 • STANDARD REVIEW" else "STEP 2 OF 2 • PRACTICE ALL QUESTIONS",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = if (showFixedPool) PassGreen else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -536,7 +591,11 @@ fun PracticeConfigScreen(
                             CompactSessionLogTable(
                                 sessions = recentSessions,
                                 onResumeSession = { session ->
-                                    viewModel.resumeDrillSession(session)
+                                    if (session.isCompleted) {
+                                        viewModel.openSessionReview(session.id)
+                                    } else {
+                                        viewModel.resumeDrillSession(session)
+                                    }
                                 },
                                 onDeleteSession = { session ->
                                     if (sessionPendingDeleteId == null) {
@@ -1156,79 +1215,157 @@ fun PracticeConfigScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        if (isMistakesMode) {
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                        // Switch 3: Prioritize Unseen Items
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
+                            // Consecutive Correct Passes to Redeem
                             Column(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .padding(end = 12.dp)
-                                    .clickable {
-                                        val next = !prioritizeUnseen
-                                        prioritizeUnseen = next
-                                        viewModel.setPrioritizeUnseen(next)
-                                    }
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "Prioritize Unseen Items",
+                                        text = "Consecutive Passes to Redeem",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Surface(
                                         shape = RectangleShape,
-                                        border = BorderStroke(1.dp, if (prioritizeUnseen) (if (isDarkState) Color(0xFF22C55E) else Color(0xFF16A34A)) else (if (isDarkState) Color(0xFF64748B) else Color(0xFFCBD5E1))),
-                                        color = if (prioritizeUnseen) (if (isDarkState) Color(0xFF14532D).copy(alpha = 0.2f) else Color(0xFFDCFCE7)) else Color.Transparent
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                                     ) {
                                         Text(
-                                            text = if (prioritizeUnseen) "PRIORITIZED" else "DEFAULT",
-                                            color = if (prioritizeUnseen) (if (isDarkState) Color(0xFF4ADE80) else Color(0xFF15803D)) else (if (isDarkState) Color(0xFF94A3B8) else Color(0xFF64748B)),
+                                            text = "$mistakePassesRequired PASS${if (mistakePassesRequired > 1) "ES" else ""}",
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Clip
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Serve unseen questions first to improve question bank coverage.",
+                                    text = "Number of times a question must be answered correctly in succession to automatically clear from your Mistakes Vault.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = 11.sp
                                 )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    listOf(1, 2, 3, 5).forEach { passes ->
+                                        val isSelected = mistakePassesRequired == passes
+                                        Surface(
+                                            shape = RectangleShape,
+                                            border = BorderStroke(
+                                                1.dp,
+                                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                                            ),
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable {
+                                                    mistakePassesRequired = passes
+                                                    viewModel.setRequiredMistakePasses(passes)
+                                                }
+                                        ) {
+                                            Text(
+                                                text = "$passes Pass${if (passes > 1) "es" else ""}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
-                            IndustrialToggleSwitch(
-                                checked = prioritizeUnseen,
-                                onCheckedChange = {
-                                    prioritizeUnseen = it
-                                    viewModel.setPrioritizeUnseen(it)
-                                },
-                                modifier = Modifier.testTag("switch_prioritize_unseen")
-                            )
+                        }
+
+                        if (!isBookmarksMode && !isMistakesMode) {
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Switch 3: Prioritize Unseen Items
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(end = 12.dp)
+                                        .clickable {
+                                            val next = !prioritizeUnseen
+                                            prioritizeUnseen = next
+                                            viewModel.setPrioritizeUnseen(next)
+                                        }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "Prioritize Unseen Items",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        Surface(
+                                            shape = RectangleShape,
+                                            border = BorderStroke(1.dp, if (prioritizeUnseen) (if (isDarkState) Color(0xFF22C55E) else Color(0xFF16A34A)) else (if (isDarkState) Color(0xFF64748B) else Color(0xFFCBD5E1))),
+                                            color = if (prioritizeUnseen) (if (isDarkState) Color(0xFF14532D).copy(alpha = 0.2f) else Color(0xFFDCFCE7)) else Color.Transparent
+                                        ) {
+                                            Text(
+                                                text = if (prioritizeUnseen) "PRIORITIZED" else "DEFAULT",
+                                                color = if (prioritizeUnseen) (if (isDarkState) Color(0xFF4ADE80) else Color(0xFF15803D)) else (if (isDarkState) Color(0xFF94A3B8) else Color(0xFF64748B)),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                maxLines = 1,
+                                                softWrap = false,
+                                                overflow = TextOverflow.Clip
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Serve unseen questions first to improve question bank coverage.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                IndustrialToggleSwitch(
+                                    checked = prioritizeUnseen,
+                                    onCheckedChange = {
+                                        prioritizeUnseen = it
+                                        viewModel.setPrioritizeUnseen(it)
+                                    },
+                                    modifier = Modifier.testTag("switch_prioritize_unseen")
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // Step 4: Dual Question Range Selector (RangeSlider + Start/End Inputs) - Fixed in CRP Mode & GMDSS
-            val showFixedPoolLocal = isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview)
+            val showFixedPoolLocal = !isMTestMDrill && (isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview))
             val selectedItemCount = if (showFixedPoolLocal) maxAvailable else (endItem - startItem + 1).coerceAtLeast(1)
             item {
                 Card(
@@ -1349,7 +1486,7 @@ fun PracticeConfigScreen(
                             RangeSlider(
                                 value = sliderRange,
                                 onValueChange = { range ->
-                                    if (isActivated) {
+                                    if (isRangeUnlocked) {
                                         val s = range.start.toInt().coerceIn(1, maxAvailable)
                                         val e = range.endInclusive.toInt().coerceIn(s, maxAvailable)
                                         startItem = s
@@ -1359,7 +1496,7 @@ fun PracticeConfigScreen(
                                     }
                                 },
                                 valueRange = totalValueRange,
-                                enabled = isActivated,
+                                enabled = isRangeUnlocked,
                                 colors = SliderDefaults.colors(
                                     thumbColor = MaterialTheme.colorScheme.primary,
                                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -1416,7 +1553,7 @@ fun PracticeConfigScreen(
                                     label = { Text("Start Item (#)", fontSize = 11.sp) },
                                     singleLine = true,
                                     shape = RectangleShape,
-                                    enabled = isActivated,
+                                    enabled = isRangeUnlocked,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1442,7 +1579,7 @@ fun PracticeConfigScreen(
                                     label = { Text("End Item (#)", fontSize = 11.sp) },
                                     singleLine = true,
                                     shape = RectangleShape,
-                                    enabled = isActivated,
+                                    enabled = isRangeUnlocked,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedBorderColor = MaterialTheme.colorScheme.primary,
@@ -1556,6 +1693,8 @@ fun PracticeConfigScreen(
             // Launch Action Button
             item {
                 val launchLabel = when {
+                    isBookmarksMode -> "Start Reviewing Bookmarks ($selectedItemCount Items: #$startItem–#$endItem)"
+                    isMistakesMode -> "Start Reviewing Mistakes ($selectedItemCount Items: #$startItem–#$endItem)"
                     selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE -> "Start Reviewing (Intensive Mode)"
                     isCrpMode && selectedTrack == Track.DECK_OIC_NW -> "Start Reviewing (MARINA CRP)"
                     isCrpMode -> "Start Reviewing (Standard Review)"
@@ -1569,19 +1708,38 @@ fun PracticeConfigScreen(
                         val launchEnd = if (showFixedPool) maxAvailable else endItem
                         val launchCount = if (showFixedPool) maxAvailable else (endItem - startItem + 1).coerceAtLeast(1)
 
-                        viewModel.startConfiguredPractice(
-                            competenceId = competenceId,
-                            selectedPart = selectedPart,
-                            deliveryMode = selectedDeliveryFormat,
-                            questionCount = launchCount,
-                            startItem = launchStart,
-                            endItem = launchEnd,
-                            shuffleQuestions = randomizeQuestionOrder,
-                            shuffleChoices = shuffleChoices,
-                            isCrpMode = isCrpMode,
-                            prioritizeUnseen = prioritizeUnseen,
-                            isOperationalReview = isOperationalReview
-                        )
+                        if (isBookmarksMode) {
+                            viewModel.startBookmarksConfiguredPractice(
+                                deliveryMode = selectedDeliveryFormat,
+                                startItem = launchStart,
+                                endItem = launchEnd,
+                                shuffleQuestions = randomizeQuestionOrder,
+                                shuffleChoices = shuffleChoices
+                            )
+                        } else if (isMistakesMode) {
+                            viewModel.startMistakesConfiguredPractice(
+                                deliveryMode = selectedDeliveryFormat,
+                                startItem = launchStart,
+                                endItem = launchEnd,
+                                shuffleQuestions = randomizeQuestionOrder,
+                                shuffleChoices = shuffleChoices,
+                                requiredPasses = mistakePassesRequired
+                            )
+                        } else {
+                            viewModel.startConfiguredPractice(
+                                competenceId = competenceId,
+                                selectedPart = selectedPart,
+                                deliveryMode = selectedDeliveryFormat,
+                                questionCount = launchCount,
+                                startItem = launchStart,
+                                endItem = launchEnd,
+                                shuffleQuestions = randomizeQuestionOrder,
+                                shuffleChoices = shuffleChoices,
+                                isCrpMode = isCrpMode,
+                                prioritizeUnseen = prioritizeUnseen,
+                                isOperationalReview = isOperationalReview
+                            )
+                        }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1897,7 +2055,7 @@ fun PracticeConfigScreen(
 
     // Store Purchase Confirm Dialog
     if (showVerificationDialog) {
-        Dialog(
+        HyperionDialog(
             onDismissRequest = { showVerificationDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
@@ -1968,6 +2126,26 @@ fun PracticeConfigScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Surface(
+                            onClick = { showVerificationDialog = false },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RectangleShape,
+                            color = colors.surface2,
+                            border = BorderStroke(1.dp, colors.border)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "NO",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.foreground,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        Surface(
                             onClick = {
                                 showVerificationDialog = false
                                 viewModel.navigateTo(Screen.Store)
@@ -1984,26 +2162,6 @@ fun PracticeConfigScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = colors.accentForeground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { showVerificationDialog = false },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.surface2,
-                            border = BorderStroke(1.dp, colors.border)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "NO",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.foreground,
                                     letterSpacing = 1.sp
                                 )
                             }
@@ -2168,7 +2326,7 @@ fun CompactSessionLogTable(
                     )
                     TableDivider(color = dividerColor)
                     // Action / Resume trigger
-                    val actionText = if (session.isCompleted) "COMPLETED" else "RESUME »"
+                    val actionText = if (session.isCompleted) "REVIEW »" else "RESUME »"
                     val actionColor = if (session.isCompleted) (if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7)) else (if (isDark) Color(0xFF22C55E) else Color(0xFF15803D))
                     TableCell(
                         text = actionText,

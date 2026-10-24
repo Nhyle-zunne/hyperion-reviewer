@@ -502,6 +502,16 @@ fun HistoryScreen(
                     val isMistakes = record.mode.equals("MISTAKES", ignoreCase = true) || record.competence.equals("MISTAKES", ignoreCase = true)
                     val titleText = if (isMistakes) {
                         "Mistakes"
+                    } else if (isMock) {
+                        val mockTrackTag = when (record.track.removeSuffix("_MISTAKES")) {
+                            "DECK_OIC_NW" -> "OIC-NW"
+                            "GMDSS_GOC" -> "GMDSS"
+                            "ENGINE_OIC_EW" -> "OIC-EW"
+                            "DECK_MGT" -> "DECK MGT"
+                            "ENGINE_MGT" -> "ENGINE MGT"
+                            else -> record.track.replace('_', ' ')
+                        }
+                        "MOCK EXAM · $mockTrackTag"
                     } else {
                         buildString {
                             val scope = com.nhyle.hyperionmaritime.data.local.DrillSessionFormatter.formatScopeLabel(record.competence, record.part, record.track)
@@ -537,8 +547,10 @@ fun HistoryScreen(
                                         if (selectedRecordIds.isEmpty()) {
                                             isSelectionMode = false
                                         }
-                                    } else {
+                                    } else if (isInProgress) {
                                         recordToView = record
+                                    } else {
+                                        viewModel.openSessionReview(record.id)
                                     }
                                 }
                             )

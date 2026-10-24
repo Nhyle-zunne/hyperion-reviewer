@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -46,7 +48,7 @@ import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import android.app.DatePickerDialog
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -79,6 +81,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,7 +89,11 @@ import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.model.Track
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MianButton
+import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.SpaghettiProgressBar
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.ui.theme.PassGreen
@@ -121,14 +128,25 @@ fun TrackSelectionScreen(
     } else 0.0
 
     var selectedDetailsTrack by remember { mutableStateOf<Track?>(null) }
+    var showFacebookConfirmDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
+    val currentDensity = LocalDensity.current
+    val textScale by viewModel.questionTextScale.collectAsState()
+    val scaledDensity = remember(currentDensity, textScale) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * textScale
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
         // 1. Top Bar
         Surface(
             color = colors.surface,
@@ -172,13 +190,10 @@ fun TrackSelectionScreen(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { viewModel.navigateTo(Screen.History) }) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = "History",
-                                tint = colors.foreground
-                            )
-                        }
+                        QuestionSettingsMenu(
+                            viewModel = viewModel,
+                            showOnlyTextSize = true
+                        )
 
                         IconButton(onClick = { viewModel.navigateTo(Screen.Store) }) {
                             Icon(
@@ -286,8 +301,8 @@ fun TrackSelectionScreen(
                         viewModel.selectTrack(track)
                         viewModel.navigateTo(Screen.Home)
                     },
-                    onOpenStore = {
-                        viewModel.navigateTo(Screen.Store)
+                    onOpenFacebook = {
+                        showFacebookConfirmDialog = true
                     },
                     onOpenDetails = { track ->
                         selectedDetailsTrack = track
@@ -327,6 +342,22 @@ fun TrackSelectionScreen(
                 selectedDetailsTrack = null
             }
         )
+    }
+
+    if (showFacebookConfirmDialog) {
+        FacebookConfirmationDialog(
+            onConfirm = {
+                showFacebookConfirmDialog = false
+                try {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.facebook.com/hyperionbynhyle"))
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                    Toast.makeText(context, "Unable to open browser", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { showFacebookConfirmDialog = false }
+        )
+    }
     }
 }
 
@@ -462,7 +493,7 @@ private fun DashboardGrid(
     deckProgress: Int,
     gmdssProgress: Int,
     onSelectTrack: (Track) -> Unit,
-    onOpenStore: () -> Unit,
+    onOpenFacebook: () -> Unit,
     onOpenDetails: (Track) -> Unit
 ) {
     Column(
@@ -585,7 +616,7 @@ private fun DashboardGrid(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                PassStoreTile(onClick = onOpenStore)
+                FacebookTile(onClick = onOpenFacebook)
             }
         }
     }
@@ -900,7 +931,7 @@ private fun LockedEngineTile() {
 }
 
 @Composable
-private fun PassStoreTile(
+private fun FacebookTile(
     onClick: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
@@ -908,7 +939,7 @@ private fun PassStoreTile(
     Surface(
         shape = RectangleShape,
         color = colors.surface,
-        border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.6f)),
+        border = BorderStroke(1.dp, Color(0xFF1877F2).copy(alpha = 0.7f)),
         modifier = Modifier
             .fillMaxWidth()
             .height(205.dp)
@@ -928,15 +959,20 @@ private fun PassStoreTile(
                 Box(
                     modifier = Modifier
                         .size(30.dp)
-                        .background(colors.surface2, RectangleShape)
-                        .border(1.dp, colors.border, RectangleShape),
+                        .background(Color(0xFF1877F2), RectangleShape)
+                        .border(1.dp, Color(0xFF1877F2), RectangleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Storefront,
-                        contentDescription = "Pass Store",
-                        tint = colors.accent,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = "f",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 22.sp
+                        ),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
 
@@ -946,7 +982,7 @@ private fun PassStoreTile(
                     border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.6f))
                 ) {
                     Text(
-                        text = "PASS STORE",
+                        text = "COMMUNITY",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
@@ -961,7 +997,7 @@ private fun PassStoreTile(
 
             Column {
                 Text(
-                    text = "UNLOCK ACCESS",
+                    text = "CONNECT WITH US",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.ExtraBold,
                     color = colors.foreground,
@@ -971,7 +1007,7 @@ private fun PassStoreTile(
                 )
                 Spacer(modifier = Modifier.height(1.dp))
                 Text(
-                    text = "ALL LICENSURE TRACKS",
+                    text = "OFFICIAL PAGE & SUPPORT",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.muted,
                     fontSize = 9.sp,
@@ -979,7 +1015,7 @@ private fun PassStoreTile(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "PRO PASS",
+                    text = "FACEBOOK",
                     style = MaterialTheme.typography.titleLarge,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
@@ -988,7 +1024,7 @@ private fun PassStoreTile(
                     softWrap = true
                 )
                 Text(
-                    text = "FULL RATIONALES & MOCKS",
+                    text = "UPDATES & INQUIRIES",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.muted,
                     fontSize = 9.sp,
@@ -998,7 +1034,7 @@ private fun PassStoreTile(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "5 TRACKS · OFFLINE AT SEA",
+                    text = "@hyperionbynhyle",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.muted,
                     fontSize = 10.sp,
@@ -1017,7 +1053,7 @@ private fun PassStoreTile(
                         .padding(end = 8.dp)
                 ) {
                     Text(
-                        text = "HYPERION STORE",
+                        text = "VISIT PAGE",
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = colors.muted,
@@ -1050,10 +1086,130 @@ private fun PassStoreTile(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Pass Store",
+                        contentDescription = "Visit Facebook",
                         tint = colors.accentForeground,
                         modifier = Modifier.size(16.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FacebookConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalSpaghettiColors.current
+
+    HyperionDialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.7f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = RectangleShape,
+                color = colors.surface,
+                border = BorderStroke(1.dp, colors.border),
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .clickable(enabled = false) {}
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp)
+                    ) {
+                        Text(
+                            text = "EXTERNAL LINK",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.accent,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Do you want to visit our Facebook page?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.foreground,
+                            lineHeight = 22.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "You will be redirected to the official Hyperion page on Facebook.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.muted,
+                            lineHeight = 18.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                onClick = onConfirm,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = RectangleShape,
+                                color = colors.accent
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "YES",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.accentForeground,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
+
+                            Surface(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = RectangleShape,
+                                color = colors.surface2,
+                                border = BorderStroke(1.dp, colors.border)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "NO",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.foreground,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1099,7 +1255,7 @@ private fun TrackDetailsPopup(
         Track.DECK_MGT -> Icons.Default.Navigation
     }
 
-    Dialog(
+    HyperionDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
@@ -1547,6 +1703,17 @@ private fun TacticalReadinessTerminal(
     val context = LocalContext.current
     val colors = LocalSpaghettiColors.current
     val hypeBalance by viewModel.hypeBalance.collectAsState()
+    val allStudySegments by remember { viewModel.getAllStudySegments() }.collectAsState(initial = emptyList())
+    val todayStudyText = remember(allStudySegments) {
+        com.nhyle.hyperionmaritime.data.studytime.StudyTimeCalculator.formatDurationHMM(
+            com.nhyle.hyperionmaritime.data.studytime.StudyTimeCalculator.calculateTotalDurationMs(
+                com.nhyle.hyperionmaritime.data.studytime.StudyTimeCalculator.filterSegmentsForDay(
+                    allStudySegments,
+                    java.time.LocalDate.now()
+                )
+            )
+        )
+    }
 
     val formattedDate = remember(marinaExamTargetMillis) {
         if (marinaExamTargetMillis > 0) {
@@ -1723,7 +1890,7 @@ private fun TacticalReadinessTerminal(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "0:25",
+                        text = todayStudyText,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = colors.foreground,

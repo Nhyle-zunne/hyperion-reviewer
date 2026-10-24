@@ -42,7 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import com.nhyle.hyperionmaritime.data.hype.HypePassManager
 import com.nhyle.hyperionmaritime.ui.store.rememberStoreColors
@@ -71,7 +71,7 @@ fun DailyCheckInDialog(
     val timeUntilResetMs by viewModel.timeUntilResetMs.collectAsState()
     val checkInFeedback by viewModel.checkInFeedbackMessage.collectAsState()
 
-    Dialog(
+    HyperionDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,

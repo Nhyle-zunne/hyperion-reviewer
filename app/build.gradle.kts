@@ -16,8 +16,8 @@ android {
     applicationId = "com.nhyle.hyperionmaritime"
     minSdk = 24
     targetSdk = 36
-    versionCode = 52
-    versionName = "1.0.0"
+    versionCode = 62
+    versionName = "1.0.5"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -89,6 +89,9 @@ dependencies {
   implementation("androidx.compose.material:material-icons-extended")
   implementation(libs.androidx.navigation.compose)
 
+  // Newer fragment library (Play recommendation)
+  implementation("androidx.fragment:fragment-ktx:1.8.9")
+
   // Room Database
   implementation("androidx.room:room-runtime:2.6.1")
   implementation("androidx.room:room-ktx:2.6.1")
@@ -98,10 +101,12 @@ dependencies {
   implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-  // Google Play Billing & In-App Updates
+  // Google Play Billing & In-App Updates & Reviews
   implementation("com.android.billingclient:billing-ktx:8.0.0")
   implementation("com.google.android.play:app-update:2.1.0")
   implementation("com.google.android.play:app-update-ktx:2.1.0")
+  implementation("com.google.android.play:review:2.0.2")
+  implementation("com.google.android.play:review-ktx:2.0.2")
 
   // Firebase & Google Play Services
   implementation(platform("com.google.firebase:firebase-bom:33.9.0"))

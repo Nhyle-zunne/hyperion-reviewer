@@ -58,7 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
@@ -111,7 +111,7 @@ fun PaywallDialog(
     val isGmdssOffline = LicenseManager.isGmdssProUnlocked(context)
     val isAllAccessOffline = LicenseManager.isHyperionProUnlocked(context) || (isOicOffline && isGmdssOffline)
 
-    Dialog(
+    HyperionDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
             dismissOnBackPress = true,
@@ -322,10 +322,12 @@ fun PaywallDialog(
                             onPurchase = {
                                 val details = billingManager.getProductDetails(item.productId)
                                 val activity = context.findActivity()
-                                if (details != null && activity != null) {
-                                    billingManager.launchBillingFlow(activity, item.productId, selectedCycle)
-                                } else {
-                                    sandboxConfirmProduct = item
+                                if (activity != null) {
+                                    if (details != null || !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
+                                        billingManager.launchBillingFlow(activity, item.productId, selectedCycle)
+                                    } else if (com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
+                                        sandboxConfirmProduct = item
+                                    }
                                 }
                             }
                         )
@@ -382,12 +384,13 @@ fun PaywallDialog(
         }
     }
 
-    // Sandbox Simulator Confirmation Dialog
-    sandboxConfirmProduct?.let { product ->
-        Dialog(
-            onDismissRequest = { sandboxConfirmProduct = null },
-            properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
-        ) {
+    // Sandbox Simulator Confirmation Dialog (Debug Only)
+    if (com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
+        sandboxConfirmProduct?.let { product ->
+            HyperionDialog(
+                onDismissRequest = { sandboxConfirmProduct = null },
+                properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
+            ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -446,6 +449,7 @@ fun PaywallDialog(
             }
         }
     }
+}
 }
 
 @Composable

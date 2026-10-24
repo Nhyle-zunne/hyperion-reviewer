@@ -3,7 +3,6 @@
 # proguardFiles setting in build.gradle.
 
 # Jetpack Room
--keep class androidx.room.** { *; }
 -dontwarn androidx.room.**
 -keep class * extends androidx.room.RoomDatabase
 
@@ -34,9 +33,6 @@
     public static ** valueOf(java.lang.String);
 }
 
-# Preserve Licensing Key, Security Tokens & Question Bank Models
--keep class com.nhyle.hyperionmaritime.** { *; }
-
 # Automated Debug Log Stripping (Remove logging overhead in production)
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
@@ -45,9 +41,6 @@
     public static int i(...);
     public static int w(...);
 }
-
-# Jetpack Compose Rules
--keep class androidx.compose.runtime.** { *; }
 
 # Google Play Core Billing & Entitlement Cache
 -keep class com.android.billingclient.api.** { *; }

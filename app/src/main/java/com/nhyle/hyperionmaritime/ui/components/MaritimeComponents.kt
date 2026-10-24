@@ -63,7 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.UserQuestionState
 import com.nhyle.hyperionmaritime.ui.theme.FailRed
@@ -470,11 +470,12 @@ fun QuestionPaletteDialog(
     questionIds: List<String>,
     onQuestionClick: (Int) -> Unit,
     onDismiss: () -> Unit,
+    onJumpToNumber: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
 
-    Dialog(onDismissRequest = onDismiss) {
+    HyperionDialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RectangleShape,
             color = colors.surface,
@@ -535,7 +536,7 @@ fun QuestionPaletteDialog(
                         columns = GridCells.Adaptive(minSize = 44.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.height(300.dp)
+                        modifier = Modifier.height(if (onJumpToNumber != null) 240.dp else 300.dp)
                     ) {
                         itemsIndexed((0 until totalQuestions).toList()) { index, _ ->
                             val isCurrent = index == currentIndex
@@ -618,6 +619,64 @@ fun QuestionPaletteDialog(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
+
+                    if (onJumpToNumber != null) {
+                        val jumpText = remember { mutableStateOf("") }
+                        val jumpError = remember { mutableStateOf(false) }
+                        val doJump: () -> Unit = {
+                            val target = jumpText.value.toIntOrNull()
+                            if (target != null && target in 1..totalQuestions) {
+                                onJumpToNumber(target - 1)
+                                onDismiss()
+                            } else {
+                                jumpError.value = true
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.material3.OutlinedTextField(
+                                value = jumpText.value,
+                                onValueChange = { input ->
+                                    jumpText.value = input.filter { it.isDigit() }.take(5)
+                                    jumpError.value = false
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RectangleShape,
+                                isError = jumpError.value,
+                                label = {
+                                    Text(
+                                        text = if (jumpError.value) "ENTER 1 TO $totalQuestions" else "GO TO QUESTION NO. (1-$totalQuestions)",
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Go
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onGo = { doJump() }
+                                ),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = colors.accent,
+                                    unfocusedBorderColor = colors.border,
+                                    focusedTextColor = colors.foreground,
+                                    unfocusedTextColor = colors.foreground
+                                )
+                            )
+                            MianButton(onClick = { doJump() }, accent = true) {
+                                Text(
+                                    text = "GO",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
 
                     MianButton(
                         onClick = onDismiss,

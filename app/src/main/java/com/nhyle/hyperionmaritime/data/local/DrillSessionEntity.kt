@@ -35,7 +35,19 @@ data class DrillSessionEntity(
         get() = DrillSessionFormatter.formatTimestamp(lastUpdated)
 
     val scopeLabel: String
-        get() = DrillSessionFormatter.formatScopeLabel(competence, part, track)
+        get() = if (mode.contains("MOCK", ignoreCase = true)) {
+            val trackTag = when (track.removeSuffix("_MISTAKES")) {
+                "DECK_OIC_NW" -> "OIC-NW"
+                "GMDSS_GOC" -> "GMDSS"
+                "ENGINE_OIC_EW" -> "OIC-EW"
+                "DECK_MGT" -> "DECK MGT"
+                "ENGINE_MGT" -> "ENGINE MGT"
+                else -> track.replace('_', ' ')
+            }
+            "Mock Exam · $trackTag"
+        } else {
+            DrillSessionFormatter.formatScopeLabel(competence, part, track)
+        }
 
     val passingRate: Double
         get() = DrillSessionFormatter.calculatePassingPercentage(correctCount, answeredCount)

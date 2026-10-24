@@ -1,5 +1,10 @@
 package com.nhyle.hyperionmaritime.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,12 +36,15 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
@@ -53,7 +61,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.text.style.TextOverflow
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +102,11 @@ fun HyperionDrawerContent(
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
 
     val hasAnyActiveLicense = isOicNwProUnlocked || isGmdssProUnlocked || isEwActive || isDmActive || isEmActive || isActivated || isUnlocked
-    var showSearchLockDialog by remember { mutableStateOf(false) }
+    var lockedFeatureName by remember { mutableStateOf<String?>(null) }
+
+    var isQuestionBankExpanded by remember { mutableStateOf(true) }
+    var isAccountSupportExpanded by remember { mutableStateOf(false) }
+    var isLegalExpanded by remember { mutableStateOf(false) }
 
     ModalDrawerSheet(
         modifier = modifier
@@ -240,29 +254,110 @@ fun HyperionDrawerContent(
                     }
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // SECTION: QUESTION BANK & TOOLS
-                MianSectionHeader(title = "QUESTION BANK & TOOLS")
-
+                // Transferred & Highlighted Bond Store Button
                 DrawerNavRow(
-                    label = "SEARCH QUESTION BANK",
-                    icon = Icons.Default.Search,
-                    isSelected = currentScreen is Screen.Search,
-                    isLocked = !hasAnyActiveLicense,
+                    label = "BOND STORE",
+                    icon = Icons.Default.WorkspacePremium,
+                    isSelected = currentScreen is Screen.Store,
+                    isHighlighted = true,
                     onClick = {
-                        if (hasAnyActiveLicense) {
-                            onCloseDrawer()
-                            viewModel.navigateTo(Screen.Search)
-                        } else {
-                            showSearchLockDialog = true
-                        }
+                        onCloseDrawer()
+                        viewModel.navigateTo(Screen.Store)
                     }
                 )
 
-                if (showSearchLockDialog) {
-                    Dialog(
-                        onDismissRequest = { showSearchLockDialog = false },
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // SECTION 1: QUESTION BANK & TOOLS (Collapsible Dropdown)
+                DrawerCollapsibleHeader(
+                    title = "QUESTION BANK & TOOLS",
+                    isExpanded = isQuestionBankExpanded,
+                    onToggle = { isQuestionBankExpanded = !isQuestionBankExpanded }
+                )
+
+                AnimatedVisibility(
+                    visible = isQuestionBankExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column {
+                        DrawerNavRow(
+                            label = "SEARCH QUESTION BANK",
+                            icon = Icons.Default.Search,
+                            isSelected = currentScreen is Screen.Search,
+                            isLocked = !hasAnyActiveLicense,
+                            onClick = {
+                                if (hasAnyActiveLicense) {
+                                    onCloseDrawer()
+                                    viewModel.navigateTo(Screen.Search)
+                                } else {
+                                    lockedFeatureName = "the Question Bank Search index"
+                                }
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "BOOKMARKED QUESTIONS",
+                            icon = Icons.Default.Bookmark,
+                            isSelected = currentScreen is Screen.Bookmarks,
+                            isLocked = !hasAnyActiveLicense,
+                            onClick = {
+                                if (hasAnyActiveLicense) {
+                                    onCloseDrawer()
+                                    viewModel.navigateTo(Screen.Bookmarks)
+                                } else {
+                                    lockedFeatureName = "Bookmarked Questions"
+                                }
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "SESSION LOG & DIAGNOSTICS",
+                            icon = Icons.Default.History,
+                            isSelected = currentScreen is Screen.History,
+                            isLocked = !hasAnyActiveLicense,
+                            onClick = {
+                                if (hasAnyActiveLicense) {
+                                    onCloseDrawer()
+                                    viewModel.navigateTo(Screen.History)
+                                } else {
+                                    lockedFeatureName = "Session Log & Diagnostics"
+                                }
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "MISTAKES NOTEBOOK (VAULT)",
+                            icon = Icons.Default.Info,
+                            isSelected = currentScreen is Screen.Vault,
+                            isLocked = !hasAnyActiveLicense,
+                            onClick = {
+                                if (hasAnyActiveLicense) {
+                                    onCloseDrawer()
+                                    viewModel.navigateTo(Screen.Vault)
+                                } else {
+                                    lockedFeatureName = "the Mistakes Notebook"
+                                }
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "MTESTM IMPORT",
+                            icon = Icons.Default.UploadFile,
+                            isSelected = currentScreen is Screen.MTestMImport,
+                            onClick = {
+                                onCloseDrawer()
+                                viewModel.navigateTo(Screen.MTestMImport)
+                            }
+                        )
+                    }
+                }
+
+                lockedFeatureName?.let { feature ->
+                    HyperionDialog(
+                        onDismissRequest = { lockedFeatureName = null },
                         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
                     ) {
                         Surface(
@@ -293,7 +388,7 @@ fun HyperionDrawerContent(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "An active license is required to access the Question Bank Search index. You can purchase a pass in the Pass Store or activate an offline key.",
+                                    text = "An active license is required to access $feature. You can purchase a pass in the Pass Store or activate an offline key.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colors.muted,
                                     textAlign = TextAlign.Center
@@ -304,7 +399,7 @@ fun HyperionDrawerContent(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     OutlinedButton(
-                                        onClick = { showSearchLockDialog = false },
+                                        onClick = { lockedFeatureName = null },
                                         shape = RectangleShape,
                                         border = BorderStroke(1.dp, colors.border),
                                         colors = ButtonDefaults.outlinedButtonColors(
@@ -323,7 +418,7 @@ fun HyperionDrawerContent(
                                     }
                                     Button(
                                         onClick = {
-                                            showSearchLockDialog = false
+                                            lockedFeatureName = null
                                             onCloseDrawer()
                                             viewModel.navigateTo(Screen.Store)
                                         },
@@ -349,91 +444,75 @@ fun HyperionDrawerContent(
                     }
                 }
 
-                DrawerNavRow(
-                    label = "BOOKMARKED QUESTIONS",
-                    icon = Icons.Default.Bookmark,
-                    isSelected = currentScreen is Screen.Bookmarks,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.Bookmarks)
-                    }
+                // SECTION 2: ACCOUNT & SUPPORT (Collapsible Dropdown)
+                DrawerCollapsibleHeader(
+                    title = "ACCOUNT & SUPPORT",
+                    isExpanded = isAccountSupportExpanded,
+                    onToggle = { isAccountSupportExpanded = !isAccountSupportExpanded }
                 )
 
-                DrawerNavRow(
-                    label = "SESSION LOG & DIAGNOSTICS",
-                    icon = Icons.Default.History,
-                    isSelected = currentScreen is Screen.History,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.History)
+                AnimatedVisibility(
+                    visible = isAccountSupportExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column {
+                        DrawerNavRow(
+                            label = "ACCOUNT & DEVICE HELP",
+                            icon = Icons.AutoMirrored.Filled.Help,
+                            isSelected = currentScreen is Screen.HowToAvail,
+                            onClick = {
+                                onCloseDrawer()
+                                viewModel.navigateTo(Screen.HowToAvail)
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "ACTIVATE KEY",
+                            icon = Icons.Default.Key,
+                            isSelected = currentScreen is Screen.Activation,
+                            onClick = {
+                                onCloseDrawer()
+                                viewModel.navigateTo(Screen.Activation)
+                            }
+                        )
                     }
+                }
+
+                // SECTION 3: LEGAL & COMPLIANCE (Collapsible Dropdown)
+                DrawerCollapsibleHeader(
+                    title = "LEGAL & COMPLIANCE",
+                    isExpanded = isLegalExpanded,
+                    onToggle = { isLegalExpanded = !isLegalExpanded }
                 )
 
-                DrawerNavRow(
-                    label = "MISTAKES NOTEBOOK (VAULT)",
-                    icon = Icons.Default.Info,
-                    isSelected = currentScreen is Screen.Vault,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.Vault)
+                AnimatedVisibility(
+                    visible = isLegalExpanded,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column {
+                        DrawerNavRow(
+                            label = "Terms and Conditions",
+                            icon = Icons.Default.Gavel,
+                            isSelected = currentScreen is Screen.TermsAndDisclaimer,
+                            onClick = {
+                                onCloseDrawer()
+                                viewModel.navigateTo(Screen.TermsAndDisclaimer)
+                            }
+                        )
+
+                        DrawerNavRow(
+                            label = "ABOUT HYPERION",
+                            icon = Icons.Default.Info,
+                            isSelected = currentScreen is Screen.About,
+                            onClick = {
+                                onCloseDrawer()
+                                viewModel.navigateTo(Screen.About)
+                            }
+                        )
                     }
-                )
-
-                // SECTION: ACCOUNT & SUPPORT
-                MianSectionHeader(title = "ACCOUNT & SUPPORT")
-
-                DrawerNavRow(
-                    label = "PASS STORE & UPGRADES",
-                    icon = Icons.Default.WorkspacePremium,
-                    isSelected = currentScreen is Screen.Store,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.Store)
-                    }
-                )
-
-                DrawerNavRow(
-                    label = "ACCOUNT & DEVICE HELP",
-                    icon = Icons.AutoMirrored.Filled.Help,
-                    isSelected = currentScreen is Screen.HowToAvail,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.HowToAvail)
-                    }
-                )
-
-                DrawerNavRow(
-                    label = "ACTIVATE KEY",
-                    icon = Icons.Default.Key,
-                    isSelected = currentScreen is Screen.Activation,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.Activation)
-                    }
-                )
-
-                // SECTION: LEGAL & COMPLIANCE
-                MianSectionHeader(title = "LEGAL & COMPLIANCE")
-
-                DrawerNavRow(
-                    label = "Terms and Conditions",
-                    icon = Icons.Default.Gavel,
-                    isSelected = currentScreen is Screen.TermsAndDisclaimer,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.TermsAndDisclaimer)
-                    }
-                )
-
-                DrawerNavRow(
-                    label = "ABOUT HYPERION",
-                    icon = Icons.Default.Info,
-                    isSelected = currentScreen is Screen.About,
-                    onClick = {
-                        onCloseDrawer()
-                        viewModel.navigateTo(Screen.About)
-                    }
-                )
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
             }
@@ -448,12 +527,24 @@ private fun DrawerNavRow(
     isSelected: Boolean,
     onClick: () -> Unit,
     isLocked: Boolean = false,
+    isHighlighted: Boolean = false,
+    badgeText: String? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
-    val rowBg = if (isSelected) colors.surface2 else Color.Transparent
-    val contentColor = when {
+    val isDark = colors.isDark
+    val rowBg = when {
+        isSelected -> colors.surface2
+        isHighlighted -> colors.accent.copy(alpha = if (isDark) 0.15f else 0.10f)
+        else -> Color.Transparent
+    }
+    val borderColor = when {
         isSelected -> colors.accent
+        isHighlighted -> colors.accent.copy(alpha = 0.8f)
+        else -> null
+    }
+    val contentColor = when {
+        isSelected || isHighlighted -> colors.accent
         isLocked -> colors.muted
         else -> colors.foreground
     }
@@ -464,7 +555,7 @@ private fun DrawerNavRow(
             .clickable(onClick = onClick),
         shape = RectangleShape,
         color = rowBg,
-        border = if (isSelected) BorderStroke(1.dp, colors.accent) else null,
+        border = if (borderColor != null) BorderStroke(1.dp, borderColor) else null,
         shadowElevation = 0.dp
     ) {
         Row(
@@ -483,12 +574,31 @@ private fun DrawerNavRow(
             Text(
                 text = label.uppercase(),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
-                fontSize = 12.sp,
-                letterSpacing = 0.6.sp,
+                fontWeight = if (isSelected || isHighlighted) FontWeight.ExtraBold else FontWeight.Bold,
+                fontSize = if (label.length > 18) 11.sp else 12.sp,
+                letterSpacing = if (label.length > 18) 0.3.sp else 0.6.sp,
                 color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            if (badgeText != null) {
+                Surface(
+                    shape = RectangleShape,
+                    color = colors.accent,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.accentForeground,
+                        fontSize = 9.sp,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
             if (isSelected) {
                 Box(
                     modifier = Modifier
@@ -497,6 +607,47 @@ private fun DrawerNavRow(
                         .background(colors.accent)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DrawerCollapsibleHeader(
+    title: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit
+) {
+    val colors = LocalSpaghettiColors.current
+    Surface(
+        shape = RectangleShape,
+        color = colors.surface2,
+        border = BorderStroke(1.dp, colors.border),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 10.dp, bottom = 4.dp)
+            .clickable(onClick = onToggle)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.accent,
+                fontSize = 10.sp,
+                letterSpacing = 1.2.sp
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                tint = colors.accent,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }

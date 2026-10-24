@@ -193,9 +193,9 @@ class PerformanceAndDatabaseIndexingTest {
         val oicC1 = MaritimeCompetenceRegistry.getDynamicQuestionCount("C1", Track.DECK_OIC_NW, isCrpMode = false)
         assertEquals("OIC-NW C1 must equal 831", 831, oicC1)
 
-        // OIC-NW C2 = 570
+        // OIC-NW C2 = 573
         val oicC2 = MaritimeCompetenceRegistry.getDynamicQuestionCount("C2", Track.DECK_OIC_NW, isCrpMode = false)
-        assertEquals("OIC-NW C2 must equal 570", 570, oicC2)
+        assertEquals("OIC-NW C2 must equal 573", 573, oicC2)
 
         // GMDSS C1 = 1,911
         val gmdssC1 = MaritimeCompetenceRegistry.getDynamicQuestionCount("C1", Track.GMDSS_GOC, isCrpMode = false)

@@ -63,7 +63,8 @@ fun MaritimeTopBar(
     onLegalClick: (() -> Unit)? = null,
     bookmarkCount: Int = 0,
     vaultCount: Int = 0,
-    onClearAllClick: (() -> Unit)? = null
+    onClearAllClick: (() -> Unit)? = null,
+    settingsMenu: (@Composable () -> Unit)? = null
 ) {
     val colors = LocalSpaghettiColors.current
 
@@ -224,6 +225,10 @@ fun MaritimeTopBar(
                             )
                         }
                     }
+                }
+
+                if (settingsMenu != null) {
+                    settingsMenu()
                 }
 
                 if (onClearAllClick != null) {

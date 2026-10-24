@@ -66,9 +66,6 @@ fun HowToAvailScreen(
 ) {
     val colors = LocalSpaghettiColors.current
     val context = LocalContext.current
-    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
-    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsState()
-    val isHyperionProUnlocked by viewModel.isHyperionProUnlocked.collectAsState()
 
     BackHandler {
         viewModel.navigateBack()
@@ -187,60 +184,6 @@ fun HowToAvailScreen(
                 )
             }
 
-            item {
-                MianSectionHeader(title = "LICENSE TIERS")
-            }
-
-            item {
-                TierCard(
-                    title = "OIC-NW DECK (OPERATIONAL LEVEL)",
-                    subtitle = "STCW Regulation II/1 • 12 Competencies, 200 items timed mock, full rationale",
-                    questionCount = "Total Question Bank: 6,445 questions",
-                    isUnlocked = isOicNwProUnlocked
-                )
-            }
-
-            item {
-                TierCard(
-                    title = "GMDSS GOC (RADIO OPERATOR)",
-                    subtitle = "STCW Regulation IV/2 • 2 Competencies, 100 items timed mock, full rationale",
-                    questionCount = "Total Question Bank: 2,260 questions",
-                    isUnlocked = isGmdssProUnlocked
-                )
-            }
-
-            item {
-                TierCard(
-                    title = "OIC-EW ENGINE (OPERATIONAL LEVEL)",
-                    subtitle = "STCW Regulation III/1 • 13 Competencies, full rationale",
-                    isUnlocked = viewModel.isEngineOicEwProUnlocked.collectAsState().value
-                )
-            }
-
-            item {
-                TierCard(
-                    title = "DECK MANAGEMENT LEVEL",
-                    subtitle = "STCW Regulation II/2 • 18 Competencies, full rationale",
-                    isUnlocked = viewModel.isDeckMgtProUnlocked.collectAsState().value
-                )
-            }
-
-            item {
-                TierCard(
-                    title = "ENGINE MANAGEMENT LEVEL",
-                    subtitle = "STCW Regulation III/2 • 14 Competencies, full rationale",
-                    isUnlocked = viewModel.isEngineMgtProUnlocked.collectAsState().value
-                )
-            }
-
-            item {
-                TierCard(
-                    title = "HYPERION ALL ACCESS",
-                    subtitle = "Complete Deck Operational + GMDSS Radio + Engine Reviewer package",
-                    questionCount = "Total Question Bank: 12,000+ questions across all suites",
-                    isUnlocked = isHyperionProUnlocked
-                )
-            }
 
             item {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -346,77 +289,6 @@ private fun StepCard(
                     fontWeight = if (isClickable) FontWeight.SemiBold else FontWeight.Normal,
                     fontSize = 11.sp
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TierCard(
-    title: String,
-    subtitle: String,
-    isUnlocked: Boolean,
-    questionCount: String? = null
-) {
-    val colors = LocalSpaghettiColors.current
-
-    MianRuleCard(
-        ruleColor = if (isUnlocked) colors.success else colors.border,
-        containerColor = colors.surface
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = colors.foreground,
-                    modifier = Modifier.weight(1f)
-                )
-
-                Surface(
-                    shape = RoundedCornerShape(2.dp),
-                    color = colors.surface2
-                ) {
-                    Text(
-                        text = if (isUnlocked) "ACTIVE" else "LOCKED",
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isUnlocked) colors.success else colors.muted,
-                        fontSize = 10.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.muted
-            )
-
-            if (questionCount != null) {
-                Spacer(modifier = Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(2.dp),
-                    color = colors.surface2
-                ) {
-                    Text(
-                        text = questionCount,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = colors.foreground,
-                        fontSize = 10.sp,
-                        letterSpacing = 0.5.sp
-                    )
-                }
             }
         }
     }

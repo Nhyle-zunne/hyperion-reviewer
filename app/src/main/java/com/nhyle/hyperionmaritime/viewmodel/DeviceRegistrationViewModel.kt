@@ -50,7 +50,7 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
     }
 
     // ----------------------------------------------------------------------------
-    // 1. OFFLINE ACTIVATION (ADMIN1234 / SHA-256 HARDWARE KEYS)
+    // 1. OFFLINE ACTIVATION (SHA-256 HARDWARE KEYS)
     // ----------------------------------------------------------------------------
     fun activateDeviceWithKey(context: Context) {
         val cleanKey = _uiState.value.activationKeyInput.trim().uppercase()
@@ -197,9 +197,9 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
                     val expiryEpoch = remoteConfig.getLong("promo_code_expiry_epoch")
                     val now = System.currentTimeMillis()
 
+                    if (serverCode.isBlank() || cleanCode != serverCode) throw IllegalStateException("PROMO CODE NOT FOUND")
                     if (!isActive) throw IllegalStateException("PROMO CODE IS CURRENTLY DEACTIVATED")
                     if (expiryEpoch > 0L && now >= expiryEpoch) throw IllegalStateException("PROMO CODE HAS EXPIRED")
-                    if (cleanCode != serverCode) throw IllegalStateException("INVALID PROMO CODE")
 
                     // Promo codes grant All-Access clearance
                     val prefs = context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
@@ -233,7 +233,7 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
                             isGmdssLicensed = true,
                             isAllAccessLicensed = true,
                             promoError = null,
-                            statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)"
+                            statusMessage = "ACTIVE (PROMO PASS · ALL ACCESS)"
                         )
                     }
                 }
@@ -349,7 +349,7 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
                             _uiState.update {
                                 it.copy(
                                     isVerifyingLicense = false,
-                                    statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)"
+                                    statusMessage = "ACTIVE (PROMO PASS · ALL ACCESS)"
                                 )
                             }
                         }
@@ -399,7 +399,7 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
                     isOicLicensed = true,
                     isGmdssLicensed = true,
                     isAllAccessLicensed = true,
-                    statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)",
+                    statusMessage = "ACTIVE (PROMO PASS · ALL ACCESS)",
                     keyError = null,
                     promoError = null
                 )
@@ -470,7 +470,7 @@ class DeviceRegistrationViewModel(application: Application) : AndroidViewModel(a
                     requestKey = reqKey,
                     isLicensed = false,
                     licenseType = "RESTRICTED",
-                    statusMessage = "CLOCK TAMPERED // RESTORE SYSTEM TIME",
+                    statusMessage = "CLOCK TAMPERED · RESTORE SYSTEM TIME",
                     keyError = offlineInfo.tamperReason,
                     promoError = null
                 )

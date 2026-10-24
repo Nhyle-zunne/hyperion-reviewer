@@ -134,7 +134,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         return mistakeDao.getAllMistakes().flowOn(kotlinx.coroutines.Dispatchers.IO)
     }
 
-    suspend fun recordQuestionAttempt(questionId: String, isCorrect: Boolean) {
+    suspend fun recordQuestionAttempt(questionId: String, isCorrect: Boolean, requiredPasses: Int = 2) {
         val existing = mistakeDao.getMistake(questionId)
         if (!isCorrect) {
             val newTimes = (existing?.timesFailed ?: 0) + 1
@@ -149,7 +149,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         } else {
             if (existing != null) {
                 val newConsecutive = existing.consecutiveCorrect + 1
-                if (newConsecutive >= 2) {
+                if (newConsecutive >= requiredPasses) {
                     mistakeDao.deleteMistake(questionId)
                 } else {
                     mistakeDao.insertOrUpdate(
@@ -397,7 +397,8 @@ class ReviewerRepository(private val database: HyperionDatabase) {
         bookmarkIds: Set<String> = emptySet(),
         isProUnlocked: Boolean = false,
         prioritizeUnseen: Boolean = false,
-        seenQuestionIds: Set<String> = emptySet()
+        seenQuestionIds: Set<String> = emptySet(),
+        selectedFunctions: Set<String>? = null
     ): List<Question> {
         // Deep defense: Unactivated mock exam returns empty list immediately
         if (mode == QuizMode.MOCK_EXAM && !isProUnlocked) {
@@ -421,12 +422,16 @@ class ReviewerRepository(private val database: HyperionDatabase) {
                 }
             }
             QuizMode.MOCK_EXAM -> {
-                // Official MARINA permit breakdown: exactly 200 items for Deck OIC-NW, 100 items for GMDSS
-                val mockDataset = MaritimeQuestionBank.getMockExamDataset(track, isProUnlocked = isProUnlocked)
+                // Official MARINA permit breakdown: filtered to selected functions if specified
+                val mockDataset = MaritimeQuestionBank.getMockExamDataset(
+                    track = track,
+                    isProUnlocked = isProUnlocked,
+                    selectedFunctions = selectedFunctions
+                )
                 if (prioritizeUnseen) {
                     QuestionSelectionDispatcher.selectQuestions(
                         eligiblePool = mockDataset,
-                        requestedCount = if (track == Track.GMDSS_GOC) 100 else track.mockQuestions,
+                        requestedCount = mockDataset.size,
                         seenQuestionIds = seenQuestionIds,
                         prioritizeUnseen = true,
                         shuffleQuestions = true

@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -54,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
@@ -86,6 +90,7 @@ fun SearchScreen(
     val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsStateWithLifecycle()
     val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsStateWithLifecycle()
     val isUnlocked by viewModel.isUnlocked.collectAsStateWithLifecycle()
+    val bookmarkedIds by viewModel.bookmarkedIds.collectAsStateWithLifecycle()
 
     fun isTrackLicensed(track: Track): Boolean = when (track) {
         Track.DECK_OIC_NW -> isOicNwActive
@@ -357,7 +362,7 @@ fun SearchScreen(
                             else -> "Selected"
                         }
 
-                        androidx.compose.ui.window.Dialog(
+                        HyperionDialog(
                             onDismissRequest = { showLockedDialog = false },
                             properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
                         ) {
@@ -567,7 +572,11 @@ fun SearchScreen(
                         items = searchResults,
                         key = { "${it.competenceId}_${it.id}" }
                     ) { question ->
-                        SearchResultCard(question = question)
+                        SearchResultCard(
+                            question = question,
+                            isBookmarked = bookmarkedIds.contains(question.id),
+                            onToggleBookmark = { viewModel.toggleBookmark(question.id) }
+                        )
                     }
 
                     item {
@@ -642,7 +651,9 @@ private fun TrackChip(
 
 @Composable
 private fun SearchResultCard(
-    question: Question
+    question: Question,
+    isBookmarked: Boolean,
+    onToggleBookmark: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
     var isExpanded by androidx.compose.runtime.saveable.rememberSaveable(question.id) { 
@@ -675,11 +686,27 @@ private fun SearchResultCard(
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Expand",
-                    tint = colors.muted
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onToggleBookmark,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = if (isBookmarked) "Remove Bookmark" else "Bookmark Question",
+                            tint = if (isBookmarked) colors.accent else colors.muted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Expand",
+                        tint = colors.muted
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -693,22 +720,30 @@ private fun SearchResultCard(
             )
 
             AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(top = 10.dp)) {
+                Column(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val letters = listOf("A", "B", "C", "D", "E", "F")
                     val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
-                    val correctOptLetter = listOf("A", "B", "C", "D").getOrElse(question.correctAnswerIndex) { "?" }
+                    val correctOptLetter = letters.getOrElse(question.correctAnswerIndex) { "?" }
+                    val otherOptions = question.options.mapIndexed { idx, text -> idx to text }
+                        .filter { (idx, text) -> idx != question.correctAnswerIndex && text.isNotBlank() }
 
+                    // 1. Correct Answer: Listed first and emphasized
                     Surface(
                         shape = RectangleShape,
                         color = colors.surface2,
+                        border = BorderStroke(1.dp, colors.success.copy(alpha = 0.6f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(8.dp),
+                            modifier = Modifier.padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(22.dp)
                                     .clip(RectangleShape)
                                     .background(colors.success),
                                 contentAlignment = Alignment.Center
@@ -720,13 +755,73 @@ private fun SearchResultCard(
                                     color = colors.primaryForeground
                                 )
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = correctOptText,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.success
-                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = colors.success,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "CORRECT ANSWER",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = colors.success,
+                                        fontSize = 9.sp,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = correctOptText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.foreground,
+                                    lineHeight = 18.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. Other Options: Listed below the correct answer
+                    otherOptions.forEach { (idx, optText) ->
+                        val optLetter = letters.getOrElse(idx) { "?" }
+                        Surface(
+                            shape = RectangleShape,
+                            color = colors.surface2.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, colors.border.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .clip(RectangleShape)
+                                        .background(colors.surface),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = optLetter,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = colors.muted
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = optText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.foreground,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }

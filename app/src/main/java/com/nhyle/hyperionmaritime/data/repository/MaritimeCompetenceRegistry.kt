@@ -355,23 +355,34 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getTotalTrackQuestionCount(track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
+        if (isCrpMode) {
+            return if (track == Track.DECK_OIC_NW) 2065 else 1150
+        }
+        if (track == Track.GMDSS_GOC && isOperationalReview) {
+            return OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
+        }
+        // If question bank is still warming up on background I/O thread, return static counts instantly
+        // to prevent blocking the Main UI thread during initial app launch / splash screen.
+        if (!MaritimeQuestionBank.isLoaded) {
+            return when (track) {
+                Track.DECK_OIC_NW -> 6448
+                Track.GMDSS_GOC -> if (isProUnlocked) 2260 else 1150
+                Track.ENGINE_OIC_EW -> 5440
+                Track.DECK_MGT -> 6301
+                Track.ENGINE_MGT -> 6087
+            }
+        }
         val dynamicCount = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = isProUnlocked).size
         if (dynamicCount > 0) {
             return dynamicCount
         }
-        if (track == Track.GMDSS_GOC) {
-            if (isOperationalReview) {
-                return OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
-            }
-            return if (isProUnlocked) 2260 else 1150
+        return when (track) {
+            Track.DECK_OIC_NW -> 6448
+            Track.GMDSS_GOC -> if (isProUnlocked) 2260 else 1150
+            Track.ENGINE_OIC_EW -> 5440
+            Track.DECK_MGT -> 6301
+            Track.ENGINE_MGT -> 6087
         }
-        if (isCrpMode) {
-            return if (track == Track.DECK_OIC_NW) 2065 else 1150
-        }
-        if (track == Track.DECK_OIC_NW) {
-            return 6445
-        }
-        return 6444
     }
 
     fun getTotalStandardReviewQuestionCount(track: Track, isProUnlocked: Boolean): Int {

@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.graphics.luminance
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.data.util.ProTier
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
@@ -121,7 +122,7 @@ fun ActivationScreen(
     val regState by viewModel.registrationUiState.collectAsState()
 
     if (regState.isVerifyingOnLaunch || regState.isVerifyingLicense) {
-        androidx.compose.ui.window.Dialog(onDismissRequest = { /* Non-dismissible while verifying */ }) {
+        HyperionDialog(onDismissRequest = { /* Non-dismissible while verifying */ }) {
             androidx.compose.material3.Card(
                 shape = RoundedCornerShape(4.dp),
                 colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = colors.surface),
@@ -395,118 +396,6 @@ fun ActivationScreen(
                 }
             }
 
-            // Tier Selector
-            MianSectionHeader(title = "SELECT LICENSE TIER")
-
-            ProTier.values().filter { it != ProTier.HYPERION_PRO }.forEach { tier ->
-                val isTierSelected = selectedTier == tier
-                val isAllAccessActive = regState.isAllAccessLicensed || (regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed)
-                val isTierUnlocked = when (tier) {
-                    ProTier.OIC_NW_PRO -> regState.isOicLicensed || isAllAccessActive
-                    ProTier.GMDSS_PRO -> regState.isGmdssLicensed || isAllAccessActive
-                    ProTier.ENGINE_OIC_EW_PRO -> regState.isEwLicensed || isAllAccessActive
-                    ProTier.DECK_MGT_PRO -> regState.isDmLicensed || isAllAccessActive
-                    ProTier.ENGINE_MGT_PRO -> regState.isEmLicensed || isAllAccessActive
-                    ProTier.HYPERION_PRO -> isAllAccessActive
-                }
-                val tierTimeLeft = when (tier) {
-                    ProTier.OIC_NW_PRO -> regState.oicTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.GMDSS_PRO -> regState.gmdssTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.ENGINE_OIC_EW_PRO -> regState.ewTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.DECK_MGT_PRO -> regState.dmTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.ENGINE_MGT_PRO -> regState.emTimeLeft ?: if (isAllAccessActive) regState.allAccessTimeLeft else null
-                    ProTier.HYPERION_PRO -> regState.allAccessTimeLeft ?: if (regState.isOicLicensed && regState.isGmdssLicensed && regState.isEwLicensed && regState.isDmLicensed && regState.isEmLicensed) regState.oicTimeLeft else null
-                }
-
-                MianRuleCard(
-                    ruleColor = if (isTierSelected) colors.accent else colors.border,
-                    containerColor = if (isTierSelected) colors.surface2 else colors.surface,
-                    onClick = { selectedTier = tier }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = tier.title.uppercase(),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isTierSelected) colors.accent else colors.foreground
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = tier.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.muted,
-                                fontSize = 11.sp
-                            )
-                            val tierTrack = when (tier) {
-                                ProTier.OIC_NW_PRO -> com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW
-                                ProTier.GMDSS_PRO -> com.nhyle.hyperionmaritime.data.model.Track.GMDSS_GOC
-                                ProTier.ENGINE_OIC_EW_PRO -> com.nhyle.hyperionmaritime.data.model.Track.ENGINE_OIC_EW
-                                ProTier.DECK_MGT_PRO -> com.nhyle.hyperionmaritime.data.model.Track.DECK_MGT
-                                ProTier.ENGINE_MGT_PRO -> com.nhyle.hyperionmaritime.data.model.Track.ENGINE_MGT
-                                else -> null
-                            }
-                            val displayQuestionCount = if (tier.questionCount.isNotBlank()) {
-                                tier.questionCount
-                            } else if (tierTrack != null) {
-                                val total = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalTrackQuestionCount(tierTrack)
-                                "Total Question Bank: %,d questions".format(total)
-                            } else ""
-
-                            if (displayQuestionCount.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(2.dp),
-                                    color = colors.surface2
-                                ) {
-                                    Text(
-                                        text = displayQuestionCount,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.foreground,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(2.dp),
-                            color = if (isTierUnlocked) {
-                                if (isDark) androidx.compose.ui.graphics.Color(0xFF00E676).copy(alpha = 0.15f) else androidx.compose.ui.graphics.Color(0xFFDCFCE7)
-                            } else colors.surface2,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isTierUnlocked) {
-                                    if (isDark) androidx.compose.ui.graphics.Color(0xFF00E676) else androidx.compose.ui.graphics.Color(0xFF16A34A)
-                                } else colors.border
-                            )
-                        ) {
-                            Text(
-                                text = if (isTierUnlocked) "VERIFIED" else "UNVERIFIED",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isTierUnlocked) {
-                                    if (isDark) androidx.compose.ui.graphics.Color(0xFF00E676) else androidx.compose.ui.graphics.Color(0xFF15803D)
-                                } else {
-                                    if (isDark) androidx.compose.ui.graphics.Color(0xFF8E9BAE) else androidx.compose.ui.graphics.Color(0xFF64748B)
-                                },
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
-                }
-            }
-
             // Institutional Verification Desk Button
             com.nhyle.hyperionmaritime.ui.components.LuminousDeskSupportButton(
                 title = "CONTACT VERIFICATION DESK ↗",
@@ -542,7 +431,7 @@ fun ActivationScreen(
                         )
 
                         Text(
-                            text = selectedTier.shortName.uppercase(),
+                            text = "THIS DEVICE",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 9.5.sp,
@@ -636,7 +525,7 @@ fun ActivationScreen(
                         enabled = !(regState.licenseType == "LIFETIME" && regState.isAllAccessLicensed),
                         placeholder = {
                             Text(
-                                text = if (regState.licenseType == "LIFETIME" && regState.isAllAccessLicensed) "YOU ALREADY HAVE FULL ALL-ACCESS CLEARANCE" else "HYPE-XXXX-XX-XXXX-XXXX-XXXX",
+                                text = if (regState.licenseType == "LIFETIME" && regState.isAllAccessLicensed) "YOU ALREADY HAVE FULL ALL-ACCESS CLEARANCE" else "PASTE YOUR KEY HERE",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
                                 color = colors.muted
                             )
@@ -697,7 +586,7 @@ fun ActivationScreen(
                     } else if (regState.licenseType == "LIFETIME" && regState.isAllAccessLicensed) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "TERMINAL ACTIVATED // LIFETIME ALL-ACCESS LICENSE ACTIVE",
+                            text = "TERMINAL ACTIVATED · LIFETIME ALL-ACCESS LICENSE ACTIVE",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.success
@@ -718,7 +607,7 @@ fun ActivationScreen(
                     } else if (regState.licenseType == "PROMO_PASS" && regState.isLicensed) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "PROMO PASS ACTIVE // TEMPORARY CLEARANCE GRANTED",
+                            text = "PROMO PASS ACTIVE · TEMPORARY ACCESS GRANTED",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.success
@@ -726,7 +615,7 @@ fun ActivationScreen(
                     } else if (regState.isLicensed) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "YOU ALREADY HAVE AN ACTIVE LICENSE (${regState.licenseType})",
+                            text = "YOU ALREADY HAVE AN ACTIVE LICENSE (${regState.licenseType.replace("_", " ")})",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.muted
@@ -845,7 +734,7 @@ fun ActivationScreen(
                     } else if (regState.isLicensed && regState.licenseType == "PROMO_PASS") {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "PROMO PASS APPLIED // CLEARANCE GRANTED",
+                            text = "PROMO PASS APPLIED · ACCESS GRANTED",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.success
@@ -853,7 +742,7 @@ fun ActivationScreen(
                     } else if (regState.isLicensed) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "YOU ALREADY HAVE AN ACTIVE LICENSE (${regState.licenseType})",
+                            text = "YOU ALREADY HAVE AN ACTIVE LICENSE (${regState.licenseType.replace("_", " ")})",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.muted

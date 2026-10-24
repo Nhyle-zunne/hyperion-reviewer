@@ -24,7 +24,7 @@ data class ProQuestion(
             options = this.options,
             correctAnswerIndex = this.correctAnswerIndex,
             explanation = this.explanation,
-            difficulty = Difficulty.MODERATE
+            difficulty = classifyQuestionDifficulty(this.questionText, this.options)
         )
     }
 }

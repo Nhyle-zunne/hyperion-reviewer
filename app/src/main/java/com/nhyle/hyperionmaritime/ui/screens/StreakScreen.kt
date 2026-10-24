@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import com.nhyle.hyperionmaritime.data.hype.HypePassManager
 import com.nhyle.hyperionmaritime.data.hype.HypeRedemptionOption
@@ -577,7 +577,7 @@ fun StreakScreen(
                 ) {
                     Column {
                         Text(
-                            text = "HYPE REDEMPTION // REWARDS",
+                            text = "HYPE REDEMPTION · REWARDS",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold,
@@ -626,7 +626,7 @@ fun StreakScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "REWARD REDEMPTION // COMING SOON",
+                            text = "REWARD REDEMPTION · COMING SOON",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.ExtraBold,
@@ -667,7 +667,7 @@ fun StreakScreen(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "LOCKED // IN ACTIVE DEVELOPMENT",
+                                    text = "LOCKED · IN ACTIVE DEVELOPMENT",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = FontFamily.Monospace,
                                         fontWeight = FontWeight.Bold,
@@ -797,7 +797,7 @@ fun StreakScreen(
         val option = selectedOptionToRedeem!!
         val remainingAfter = hypeBalance - option.costHype
 
-        Dialog(
+        HyperionDialog(
             onDismissRequest = { selectedOptionToRedeem = null },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,

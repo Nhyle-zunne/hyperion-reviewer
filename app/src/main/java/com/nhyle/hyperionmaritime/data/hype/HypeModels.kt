@@ -151,7 +151,7 @@ sealed class RedemptionBlockReason {
             }
         }
         is InsufficientHype -> "INSUFFICIENT HYPE (NEED $required)"
-        is MysteryLocked -> "CLASSIFIED // LOCKED"
+        is MysteryLocked -> "CLASSIFIED · LOCKED"
         is None -> "AVAILABLE"
     }
 }

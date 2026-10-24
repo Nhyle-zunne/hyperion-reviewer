@@ -94,7 +94,13 @@ fun MockExamHubScreen(
         showLockInDialog = true
     }
 
-    val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
+    val selectedMockFunctions by viewModel.selectedMockFunctions.collectAsState()
+    val allTrackCompetences = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
+    val competences = if (!selectedMockFunctions.isNullOrEmpty()) {
+        allTrackCompetences.filter { it.functionId in selectedMockFunctions!! }
+    } else {
+        allTrackCompetences
+    }
     val groupedByFunction = competences.groupBy { it.functionId }
 
     val totalQuestions = activeQuestions.size
@@ -578,7 +584,7 @@ private fun MockCompetenceHubCard(
     isLocked: Boolean = false,
     onClick: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalSpaghettiColors.current.isDark
     val colors = LocalSpaghettiColors.current
 
     val statusText = when (status) {
@@ -590,7 +596,7 @@ private fun MockCompetenceHubCard(
     val statusColor = when (status) {
         CompetenceStatus.NOT_STARTED -> colors.muted
         CompetenceStatus.IN_PROGRESS -> colors.primary
-        CompetenceStatus.COMPLETED -> PassGreen
+        CompetenceStatus.COMPLETED -> if (isDark) PassGreen else Color(0xFF15803D)
     }
 
     val statusBgColor = when (status) {
@@ -620,7 +626,7 @@ private fun MockCompetenceHubCard(
     val badgeTextColor = when (status) {
         CompetenceStatus.NOT_STARTED -> colors.foreground
         CompetenceStatus.IN_PROGRESS -> colors.primary
-        CompetenceStatus.COMPLETED -> PassGreen
+        CompetenceStatus.COMPLETED -> if (isDark) PassGreen else Color(0xFF15803D)
     }
 
     val badgeBorderColor = when (status) {

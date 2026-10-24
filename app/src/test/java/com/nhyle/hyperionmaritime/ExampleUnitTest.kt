@@ -66,37 +66,6 @@ class ExampleUnitTest {
   }
 
   @Test
-  fun testActivationKeyAlgorithmAndVerification() {
-    val reqCode = "HYP-A1B2-C3D4"
-    val key = com.nhyle.hyperionmaritime.data.util.LicenseManager.computeValidKey(reqCode)
-
-    // Format should be 4 chunks of 4 hex chars: XXXX-XXXX-XXXX-XXXX
-    val keyRegex = Regex("^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$")
-    org.junit.Assert.assertTrue("Activation key must match XXXX-XXXX-XXXX-XXXX format: $key", keyRegex.matches(key))
-
-    // Manually calculate expected SHA-256
-    val cleanReq = "HYP-A1B2-C3D4"
-    val digest = java.security.MessageDigest.getInstance("SHA-256")
-    val hash = digest.digest(cleanReq.toByteArray(Charsets.UTF_8))
-    val hex = hash.joinToString("") { "%02X".format(it) }
-    val expectedKey = "${hex.substring(0, 4)}-${hex.substring(4, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}"
-
-    assertEquals(expectedKey, key)
-    org.junit.Assert.assertTrue(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, key))
-    org.junit.Assert.assertTrue(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, key.lowercase()))
-    org.junit.Assert.assertTrue(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, key.replace("-", "")))
-
-    // Old test keys must be rejected
-    org.junit.Assert.assertFalse(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, "HYPERION-PRO-2026"))
-    org.junit.Assert.assertFalse(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, "HYPERION-PRO"))
-    org.junit.Assert.assertFalse(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(reqCode, "MARITIME-2026"))
-
-    // Invalid key for another device
-    val otherReqCode = "HYP-FFFF-0000"
-    org.junit.Assert.assertFalse(com.nhyle.hyperionmaritime.data.util.LicenseManager.verifyKey(otherReqCode, key))
-  }
-
-  @Test
   fun testObfuscatedSaltReconstruction() {
     val dynamicSalt = com.nhyle.hyperionmaritime.data.util.LicenseManager.getSecretSalt()
     org.junit.Assert.assertTrue(dynamicSalt.isNotEmpty())

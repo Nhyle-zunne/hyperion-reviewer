@@ -18,6 +18,11 @@ import com.nhyle.hyperionmaritime.data.local.MistakesVaultManager
 import com.nhyle.hyperionmaritime.data.local.QuestionAttemptHistoryManager
 import com.nhyle.hyperionmaritime.data.local.SessionJsonHelper
 import kotlinx.coroutines.flow.asStateFlow
+import android.net.Uri
+import com.nhyle.hyperionmaritime.data.mtestm.ImportedSheet
+import com.nhyle.hyperionmaritime.data.mtestm.ImportedSheetsManager
+import com.nhyle.hyperionmaritime.data.mtestm.MtbParser
+import com.nhyle.hyperionmaritime.data.mtestm.MtbSheetInfo
 import com.nhyle.hyperionmaritime.data.model.CurrentQuestionStats
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.ExamResult
@@ -94,16 +99,18 @@ sealed class Screen {
         val isCrpMode: Boolean = false,
         val track: Track? = null,
         val prioritizeUnseen: Boolean = false,
-        val isOperationalReview: Boolean = false
+        val isOperationalReview: Boolean = false,
+        val isBookmarksMode: Boolean = false,
+        val isMistakesMode: Boolean = false
     ) : Screen() {
         val route: String
-            get() = createRoute(track = track, competence = competenceId, isCrpMode = isCrpMode, prioritizeUnseen = prioritizeUnseen, isOperationalReview = isOperationalReview)
+            get() = createRoute(track = track, competence = competenceId, isCrpMode = isCrpMode, prioritizeUnseen = prioritizeUnseen, isOperationalReview = isOperationalReview, isBookmarksMode = isBookmarksMode, isMistakesMode = isMistakesMode)
 
         companion object {
-            fun createRoute(track: Track? = null, competence: String? = null, isCrpMode: Boolean = false, prioritizeUnseen: Boolean = false, isOperationalReview: Boolean = false): String {
+            fun createRoute(track: Track? = null, competence: String? = null, isCrpMode: Boolean = false, prioritizeUnseen: Boolean = false, isOperationalReview: Boolean = false, isBookmarksMode: Boolean = false, isMistakesMode: Boolean = false): String {
                 val trackName = track?.name ?: "DEFAULT"
                 val comp = competence ?: "ALL"
-                return "practice_config/$trackName/$comp?isCrp=$isCrpMode&unseen=$prioritizeUnseen&opReview=$isOperationalReview"
+                return "practice_config/$trackName/$comp?isCrp=$isCrpMode&unseen=$prioritizeUnseen&opReview=$isOperationalReview&bookmarks=$isBookmarksMode&mistakes=$isMistakesMode"
             }
         }
     } // Step 2: Practice Configuration Page
@@ -124,10 +131,12 @@ sealed class Screen {
     object ExamGuidelines : Screen() // Dedicated MARINA Theoretical Examination Guidelines Screen
     data class QuickScanCompetenceSelect(val track: Track? = null) : Screen() // Quick Scan Competence Selection
     data class QuickScanViewer(val competenceId: String, val track: Track? = null) : Screen() // Quick Scan Material Viewer
+    data class SessionReview(val sessionId: String) : Screen() // Read-only review of a completed session
     object Store : Screen() // Dedicated Google Play Store Screen
     object Streak : Screen() // Dedicated Study Streak & Activity Page
     object StudyTime : Screen() // Dedicated Study Time Statistics Page
     object About : Screen() // About Hyperion
+    object MTestMImport : Screen() // Dedicated MTestM Import & Review Hub
 }
 
 class ReviewerViewModel(application: Application) : AndroidViewModel(application) {
@@ -138,6 +147,34 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     private val _marinaExamTargetMillis = MutableStateFlow(prefs.getLong("marina_exam_target_millis", 0L))
     val marinaExamTargetMillis: StateFlow<Long> = _marinaExamTargetMillis.asStateFlow()
+
+    // --- MTestM Custom Sheets Import State ---
+    private val _importedSheets = MutableStateFlow<List<ImportedSheet>>(emptyList())
+    val importedSheets: StateFlow<List<ImportedSheet>> = _importedSheets.asStateFlow()
+
+    private val _pendingMtbSheets = MutableStateFlow<List<MtbSheetInfo>>(emptyList())
+    val pendingMtbSheets: StateFlow<List<MtbSheetInfo>> = _pendingMtbSheets.asStateFlow()
+
+    private val _selectedMtbExamIds = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedMtbExamIds: StateFlow<Set<Int>> = _selectedMtbExamIds.asStateFlow()
+
+    private val _isMtbProcessing = MutableStateFlow(false)
+    val isMtbProcessing: StateFlow<Boolean> = _isMtbProcessing.asStateFlow()
+
+    private val _mtbStatusMessage = MutableStateFlow<String?>(null)
+    val mtbStatusMessage: StateFlow<String?> = _mtbStatusMessage.asStateFlow()
+
+    private var pendingMtbDbFile: java.io.File? = null
+    private val _isMTestMDrillActive = MutableStateFlow(false)
+    val isMTestMDrillActive: StateFlow<Boolean> = _isMTestMDrillActive.asStateFlow()
+
+    private val _activeImportedSheet = MutableStateFlow<ImportedSheet?>(null)
+    val activeImportedSheet: StateFlow<ImportedSheet?> = _activeImportedSheet.asStateFlow()
+
+    fun exitMTestMDrill() {
+        _isMTestMDrillActive.value = false
+        _activeImportedSheet.value = null
+    }
 
     fun setMarinaExamTargetMillis(millis: Long) {
         prefs.edit().putLong("marina_exam_target_millis", millis).apply()
@@ -452,7 +489,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_OIC_NW)
                 if (rem != null && exp != null) "$rem ($exp)" else null
             }
-            isHypeDeck -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
+            isHypeDeck && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             else -> null
         }
 
@@ -463,7 +500,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.GMDSS_GOC)
                 if (rem != null && exp != null) "$rem ($exp)" else null
             }
-            isHypeRadio -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
+            isHypeRadio && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             else -> null
         }
 
@@ -502,20 +539,20 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val oicExp = maxOf(
-            if (oicOfflineActive) offlineInfo!!.expiryEpoch else 0L,
+            if (oicOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L,
             if (oicPlan != null && !oicPlan.isExpired) oicPlan.expiryTimestamp else 0L
         )
         val gmdssExp = maxOf(
-            if (gmdssOfflineActive) offlineInfo!!.expiryEpoch else 0L,
+            if (gmdssOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L,
             if (gmdssPlan != null && !gmdssPlan.isExpired) gmdssPlan.expiryTimestamp else 0L
         )
         val allAccessPlanExp = if (allAccessPlan != null && !allAccessPlan.isExpired) allAccessPlan.expiryTimestamp else 0L
-        val allAccessOfflineExp = if (allAccessOfflineActive) offlineInfo!!.expiryEpoch else 0L
+        val allAccessOfflineExp = if (allAccessOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L
 
         val allAccessTimeLeft = when {
-            allAccessOfflineExp > 0L -> "${offlineInfo!!.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
-            allAccessPlanExp > 0L -> "${allAccessPlan!!.getFormattedTimeRemaining()} (${allAccessPlan.getFormattedExpiryDate()})"
-            isHypeAll -> "${hypePass!!.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
+            allAccessOfflineExp > 0L && offlineInfo != null -> "${offlineInfo.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
+            allAccessPlanExp > 0L && allAccessPlan != null -> "${allAccessPlan.getFormattedTimeRemaining()} (${allAccessPlan.getFormattedExpiryDate()})"
+            isHypeAll && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             oicExp > 0L && gmdssExp > 0L -> {
                 val minExp = minOf(oicExp, gmdssExp)
                 val tempPlan = com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo(expiryTimestamp = minExp)
@@ -525,7 +562,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val statusMsg = when {
-            isClockTampered -> "CLOCK TAMPERED // RESTORE SYSTEM TIME"
+            isClockTampered -> "CLOCK TAMPERED · RESTORE SYSTEM TIME"
+            licenseType == "PROMO_PASS" -> "ACTIVE (PROMO PASS · ALL ACCESS)"
             isSub -> when {
                 playEnt.allAccessUnlocked -> "ACTIVE (ALL-ACCESS PASS SUBSCRIPTION • ${allAccessPlan?.getFormattedTimeRemaining() ?: ""})"
                 newOic && newGmdss -> {
@@ -538,10 +576,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 playEnt.gmdssUnlocked -> "ACTIVE (GMDSS GOC SUBSCRIPTION • ${gmdssPlan?.getFormattedTimeRemaining() ?: ""})"
                 else -> "ACTIVE (GOOGLE PLAY SUBSCRIPTION)"
             }
-            allAccessOfflineActive -> "ACTIVE (${offlineInfo!!.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
-            oicOfflineActive && !gmdssOfflineActive -> "ACTIVE (OIC-NW ${offlineInfo!!.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
-            gmdssOfflineActive && !oicOfflineActive -> "ACTIVE (GMDSS ${offlineInfo!!.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
-            isHypeActive -> "ACTIVE (${hypePass!!.rewardType.title} • ${hypePass.getFormattedRemainingTime().uppercase()})"
+            allAccessOfflineActive && offlineInfo != null -> "ACTIVE (${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
+            oicOfflineActive && !gmdssOfflineActive && offlineInfo != null -> "ACTIVE (OIC-NW ${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
+            gmdssOfflineActive && !oicOfflineActive && offlineInfo != null -> "ACTIVE (GMDSS ${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
+            isHypeActive && hypePass != null -> "ACTIVE (${hypePass.rewardType.title} • ${hypePass.getFormattedRemainingTime().uppercase()})"
             newAct -> "ACTIVE"
             else -> "RESTRICTED (UNLICENSED)"
         }
@@ -586,15 +624,42 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _isRepoWarming = MutableStateFlow(false)
     val isRepoWarming: StateFlow<Boolean> = _isRepoWarming.asStateFlow()
 
+    // 3-second "processing results" popup shown after a drill, practice or exam is finished
+    private val _showResultsLoading = MutableStateFlow(false)
+    val showResultsLoading: StateFlow<Boolean> = _showResultsLoading.asStateFlow()
+
+    fun dismissResultsLoading() {
+        _showResultsLoading.value = false
+    }
+
+    // Bridge terminal state: shown while loading, then a 3-2-1 countdown, then closed here
+    // The bridge popup may open only once per app launch
+    private var bridgeAlreadyShown = false
+
+    private val _showBridge = MutableStateFlow(false)
+    val showBridge: StateFlow<Boolean> = _showBridge.asStateFlow()
+
+    // null = still loading, 3/2/1 = loading finished and counting down
+    private val _bridgeCountdown = MutableStateFlow<Int?>(null)
+    val bridgeCountdown: StateFlow<Int?> = _bridgeCountdown.asStateFlow()
+
+    fun closeBridge() {
+        _showBridge.value = false
+        _bridgeCountdown.value = null
+    }
+
     init {
         LicenseManager.init(application)
+        LicenseManager.syncBlockedKeys(application)
+        LicenseManager.syncTrustedTime(application)
         MaritimeQuestionBank.init(application)
         loadCurrentLicense(application)
         checkLicenseOnLaunch(application)
         refreshUnlockStates()
+        loadImportedSheets()
 
         if (prefs.getBoolean("has_accepted_terms", false)) {
-            warmUpQuestionRepositories()
+            warmUpQuestionRepositories(showBridgeDialog = false)
         }
 
         viewModelScope.launch {
@@ -630,12 +695,20 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
+            var promoTick = 0
             while (true) {
                 delay(5000L)
                 HypePassManager.checkDateRollover(application)
                 val active = HypePassManager.activePassFlow.value
                 if (active != null && active.isExpired()) {
                     refreshUnlockStates()
+                }
+                promoTick++
+                if (promoTick >= 3) {
+                    promoTick = 0
+                    if (_registrationUiState.value.licenseType == "PROMO_PASS") {
+                        verifyLicenseState(application, isSilent = true)
+                    }
                 }
             }
         }
@@ -720,7 +793,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             if (app != null) {
                 // 1. Offline License Authoritative (Terminal key, CRP activation, legacy master)
                 val prefs = app.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-                if (prefs != null) {
+                // A rolled-back clock locks offline keys; promo and Play access are not affected
+                val offlineClockTampered = LicenseManager.checkOfflineLicense(app) is
+                    com.nhyle.hyperionmaritime.data.util.OfflineLicenseStatus.ClockTampered
+                if (prefs != null && !offlineClockTampered) {
                     val isAllAccess = prefs.getBoolean("is_all_access_unlocked", false) ||
                                       prefs.getBoolean("is_full_access_unlocked", false)
                     if (isAllAccess) return true
@@ -880,7 +956,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                         isDmLicensed = true,
                         isEmLicensed = true,
                         isAllAccessLicensed = true,
-                        statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)",
+                        statusMessage = "ACTIVE (PROMO PASS · ALL ACCESS)",
                         keyError = null,
                         promoError = null
                     )
@@ -909,7 +985,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                         it.copy(
                             isLicensed = false,
                             licenseType = "RESTRICTED",
-                            statusMessage = "CLOCK TAMPERED // RESTORE SYSTEM TIME",
+                            statusMessage = "CLOCK TAMPERED · RESTORE SYSTEM TIME",
                             keyError = offlineInfo.tamperReason,
                             promoError = null
                         )
@@ -935,7 +1011,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         verifyLicenseState(context, isLaunchCheck = true)
     }
 
-    fun verifyLicenseState(context: Context, isLaunchCheck: Boolean = false) {
+    fun verifyLicenseState(context: Context, isLaunchCheck: Boolean = false, isSilent: Boolean = false) {
         val prefs = try {
             context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
         } catch (_: Exception) {
@@ -985,7 +1061,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     isCheckingStatus = false,
                     isLicensed = false,
                     licenseType = "RESTRICTED",
-                    statusMessage = "CLOCK TAMPERED // RESTORE SYSTEM TIME"
+                    statusMessage = "CLOCK TAMPERED · RESTORE SYSTEM TIME"
                 )
             }
             refreshUnlockStates()
@@ -1002,12 +1078,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 return
             }
 
-            _registrationUiState.update {
-                it.copy(
-                    isVerifyingLicense = true,
-                    isVerifyingOnLaunch = isLaunchCheck,
-                    isCheckingStatus = !isLaunchCheck
-                )
+            if (!isSilent) {
+                _registrationUiState.update {
+                    it.copy(
+                        isVerifyingLicense = true,
+                        isVerifyingOnLaunch = isLaunchCheck,
+                        isCheckingStatus = !isLaunchCheck
+                    )
+                }
             }
 
             viewModelScope.launch(Dispatchers.IO) {
@@ -1034,6 +1112,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     withContext(Dispatchers.Main) {
                         if (!isActive || (serverExpiry > 0L && currentEpoch >= serverExpiry)) {
                             revokePromoAccess(context)
+                            _registrationUiState.update {
+                                it.copy(
+                                    isVerifyingLicense = false,
+                                    isVerifyingOnLaunch = false,
+                                    isCheckingStatus = false,
+                                    statusMessage = "RESTRICTED (UNLICENSED)"
+                                )
+                            }
                         } else {
                             _registrationUiState.update {
                                 it.copy(
@@ -1046,7 +1132,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                                     isVerifyingLicense = false,
                                     isVerifyingOnLaunch = false,
                                     isCheckingStatus = false,
-                                    statusMessage = "ACTIVE (PROMO PASS // ALL ACCESS)"
+                                    statusMessage = "ACTIVE (PROMO PASS · ALL ACCESS)"
                                 )
                             }
                         }
@@ -1058,7 +1144,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                                 isVerifyingLicense = false,
                                 isVerifyingOnLaunch = false,
                                 isCheckingStatus = false,
-                                statusMessage = "OFFLINE CACHE ACTIVE // REGISTRY SYNC DEFERRED"
+                                statusMessage = "OFFLINE CACHE ACTIVE · REGISTRY SYNC DEFERRED"
                             )
                         }
                     }
@@ -1107,24 +1193,6 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 activationKeyError = null
             )
         }
-    }
-
-    suspend fun redeemLicenseCode(inputKey: String): Result<Boolean> {
-        val cleanKey = inputKey.trim().uppercase()
-        if (cleanKey == "ADMIN1234" || LicenseManager.validateLegacyKeyDirect(getApplication(), cleanKey)) {
-            val prefs = getApplication<Application>().getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-            prefs.edit()
-                .putBoolean("is_full_access_unlocked", true)
-                .putString("license_type", "LIFETIME")
-                .putBoolean("is_hardware_lifetime", true)
-                .apply()
-            LicenseManager.setMasterProUnlocked(getApplication(), true)
-            LicenseManager.init(getApplication())
-            ProQuestionRepository.clearCache()
-            _registrationUiState.update { it.copy(isLicensed = true, licenseType = "LIFETIME", isSuccess = true, statusMessage = "TERMINAL ACTIVATED / FULL CLEARANCE GRANTED", promoError = null, keyError = null, activationKeyError = null) }
-            return Result.success(true)
-        }
-        return Result.failure(IllegalArgumentException("ERR: INVALID ACTIVATION KEY"))
     }
 
     // Promo Code State & Logic
@@ -1185,8 +1253,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     val expiryEpoch = remoteConfig.getLong("promo_code_expiry_epoch")
                     val now = System.currentTimeMillis()
 
-                    if (serverCode.isBlank()) {
-                        throw IllegalStateException("Promo key is empty in Firebase Console")
+                    if (serverCode.isBlank() || cleanCode != serverCode) {
+                        throw IllegalStateException("PROMO CODE NOT FOUND")
                     }
                     if (!isActive) {
                         throw IllegalStateException("PROMO CODE IS CURRENTLY DEACTIVATED")
@@ -1278,7 +1346,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                             isGmdssLicensed = true,
                             isAllAccessLicensed = true,
                             promoError = null,
-                            statusMessage = "PROMO APPLIED // CLEARANCE GRANTED"
+                            statusMessage = "PROMO APPLIED · ACCESS GRANTED"
                         )
                     }
                 }
@@ -1456,16 +1524,49 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         } catch (_: Exception) {
             null
         }
+        val wasPromo = prefs?.getString("license_type", "") == "PROMO_PASS"
+
         // Only strip the promo pass fields so offline keys & Play Store subscriptions remain untouched
         prefs?.edit()
             ?.remove("active_promo_code")
             ?.remove("promo_expiry_epoch")
             ?.apply()
 
-        if (prefs?.getString("license_type", "") == "PROMO_PASS") {
-            prefs.edit().putString("license_type", "RESTRICTED").apply()
+        if (wasPromo) {
+            // A promo pass switches the All Access flags on directly, so they must be switched off too
+            prefs?.edit()
+                ?.putBoolean("is_full_access_unlocked", false)
+                ?.putBoolean("is_all_access_unlocked", false)
+                ?.putBoolean("is_oic_unlocked", false)
+                ?.putBoolean("is_gmdss_unlocked", false)
+                ?.putBoolean("is_engine_ew_unlocked", false)
+                ?.putBoolean("is_ew_unlocked", false)
+                ?.putBoolean("is_deck_mgt_unlocked", false)
+                ?.putBoolean("is_dm_unlocked", false)
+                ?.putBoolean("is_engine_mgt_unlocked", false)
+                ?.putBoolean("is_em_unlocked", false)
+                ?.putBoolean("is_licensed", false)
+                ?.putString("license_type", "RESTRICTED")
+                ?.apply()
+            try {
+                LicenseManager.setMasterProUnlocked(context, false)
+                LicenseManager.setOicNwProUnlocked(context, false)
+                LicenseManager.setGmdssProUnlocked(context, false)
+                LicenseManager.setEngineOicEwProUnlocked(context, false)
+                LicenseManager.setDeckMgtProUnlocked(context, false)
+                LicenseManager.setEngineMgtProUnlocked(context, false)
+                LicenseManager.setHyperionProUnlocked(context, false)
+            } catch (_: Exception) {}
+            ProQuestionRepository.clearCache()
         }
         refreshUnlockStates()
+        _registrationUiState.update {
+            it.copy(
+                isVerifyingLicense = false,
+                isVerifyingOnLaunch = false,
+                isCheckingStatus = false
+            )
+        }
     }
 
     suspend fun activateTerminal(inputKey: String): Pair<Boolean, String> {
@@ -1512,17 +1613,86 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         prefs.edit().putBoolean("is_dark_mode", enabled).apply()
     }
 
+    // Question Text Scaling State (0.85x, 1.0x, 1.15x, 1.30x)
+    private val _questionTextScale = MutableStateFlow(prefs.getFloat("question_text_scale", 1.0f))
+    val questionTextScale: StateFlow<Float> = _questionTextScale.asStateFlow()
+
+    fun setQuestionTextScale(scale: Float) {
+        val clamped = scale.coerceIn(0.85f, 1.35f)
+        _questionTextScale.value = clamped
+        prefs.edit().putFloat("question_text_scale", clamped).apply()
+    }
+
+    fun increaseQuestionTextScale() {
+        val current = _questionTextScale.value
+        val next = when {
+            current < 0.95f -> 1.0f
+            current < 1.10f -> 1.15f
+            current < 1.25f -> 1.30f
+            else -> 1.30f
+        }
+        setQuestionTextScale(next)
+    }
+
+    fun decreaseQuestionTextScale() {
+        val current = _questionTextScale.value
+        val next = when {
+            current > 1.20f -> 1.15f
+            current > 1.05f -> 1.0f
+            current > 0.90f -> 0.85f
+            else -> 0.85f
+        }
+        setQuestionTextScale(next)
+    }
+
+    // --- Practice & Standard Drill Automations ---
+    private val _isDirectAnswer = MutableStateFlow(prefs.getBoolean("drill_direct_answer", false))
+    val isDirectAnswer: StateFlow<Boolean> = _isDirectAnswer.asStateFlow()
+
+    fun toggleDirectAnswer(enabled: Boolean) {
+        _isDirectAnswer.value = enabled
+        prefs.edit().putBoolean("drill_direct_answer", enabled).apply()
+    }
+
+    private val _isAutoNextCorrect = MutableStateFlow(prefs.getBoolean("drill_auto_next_correct", false))
+    val isAutoNextCorrect: StateFlow<Boolean> = _isAutoNextCorrect.asStateFlow()
+
+    fun toggleAutoNextCorrect(enabled: Boolean) {
+        _isAutoNextCorrect.value = enabled
+        prefs.edit().putBoolean("drill_auto_next_correct", enabled).apply()
+    }
+
+    private val _isAutoNextWrong = MutableStateFlow(prefs.getBoolean("drill_auto_next_wrong", false))
+    val isAutoNextWrong: StateFlow<Boolean> = _isAutoNextWrong.asStateFlow()
+
+    fun toggleAutoNextWrong(enabled: Boolean) {
+        _isAutoNextWrong.value = enabled
+        prefs.edit().putBoolean("drill_auto_next_wrong", enabled).apply()
+    }
+
+    private var autoAdvanceJob: kotlinx.coroutines.Job? = null
+
+    fun cancelAutoAdvance() {
+        autoAdvanceJob?.cancel()
+        autoAdvanceJob = null
+    }
+
     fun acceptTerms() {
         prefs.edit().putBoolean("has_accepted_terms", true).apply()
         _hasAcceptedTerms.value = true
         backStack.clear()
         _currentScreen.value = Screen.TrackSelection
-        warmUpQuestionRepositories()
+        warmUpQuestionRepositories(showBridgeDialog = true)
     }
 
-    fun warmUpQuestionRepositories() {
+    fun warmUpQuestionRepositories(showBridgeDialog: Boolean = false) {
         if (_isRepoWarming.value) return
         _isRepoWarming.value = true
+        _bridgeCountdown.value = null
+        if (showBridgeDialog && !prefs.getBoolean("has_shown_terminal_bridge", false)) {
+            prefs.edit().putBoolean("has_shown_terminal_bridge", true).apply()
+            _showBridge.value = true
+        }
         viewModelScope.launch(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
             try {
@@ -1533,12 +1703,6 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
                 }
             } catch (_: Exception) {}
-
-            // Minimum 1.2s duration gives the user clean visual feedback while threads finish indexing
-            val elapsed = System.currentTimeMillis() - startTime
-            if (elapsed < 1200L) {
-                delay(1200L - elapsed)
-            }
 
             withContext(Dispatchers.Main) {
                 _isRepoWarming.value = false
@@ -1557,7 +1721,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             _currentScreen.collect { screen ->
-                val isActiveQuestionScreen = screen is Screen.Quiz || screen is Screen.MockCompetence
+                val isActiveQuestionScreen = screen is Screen.Quiz || screen is Screen.MockCompetence || screen is Screen.QuickScanViewer
                 if (!isActiveQuestionScreen) {
                     studyTimeTracker.pauseTimer()
                 }
@@ -1635,7 +1799,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val shuffleChoices: Boolean = true,
         val isCrpMode: Boolean = false,
         val prioritizeUnseen: Boolean = false,
-        val isOperationalReview: Boolean = false
+        val isOperationalReview: Boolean = false,
+        val requiredPasses: Int = 2
     )
 
     private var _lastPracticeDrillConfig: PracticeDrillConfig? = null
@@ -1810,6 +1975,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val _mistakeEntries = MutableStateFlow<List<MistakeEntry>>(MistakesVaultManager.loadEntries(application))
     val mistakeEntries: StateFlow<List<MistakeEntry>> = _mistakeEntries.asStateFlow()
 
+    private val _requiredMistakePasses = MutableStateFlow(MistakesVaultManager.getRequiredPasses(application))
+    val requiredMistakePasses: StateFlow<Int> = _requiredMistakePasses.asStateFlow()
+
+    fun setRequiredMistakePasses(passes: Int) {
+        val clamped = passes.coerceIn(1, 5)
+        _requiredMistakePasses.value = clamped
+        MistakesVaultManager.setRequiredPasses(getApplication(), clamped)
+    }
+
     fun refreshMistakes() {
         _mistakeEntries.value = MistakesVaultManager.loadEntries(getApplication())
     }
@@ -1960,6 +2134,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val current = _currentScreen.value
         if (current == screen) return
 
+        if (screen is Screen.TrackSelection || screen is Screen.Home) {
+            if (_registrationUiState.value.licenseType == "PROMO_PASS") {
+                verifyLicenseState(getApplication(), isSilent = true)
+            }
+        }
+
         when (screen) {
             is Screen.TrackSelection -> {
                 backStack.clear()
@@ -1989,8 +2169,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 }
                 _isCrpMode.value = screen.isCrpMode
                 backStack.removeAll { it is Screen.PracticeConfig || it is Screen.Quiz || it is Screen.FreePractice }
-                if (backStack.none { it is Screen.PracticeCompetenceSelect }) {
-                    backStack.addLast(Screen.PracticeCompetenceSelect(isCrpMode = screen.isCrpMode, isOperationalReview = screen.isOperationalReview))
+                if (!_isMTestMDrillActive.value) {
+                    if (backStack.none { it is Screen.PracticeCompetenceSelect }) {
+                        backStack.addLast(Screen.PracticeCompetenceSelect(isCrpMode = screen.isCrpMode, isOperationalReview = screen.isOperationalReview))
+                    }
+                } else {
+                    if (backStack.none { it is Screen.MTestMImport }) {
+                        backStack.addLast(Screen.MTestMImport)
+                    }
                 }
                 _currentScreen.value = screen
                 return
@@ -2024,10 +2210,25 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         refreshMistakes()
         val job = autoSaveCurrentSession()
         purgeExamSessionFromBackStack()
+        if (_isMTestMDrillActive.value) {
+            exitMTestMDrill()
+            _currentScreen.value = Screen.MTestMImport
+            return job
+        }
         val isCrp = _isCrpMode.value
         val compId = _activeCompetenceId.value
+        val mode = _activeQuizMode.value
         val track = _selectedTrack.value
         val isOpReview = _lastPracticeDrillConfig?.isOperationalReview ?: false
+
+        if (compId == "MISTAKES" || mode == QuizMode.MISTAKES) {
+            _currentScreen.value = Screen.Vault
+            return job
+        }
+        if (compId == "BOOKMARKS" || mode == QuizMode.BOOKMARKS_DRILL) {
+            _currentScreen.value = Screen.Bookmarks
+            return job
+        }
 
         val targetScreen = Screen.PracticeConfig(
             competenceId = compId,
@@ -2060,8 +2261,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             return true
         }
 
-        // 3. When on PracticeConfig, back MUST pop to PracticeCompetenceSelect
+        // 3. When on PracticeConfig, back MUST pop to PracticeCompetenceSelect (or MTestMImport if MTestM drill)
         if (current is Screen.PracticeConfig) {
+            if (_isMTestMDrillActive.value) {
+                exitMTestMDrill()
+                _currentScreen.value = Screen.MTestMImport
+                return true
+            }
             backStack.removeAll { it is Screen.PracticeConfig || it is Screen.Quiz || it is Screen.FreePractice }
             _currentScreen.value = Screen.PracticeCompetenceSelect(isCrpMode = current.isCrpMode, isOperationalReview = current.isOperationalReview)
             return true
@@ -2069,7 +2275,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         // 4. When in active drill (Screen.Quiz or Screen.FreePractice), back returns cleanly to Competence Configuration Screen
         if (current is Screen.Quiz || current is Screen.FreePractice) {
+            if (_isMTestMDrillActive.value) {
+                exitMTestMDrill()
+                _currentScreen.value = Screen.MTestMImport
+                return true
+            }
             exitDrillToCompetenceConfig()
+            return true
+        }
+
+        // 4b. When in MTestMImport, back returns to Track Selection
+        if (current is Screen.MTestMImport) {
+            _currentScreen.value = Screen.TrackSelection
             return true
         }
 
@@ -2171,9 +2388,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         startConfiguredPractice(competenceId = competenceId, isCrpMode = isCrpMode)
     }
 
-    fun startTimedMockExam(track: Track = _selectedTrack.value) {
+    private val _selectedMockFunctions = MutableStateFlow<Set<String>?>(null)
+    val selectedMockFunctions: StateFlow<Set<String>?> = _selectedMockFunctions.asStateFlow()
+
+    fun startTimedMockExam(
+        track: Track = _selectedTrack.value,
+        selectedFunctions: Set<String>? = _selectedMockFunctions.value
+    ) {
         _selectedTrack.value = track
-        startQuizSession(QuizMode.MOCK_EXAM)
+        _selectedMockFunctions.value = selectedFunctions
+        startQuizSession(QuizMode.MOCK_EXAM, selectedFunctions = selectedFunctions)
     }
 
     fun openQuestionPalette() {
@@ -2263,6 +2487,175 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         startStudyTrackingForCurrentSession()
     }
 
+    fun startBookmarksConfiguredPractice(
+        deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
+        startItem: Int = 1,
+        endItem: Int? = null,
+        shuffleQuestions: Boolean = false,
+        shuffleChoices: Boolean = true
+    ) {
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        currentActiveSessionId = java.util.UUID.randomUUID().toString()
+        resumingRecordId = null
+        _isExamSubmitted.value = false
+        _isCrpMode.value = false
+        _activeDrillDeliveryMode.value = deliveryMode
+        _activeQuizMode.value = QuizMode.BOOKMARKS_DRILL
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = "BOOKMARKS"
+        _activePartLabel.value = null
+        _currentQuestionIndex.value = 0
+        _showSubmitDialog.value = false
+        _isPaletteOpen.value = false
+        _isShuffled.value = shuffleQuestions
+        activeEvaluationAttemptCommittedId = null
+
+        val isPro = isTrackUnlocked(_selectedTrack.value)
+        val bookmarked = bookmarkedIds.value
+        var questions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked }
+        if (!isPro) {
+            questions = questions.take(5)
+        }
+
+        if (endItem != null && endItem >= startItem && questions.isNotEmpty()) {
+            val fromIndex = (startItem - 1).coerceIn(0, questions.size - 1)
+            val toIndex = endItem.coerceIn(fromIndex + 1, questions.size)
+            questions = questions.subList(fromIndex, toIndex)
+        }
+
+        if (shuffleQuestions) {
+            questions = questions.shuffled()
+        }
+
+        if (shuffleChoices) {
+            questions = questions.map { q ->
+                val originalCorrectText = q.options[q.correctAnswerIndex]
+                val shuffledOpts = q.options.shuffled()
+                val newIndex = shuffledOpts.indexOf(originalCorrectText)
+                q.copy(
+                    options = shuffledOpts,
+                    correctAnswerIndex = if (newIndex >= 0) newIndex else 0
+                )
+            }
+        }
+
+        _lastPracticeDrillConfig = PracticeDrillConfig(
+            track = _selectedTrack.value,
+            competenceId = "BOOKMARKS",
+            deliveryMode = deliveryMode,
+            startItem = startItem,
+            endItem = endItem,
+            shuffleQuestions = shuffleQuestions,
+            shuffleChoices = shuffleChoices
+        )
+
+        if (deliveryMode == DrillDeliveryMode.INTENSIVE && isPro) {
+            _intensiveQueue.value = questions
+            _intensiveInitialTotal.value = questions.size
+            _intensiveClearedCount.value = 0
+            _intensiveCurrentQuestionState.value = null
+            _intensiveCompleted.value = false
+        }
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _firstAttemptStatus.value = emptyMap()
+        _timeRemainingSeconds.value = 0
+        _selectedChoiceIndex.value = null
+        _isAnswerEvaluated.value = false
+
+        autoSaveCurrentSession()
+        _currentScreen.value = Screen.Quiz
+        startStudyTrackingForCurrentSession()
+    }
+
+    fun startMistakesConfiguredPractice(
+        deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
+        startItem: Int = 1,
+        endItem: Int? = null,
+        shuffleQuestions: Boolean = false,
+        shuffleChoices: Boolean = true,
+        requiredPasses: Int = _requiredMistakePasses.value
+    ) {
+        setRequiredMistakePasses(requiredPasses)
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        currentActiveSessionId = java.util.UUID.randomUUID().toString()
+        resumingRecordId = null
+        _isExamSubmitted.value = false
+        _isCrpMode.value = false
+        _activeDrillDeliveryMode.value = deliveryMode
+        _activeQuizMode.value = QuizMode.MISTAKES
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = "MISTAKES"
+        _activePartLabel.value = null
+        _currentQuestionIndex.value = 0
+        _showSubmitDialog.value = false
+        _isPaletteOpen.value = false
+        _isShuffled.value = shuffleQuestions
+        activeEvaluationAttemptCommittedId = null
+
+        val currentTrack = _selectedTrack.value
+        val trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+        var questions = trackMistakes.map { entry ->
+            MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
+        }
+
+        if (endItem != null && endItem >= startItem && questions.isNotEmpty()) {
+            val fromIndex = (startItem - 1).coerceIn(0, questions.size - 1)
+            val toIndex = endItem.coerceIn(fromIndex + 1, questions.size)
+            questions = questions.subList(fromIndex, toIndex)
+        }
+
+        if (shuffleQuestions) {
+            questions = questions.shuffled()
+        }
+
+        if (shuffleChoices) {
+            questions = questions.map { q ->
+                val originalCorrectText = q.options[q.correctAnswerIndex]
+                val shuffledOpts = q.options.shuffled()
+                val newIndex = shuffledOpts.indexOf(originalCorrectText)
+                q.copy(
+                    options = shuffledOpts,
+                    correctAnswerIndex = if (newIndex >= 0) newIndex else 0
+                )
+            }
+        }
+
+        _lastPracticeDrillConfig = PracticeDrillConfig(
+            track = _selectedTrack.value,
+            competenceId = "MISTAKES",
+            deliveryMode = deliveryMode,
+            startItem = startItem,
+            endItem = endItem,
+            shuffleQuestions = shuffleQuestions,
+            shuffleChoices = shuffleChoices,
+            requiredPasses = requiredPasses
+        )
+
+        val isPro = isTrackUnlocked(_selectedTrack.value)
+        if (deliveryMode == DrillDeliveryMode.INTENSIVE && isPro) {
+            _intensiveQueue.value = questions
+            _intensiveInitialTotal.value = questions.size
+            _intensiveClearedCount.value = 0
+            _intensiveCurrentQuestionState.value = null
+            _intensiveCompleted.value = false
+        }
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _firstAttemptStatus.value = emptyMap()
+        _timeRemainingSeconds.value = 0
+        _selectedChoiceIndex.value = null
+        _isAnswerEvaluated.value = false
+
+        autoSaveCurrentSession()
+        _currentScreen.value = Screen.Quiz
+        startStudyTrackingForCurrentSession()
+    }
+
     fun exitQuizToHome() {
         timerJob?.cancel()
         studyTimeTracker.pauseTimer()
@@ -2277,6 +2670,21 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         studyTimeTracker.pauseTimer()
         refreshMistakes()
         purgeExamSessionFromBackStack()
+        if (_isMTestMDrillActive.value) {
+            exitMTestMDrill()
+            _currentScreen.value = Screen.MTestMImport
+            return
+        }
+        val compId = _activeCompetenceId.value
+        val mode = _activeQuizMode.value
+        if (compId == "MISTAKES" || mode == QuizMode.MISTAKES) {
+            _currentScreen.value = Screen.Vault
+            return
+        }
+        if (compId == "BOOKMARKS" || mode == QuizMode.BOOKMARKS_DRILL) {
+            _currentScreen.value = Screen.Bookmarks
+            return
+        }
         _currentScreen.value = Screen.Home
     }
 
@@ -2293,6 +2701,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _intensiveClearedCount.value = 0
         _intensiveCompleted.value = false
         purgeExamSessionFromBackStack()
+        if (_isMTestMDrillActive.value) {
+            exitMTestMDrill()
+            _currentScreen.value = Screen.MTestMImport
+            return
+        }
         _currentScreen.value = Screen.Home
     }
 
@@ -2303,6 +2716,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         autoSaveCurrentSession()
         val mode = _activeQuizMode.value
         purgeExamSessionFromBackStack()
+        if (_isMTestMDrillActive.value) {
+            exitMTestMDrill()
+            _currentScreen.value = Screen.MTestMImport
+            return
+        }
         if (mode == QuizMode.VAULT_DRILL || mode == QuizMode.MISTAKES) {
             _currentScreen.value = Screen.Vault
         } else if (mode == QuizMode.BOOKMARKS_DRILL) {
@@ -2524,12 +2942,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         activeEvaluationAttemptCommittedId = null
 
         val context = getApplication<Application>()
-        val isLicensed = isTrackUnlocked(_selectedTrack.value)
+        val isLicensed = isTrackUnlocked(_selectedTrack.value) || _isMTestMDrillActive.value
         val isPro = isLicensed
 
         val isGmdssOpReview = (_selectedTrack.value == Track.GMDSS_GOC && isOperationalReview && (competenceId == "C1" || competenceId == "C2") && selectedPart == null)
 
-        var questions: List<Question> = if (isCrpMode) {
+        var questions: List<Question> = if (_isMTestMDrillActive.value) {
+            _activeImportedSheet.value?.questions ?: emptyList()
+        } else if (isCrpMode) {
             when (val track = _selectedTrack.value) {
                 Track.GMDSS_GOC -> MaritimeQuestionBank.getMarinaCrpGmdssQuestions(context, competenceId, selectedPart, isProUnlocked = isPro)
                 Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(competenceId)
@@ -2597,8 +3017,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             shuffleQuestions = if (isGmdssOpReview) false else shuffleQuestions
         )
 
-        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode and NOT GMDSS Op Review
-        if (!isPro && !isCrpMode && !isGmdssOpReview) {
+        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode and NOT GMDSS Op Review and NOT MTestM Drill
+        if (!isPro && !isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value) {
             questions = questions.take(5)
         }
 
@@ -2642,7 +3062,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             isOperationalReview = isOperationalReview
         )
         backStack.removeAll { it is Screen.PracticeConfig || it is Screen.Quiz }
-        backStack.addLast(configScreen)
+        if (!_isMTestMDrillActive.value) {
+            backStack.addLast(configScreen)
+        } else {
+            backStack.addLast(Screen.MTestMImport)
+        }
         _currentScreen.value = Screen.Quiz
         startStudyTrackingForCurrentSession()
     }
@@ -2783,6 +3207,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun completeIntensiveDrill() {
+        _showResultsLoading.value = true
         val questions = _activeQuestions.value
         val answers = _userQuestionStates.value
         val effectiveComp = _activeCompetenceId.value ?: sessionCompetenceCache[currentActiveSessionId]
@@ -2824,8 +3249,6 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             for (q in questions) {
                 markQuestionSeen(_selectedTrack.value, q.id)
-                repository.recordQuestionAttempt(q.id, true)
-                MistakesVaultManager.recordAttempt(getApplication(), q.id, true)
             }
             refreshMistakes()
             repository.saveExamRecord(result, questions.map { it.id })
@@ -2889,7 +3312,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         competenceId: String? = null,
         limitQuestions: Int? = null,
         prioritizeUnseen: Boolean = false,
-        seenQuestionIds: Set<String>? = null
+        seenQuestionIds: Set<String>? = null,
+        selectedFunctions: Set<String>? = null
     ) {
         timerJob?.cancel()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
@@ -2914,7 +3338,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             bookmarkIds = bookmarked,
             isProUnlocked = isPro,
             prioritizeUnseen = prioritizeUnseen,
-            seenQuestionIds = seenQuestionIds ?: emptySet()
+            seenQuestionIds = seenQuestionIds ?: emptySet(),
+            selectedFunctions = selectedFunctions
         )
 
         // Defense check: Lock out Mock Exams or truncate unactivated sessions
@@ -3614,6 +4039,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val questions = _activeQuestions.value
         if (questionIndex !in questions.indices) return
         selectOptionForQuestion(questions[questionIndex].id, optionIndex)
+        // If Direct Answer toggle is active, confirm and evaluate immediately on tap
+        if (_activeQuizMode.value != QuizMode.MOCK_EXAM && _isDirectAnswer.value && !_isAnswerEvaluated.value) {
+            confirmOrNextQuestion()
+        }
     }
 
     fun selectOption(optionIndex: Int) {
@@ -3674,9 +4103,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             )
 
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                repository.recordQuestionAttempt(currentQ.id, isCorrect)
+                repository.recordQuestionAttempt(currentQ.id, isCorrect, _requiredMistakePasses.value)
                 if (isCorrect) {
-                    MistakesVaultManager.recordAttempt(getApplication(), currentQ.id, true)
+                    MistakesVaultManager.recordAttempt(getApplication(), currentQ.id, true, _requiredMistakePasses.value)
                 } else {
                     MistakesVaultManager.recordMistake(getApplication(), currentQ, currentQ.track.name, currentQ.competenceId)
                 }
@@ -3684,7 +4113,21 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             }
 
             autoSaveCurrentSession()
+
+            // Trigger Auto-Next if enabled for this outcome
+            val shouldAutoNext = (isCorrect && _isAutoNextCorrect.value) || (!isCorrect && _isAutoNextWrong.value)
+            if (shouldAutoNext) {
+                cancelAutoAdvance()
+                autoAdvanceJob = viewModelScope.launch {
+                    val delayMs = if (isCorrect) 750L else 1200L
+                    kotlinx.coroutines.delay(delayMs)
+                    if (_isAnswerEvaluated.value && _currentQuestionIndex.value == currentIndex) {
+                        confirmOrNextQuestion()
+                    }
+                }
+            }
         } else {
+            cancelAutoAdvance()
             if (currentIndex < questions.size - 1) {
                 _currentQuestionIndex.value = currentIndex + 1
                 syncCurrentQuestionEvaluationState()
@@ -3699,6 +4142,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun jumpToQuestion(index: Int) {
+        cancelAutoAdvance()
         val questions = _activeQuestions.value
         if (index in questions.indices) {
             _currentQuestionIndex.value = index
@@ -3709,6 +4153,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun nextQuestion() {
+        cancelAutoAdvance()
         if (_activeQuizMode.value != QuizMode.MOCK_EXAM && !_isAnswerEvaluated.value && _selectedChoiceIndex.value != null) {
             confirmOrNextQuestion()
         } else {
@@ -3721,6 +4166,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun previousQuestion() {
+        cancelAutoAdvance()
         if (_currentQuestionIndex.value > 0) {
             _currentQuestionIndex.value -= 1
             syncCurrentQuestionEvaluationState()
@@ -3744,6 +4190,84 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun loadIncompleteSession(record: ExamRecordEntity) {
         resumeIncompleteExamRecord(record)
+    }
+
+    
+    private val _sessionReview = MutableStateFlow<com.nhyle.hyperionmaritime.data.model.SessionReviewData?>(null)
+    val sessionReview: StateFlow<com.nhyle.hyperionmaritime.data.model.SessionReviewData?> = _sessionReview.asStateFlow()
+
+    /** Opens a COMPLETED session as a read-only review. Never resumes or modifies the session. */
+    fun openSessionReview(sessionId: String) {
+        viewModelScope.launch {
+            val drill = repository.getDrillSessionById(sessionId)
+            val record = repository.getExamRecordById(sessionId)
+            val trackName = drill?.track ?: record?.track ?: return@launch
+            val qIdsRaw = drill?.questionIds?.takeIf { it.isNotBlank() } ?: record?.questionIds ?: ""
+            val answersRaw = drill?.answersJson?.takeIf { it.isNotBlank() } ?: record?.answersJson ?: ""
+            val competence = drill?.competence ?: record?.competence
+            val part = drill?.part ?: record?.part
+            val modeName = drill?.mode ?: record?.mode
+
+            val track = try { Track.valueOf(trackName.removeSuffix("_MISTAKES")) } catch (_: Exception) { _selectedTrack.value }
+            val qIds = qIdsRaw.split(",").filter { it.isNotBlank() }
+            val qIdSet = qIds.toSet()
+
+            val snapshot = ActiveSessionSnapshotManager.loadSnapshotById(getApplication(), sessionId)
+            val snapshotQuestions = snapshot?.questions.orEmpty().filter { it.id in qIdSet }
+            val usingSnapshot = snapshotQuestions.isNotEmpty()
+            val baseQuestions: List<Question> = if (usingSnapshot) {
+                snapshotQuestions
+            } else {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    resolveQuestionsForSession(track, qIds, competence)
+                }.filter { it.id in qIdSet }
+            }
+
+            val answers = SessionJsonHelper.deserializeAnswers(answersRaw).toMutableMap()
+            snapshot?.selectedAnswers?.forEach { (qid, sel) ->
+                val idx = sel.toIntOrNull()
+                if (idx != null && !answers.containsKey(qid)) {
+                    answers[qid] = UserQuestionState(questionId = qid, selectedIndex = idx)
+                }
+            }
+
+            val items = baseQuestions.map { q ->
+                val state = answers[q.id]
+                // Saved answer positions refer to the option order the user saw. Try the session's
+                // shuffled order first, then the stored order, and keep the one that matches the saved result.
+                val candidates = if (usingSnapshot) {
+                    listOf(q)
+                } else {
+                    listOf(com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable(q, sessionId), q)
+                }
+                val aligned = candidates.firstOrNull { cand ->
+                    state != null && state.isSubmitted && state.selectedIndex != null &&
+                        ((state.selectedIndex == cand.correctAnswerIndex) == state.isCorrect)
+                } ?: candidates.first()
+                val sel = state?.selectedIndex?.takeIf { it in aligned.options.indices }
+                com.nhyle.hyperionmaritime.data.model.SessionReviewItem(
+                    question = aligned,
+                    selectedIndex = sel,
+                    isCorrect = sel != null && sel == aligned.correctAnswerIndex
+                )
+            }
+
+            val isMistakes = modeName.equals("MISTAKES", ignoreCase = true) || competence.equals("MISTAKES", ignoreCase = true)
+            val label = if (isMistakes) {
+                "Mistakes"
+            } else if (modeName?.contains("MOCK", ignoreCase = true) == true) {
+                "Mock Exam"
+            } else {
+                com.nhyle.hyperionmaritime.data.local.DrillSessionFormatter.formatScopeLabel(competence, part, trackName)
+            }
+            val correct = items.count { it.isCorrect }
+            _sessionReview.value = com.nhyle.hyperionmaritime.data.model.SessionReviewData(
+                title = "${track.shortName} • $label",
+                scoreText = "$correct / ${items.size} CORRECT",
+                items = items
+            )
+            navigateTo(Screen.SessionReview(sessionId))
+        }
     }
 
     private fun resumeIncompleteExamRecordInternal(record: ExamRecordEntity) {
@@ -3872,7 +4396,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _showSubmitDialog.value = false
         _isPaletteOpen.value = false
 
-        if (_activeQuizMode.value == QuizMode.VAULT_DRILL || _activeQuizMode.value == QuizMode.BOOKMARKS_DRILL) {
+        if (_activeQuizMode.value == QuizMode.VAULT_DRILL) {
             exitQuiz()
             return
         }
@@ -3944,6 +4468,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
         notifySnapshotChanged()
 
+        val isMockExam = (_activeQuizMode.value == QuizMode.MOCK_EXAM)
         // Record all questions in repo and persist completed session
         viewModelScope.launch {
             for (q in questions) {
@@ -3951,12 +4476,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 if (state?.selectedIndex != null) {
                     markQuestionSeen(trackToClear, q.id)
                 }
-                val isCorrect = state?.selectedIndex == q.correctAnswerIndex
-                repository.recordQuestionAttempt(q.id, isCorrect)
-                if (isCorrect) {
-                    MistakesVaultManager.recordAttempt(getApplication(), q.id, true)
-                } else {
-                    MistakesVaultManager.recordMistake(getApplication(), q, q.track.name, q.competenceId)
+                // Only evaluate and record attempts in submitExam for Mock Exams.
+                // In Practice and Mistakes drills, each question is already evaluated and recorded when answered.
+                if (isMockExam) {
+                    val isCorrect = state?.selectedIndex == q.correctAnswerIndex
+                    repository.recordQuestionAttempt(q.id, isCorrect, _requiredMistakePasses.value)
+                    if (isCorrect) {
+                        MistakesVaultManager.recordAttempt(getApplication(), q.id, true, _requiredMistakePasses.value)
+                    } else {
+                        MistakesVaultManager.recordMistake(getApplication(), q, q.track.name, q.competenceId)
+                    }
                 }
             }
             refreshMistakes()
@@ -3970,6 +4499,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             }
         }
 
+        _showResultsLoading.value = true
         _currentScreen.value = Screen.Results
     }
 
@@ -4164,19 +4694,38 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun retakePracticeDrill() {
         val config = _lastPracticeDrillConfig
         if (config != null) {
-            startConfiguredPractice(
-                competenceId = config.competenceId,
-                selectedPart = config.selectedPart,
-                deliveryMode = config.deliveryMode,
-                questionCount = config.questionCount,
-                startItem = config.startItem,
-                endItem = config.endItem,
-                shuffleQuestions = config.shuffleQuestions,
-                shuffleChoices = config.shuffleChoices,
-                isCrpMode = config.isCrpMode,
-                prioritizeUnseen = config.prioritizeUnseen,
-                isOperationalReview = config.isOperationalReview
-            )
+            if (config.competenceId == "BOOKMARKS") {
+                startBookmarksConfiguredPractice(
+                    deliveryMode = config.deliveryMode,
+                    startItem = config.startItem,
+                    endItem = config.endItem,
+                    shuffleQuestions = config.shuffleQuestions,
+                    shuffleChoices = config.shuffleChoices
+                )
+            } else if (config.competenceId == "MISTAKES") {
+                startMistakesConfiguredPractice(
+                    deliveryMode = config.deliveryMode,
+                    startItem = config.startItem,
+                    endItem = config.endItem,
+                    shuffleQuestions = config.shuffleQuestions,
+                    shuffleChoices = config.shuffleChoices,
+                    requiredPasses = config.requiredPasses
+                )
+            } else {
+                startConfiguredPractice(
+                    competenceId = config.competenceId,
+                    selectedPart = config.selectedPart,
+                    deliveryMode = config.deliveryMode,
+                    questionCount = config.questionCount,
+                    startItem = config.startItem,
+                    endItem = config.endItem,
+                    shuffleQuestions = config.shuffleQuestions,
+                    shuffleChoices = config.shuffleChoices,
+                    isCrpMode = config.isCrpMode,
+                    prioritizeUnseen = config.prioritizeUnseen,
+                    isOperationalReview = config.isOperationalReview
+                )
+            }
         } else if (_activeCompetenceId.value != null || _activePartLabel.value != null) {
             val partNum = _activePartLabel.value?.removePrefix("Part ")?.trim()?.toIntOrNull()
             startConfiguredPractice(
@@ -4267,6 +4816,210 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         } else {
             "Full Question Bank"
         }
+    }
+
+    // ==========================================
+    // --- MTestM Custom Sheets Import Engine ---
+    // ==========================================
+
+    fun loadImportedSheets() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val sheets = ImportedSheetsManager.loadSheets(context)
+            _importedSheets.value = sheets
+        }
+    }
+
+    private var pendingDirectImportedSheets: List<ImportedSheet>? = null
+
+    fun processMtbFile(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isMtbProcessing.value = true
+            val context = getApplication<Application>()
+            try {
+                clearPendingMtb()
+
+                var fileName = "imported_file"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIdx != -1 && cursor.moveToFirst()) {
+                        fileName = cursor.getString(nameIdx)
+                    }
+                }
+
+                _mtbStatusMessage.value = "Reading $fileName..."
+
+                if (fileName.endsWith(".csv", ignoreCase = true)) {
+                    val sheets = MtbParser.parseCsv(context, uri, fileName)
+                    if (sheets.isEmpty()) {
+                        _mtbStatusMessage.value = "No valid questions found in this CSV. Required columns: No, Question, Choice A, Choice B, Choice C, Choice D, Answer."
+                    } else {
+                        pendingDirectImportedSheets = sheets
+                        _pendingMtbSheets.value = sheets.mapIndexed { idx, s ->
+                            MtbSheetInfo(examId = idx + 1, title = s.title, questionCount = s.questionCount)
+                        }
+                        _selectedMtbExamIds.value = setOf(1)
+                        _mtbStatusMessage.value = "Found ${sheets.first().questionCount} question(s) in CSV. Select to import."
+                    }
+                } else if (fileName.endsWith(".xlsx", ignoreCase = true)) {
+                    val sheets = MtbParser.parseXlsx(context, uri, fileName)
+                    if (sheets.isEmpty()) {
+                        _mtbStatusMessage.value = "No valid questions found in this Excel (.xlsx) file. Required columns: No, Question, Choice A, Choice B, Choice C, Choice D, Answer."
+                    } else {
+                        pendingDirectImportedSheets = sheets
+                        _pendingMtbSheets.value = sheets.mapIndexed { idx, s ->
+                            MtbSheetInfo(examId = idx + 1, title = s.title, questionCount = s.questionCount)
+                        }
+                        _selectedMtbExamIds.value = sheets.indices.map { it + 1 }.toSet()
+                        _mtbStatusMessage.value = "Found ${sheets.size} sheet(s) in Excel workbook. Select which to import."
+                    }
+                } else {
+                    _mtbStatusMessage.value = "Extracting MTestM package..."
+                    val dbFile = MtbParser.extractMtbDbToCache(context, uri)
+                    if (dbFile == null || !dbFile.exists()) {
+                        _mtbStatusMessage.value = "Failed to extract package. Please ensure you selected a valid .mtb, .csv, or .xlsx file."
+                        _isMtbProcessing.value = false
+                        return@launch
+                    }
+
+                    pendingMtbDbFile = dbFile
+                    _mtbStatusMessage.value = "Reading exams and sheets..."
+                    val sheets = MtbParser.listSheets(dbFile)
+                    if (sheets.isEmpty()) {
+                        _mtbStatusMessage.value = "No exams or question sheets found inside this file."
+                        _pendingMtbSheets.value = emptyList()
+                        _selectedMtbExamIds.value = emptySet()
+                    } else {
+                        _pendingMtbSheets.value = sheets
+                        _selectedMtbExamIds.value = sheets.map { it.examId }.toSet()
+                        _mtbStatusMessage.value = "Found ${sheets.size} sheet(s). Select which ones you want to import."
+                    }
+                }
+            } catch (e: Exception) {
+                _mtbStatusMessage.value = "Error processing file: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                _isMtbProcessing.value = false
+            }
+        }
+    }
+
+    fun toggleMtbExamSelection(examId: Int) {
+        val current = _selectedMtbExamIds.value.toMutableSet()
+        if (current.contains(examId)) {
+            current.remove(examId)
+        } else {
+            current.add(examId)
+        }
+        _selectedMtbExamIds.value = current
+    }
+
+    fun selectAllMtbSheets(selectAll: Boolean) {
+        if (selectAll) {
+            _selectedMtbExamIds.value = _pendingMtbSheets.value.map { it.examId }.toSet()
+        } else {
+            _selectedMtbExamIds.value = emptySet()
+        }
+    }
+
+    fun confirmImportSelectedMtbSheets(onSuccess: (() -> Unit)? = null) {
+        val selectedIds = _selectedMtbExamIds.value
+        if (selectedIds.isEmpty()) {
+            _mtbStatusMessage.value = "Please select at least one sheet to import."
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _isMtbProcessing.value = true
+            _mtbStatusMessage.value = "Importing questions into your reviewer bank..."
+            val context = getApplication<Application>()
+            try {
+                val directSheets = pendingDirectImportedSheets
+                val dbFile = pendingMtbDbFile
+
+                val imported = if (directSheets != null) {
+                    directSheets.filterIndexed { index, _ -> selectedIds.contains(index + 1) }
+                } else if (dbFile != null) {
+                    MtbParser.parseSelectedSheets(dbFile, selectedIds)
+                } else {
+                    emptyList()
+                }
+
+                if (imported.isNotEmpty()) {
+                    ImportedSheetsManager.addSheets(context, imported)
+                    _importedSheets.value = ImportedSheetsManager.loadSheets(context)
+                    _mtbStatusMessage.value = "Successfully imported ${imported.size} sheet(s)!"
+                    clearPendingMtb()
+                    withContext(Dispatchers.Main) {
+                        onSuccess?.invoke()
+                    }
+                } else {
+                    _mtbStatusMessage.value = "No questions could be imported from the selected sheets."
+                }
+            } catch (e: Exception) {
+                _mtbStatusMessage.value = "Import failed: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                _isMtbProcessing.value = false
+            }
+        }
+    }
+
+    fun clearPendingMtb() {
+        try {
+            pendingMtbDbFile?.delete()
+        } catch (_: Exception) {}
+        pendingMtbDbFile = null
+        pendingDirectImportedSheets = null
+        _pendingMtbSheets.value = emptyList()
+        _selectedMtbExamIds.value = emptySet()
+    }
+
+    fun writeSheetToCsvUri(sheet: ImportedSheet, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val context = getApplication<Application>()
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    val csv = MtbParser.exportToCsv(sheet)
+                    out.write(csv.toByteArray(Charsets.UTF_8))
+                    out.flush()
+                }
+                _mtbStatusMessage.value = "Exported '${sheet.title}.csv' successfully!"
+            } catch (e: Exception) {
+                _mtbStatusMessage.value = "Export failed: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    fun deleteImportedSheet(sheetId: String) {
+        val context = getApplication<Application>()
+        ImportedSheetsManager.deleteSheet(context, sheetId)
+        _importedSheets.value = ImportedSheetsManager.loadSheets(context)
+    }
+
+    fun startImportedSheetDrill(sheet: ImportedSheet) {
+        if (sheet.questions.isEmpty()) return
+        _isMTestMDrillActive.value = true
+        _activeImportedSheet.value = sheet
+        _activeCompetenceId.value = sheet.title
+        _activePartLabel.value = null
+        navigateTo(Screen.PracticeConfig(competenceId = sheet.title))
+    }
+
+    fun onMtbFilePicked(uri: Uri) = processMtbFile(uri)
+    fun clearPendingMtbFile() = clearPendingMtb()
+    fun selectAllMtbExams(selectAll: Boolean) = selectAllMtbSheets(selectAll)
+    fun toggleSelectMtbExam(examId: Int) = toggleMtbExamSelection(examId)
+    fun startDrillForImportedSheet(sheet: ImportedSheet) = startImportedSheetDrill(sheet)
+    fun startDrillForAllImportedSheets() {
+        val allQuestions = _importedSheets.value.flatMap { it.questions }
+        if (allQuestions.isEmpty()) return
+        val combinedSheet = ImportedSheet(
+            id = "all_imported_sheets",
+            title = "All Imported Sheets",
+            questionCount = allQuestions.size,
+            importedAtMillis = System.currentTimeMillis(),
+            questions = allQuestions
+        )
+        startImportedSheetDrill(combinedSheet)
     }
 }
 

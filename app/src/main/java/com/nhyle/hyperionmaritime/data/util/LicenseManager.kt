@@ -36,9 +36,9 @@ enum class ProTier(
     HYPERION_PRO(
         title = "HYPERION ALL ACCESS",
         codePrefix = "ALL",
-        subtitle = "Complete Deck Operational + GMDSS Radio Reviewer package with all competencies",
+        subtitle = "Complete package: all 5 tracks (Deck OIC-NW, GMDSS GOC, Engine OIC-EW, Deck Management, Engine Management)",
         shortName = "All-Access Bundle",
-        questionCount = "Total Question Bank: 8,705 questions (6,445 OIC-NW + 2,260 GMDSS)"
+        questionCount = "All 5 tracks, full question banks"
     ),
     ENGINE_OIC_EW_PRO(
         title = "OIC-EW ENGINE (OPERATIONAL LEVEL)",
@@ -77,7 +77,7 @@ enum class LicenseTier {
 }
 
 enum class UnlockResult(val toastMessage: String, val isSuccess: Boolean) {
-    TERMINAL_ACTIVATED("TERMINAL ACTIVATED // ACCESS GRANTED", true),
+    TERMINAL_ACTIVATED("TERMINAL ACTIVATED · ACCESS GRANTED", true),
     OIC_NW_UNLOCKED("OIC-NW Deck Unlocked! Offline review access active.", true),
     GMDSS_UNLOCKED("GMDSS GOC Unlocked! Offline review access active.", true),
     HYPERION_UNLOCKED("Hyperion All Access Unlocked! Full offline access active.", true),
@@ -153,7 +153,7 @@ data class OfflineLicenseInfo(
     }
 
     fun getFullBadge(): String {
-        if (isTampered) return "CLOCK TAMPERED // TIME RESTORATION REQUIRED"
+        if (isTampered) return "CLOCK TAMPERED · TIME RESTORATION REQUIRED"
         if (isExpired) return "OFFLINE LICENSE EXPIRED"
         return "${getFormattedTimeRemaining().uppercase()} • ${getFormattedExpiryDate().uppercase()}"
     }
@@ -244,6 +244,9 @@ object LicenseManager {
     val SECRET_SALT: String get() = getSecretSalt()
 
     fun init(context: Context) {
+        // Purge legacy permanent licenses and clearance keys on start
+        purgeLegacyPermanentLicenses(context)
+
         // Evaluate current offline status safely without destructive wiping
         checkOfflineLicense(context)
 
@@ -338,92 +341,6 @@ object LicenseManager {
         return "HYP-$part1-$part2"
     }
 
-    fun computeValidKey(
-        requestCode: String,
-        prefix: String = "",
-        salt: String = ""
-    ): String {
-        val cleanReq = requestCode.uppercase().trim()
-        val digest = MessageDigest.getInstance("SHA-256")
-        val inputBytes = if (salt.isEmpty()) cleanReq.toByteArray(Charsets.UTF_8) else (cleanReq + ":" + salt).toByteArray(Charsets.UTF_8)
-        val hash = digest.digest(inputBytes)
-        val hex = hash.joinToString("") { "%02X".format(it) }
-        val chunk1 = hex.substring(0, 4)
-        val chunk2 = hex.substring(4, 8)
-        val chunk3 = hex.substring(8, 12)
-        val chunk4 = hex.substring(12, 16)
-        val formatted = "$chunk1-$chunk2-$chunk3-$chunk4"
-        return if (prefix.isEmpty()) formatted else "$prefix-$formatted"
-    }
-
-    fun verifyActivationKey(requestCode: String, enteredKey: String): Boolean {
-        val cleanInput = enteredKey.trim().replace("-", "").uppercase()
-        val cleanCode = requestCode.trim().uppercase()
-
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(cleanCode.toByteArray(Charsets.UTF_8))
-        val hexString = digest.joinToString("") { "%02X".format(it) }
-        val expectedKey = hexString.substring(0, 16).uppercase()
-
-        return cleanInput == expectedKey
-    }
-
-    fun verifyKey(requestCode: String, enteredKey: String): Boolean {
-        return verifyActivationKey(requestCode, enteredKey)
-    }
-
-    /**
-     * Computes the 8-character cryptographic signature for the activation key.
-     */
-    fun computeSignature(cleanDeviceToken: String, tier: String, duration: String, issueDayHex: String): String {
-        val payload = "$cleanDeviceToken:$tier:$duration:$issueDayHex:$SECRET_SALT"
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(payload.toByteArray(Charsets.UTF_8))
-        val hex = digest.joinToString("") { "%02X".format(it) }
-        return hex.take(8).uppercase()
-    }
-
-    /**
-     * Generates a valid offline activation key for a given request code, tier, and duration.
-     */
-    fun generateActivationKey(
-        requestCodeOrDevice: String,
-        tier: String,
-        duration: String,
-        issueDayHex: String? = null
-    ): String {
-        val cleanDevice = requestCodeOrDevice.uppercase()
-            .removePrefix("HYPE-")
-            .replace("HYPE", "")
-            .replace("-", "")
-            .trim()
-            .take(12)
-
-        val dayHex = issueDayHex ?: run {
-            val days = (System.currentTimeMillis() / (24L * 60L * 60L * 1000L)).toInt()
-            days.toString(16).uppercase().padStart(4, '0')
-        }
-
-        val normTier = when (tier.uppercase().trim()) {
-            "OIC", "DECK", "OIC_NW" -> "OIC"
-            "GOC", "GMDSS", "GMDSS_GOC" -> "GOC"
-            "EW", "ENGINE_EW", "ENGINE_OIC_EW" -> "EW"
-            "DM", "DECK_MGT" -> "DM"
-            "EM", "ENGINE_MGT" -> "EM"
-            else -> "ALL"
-        }
-
-        val normDur = when (duration.uppercase().trim()) {
-            "1W", "WEEK", "7D" -> "1W"
-            "1Y", "YEAR", "365D" -> "1Y"
-            "EXP", "EX", "CUSTOM" -> "EXP"
-            else -> "1M"
-        }
-
-        val sig = computeSignature(cleanDevice, normTier, normDur, dayHex)
-        return "HYPE-$normTier-$normDur-$dayHex-${sig.substring(0, 4)}-${sig.substring(4, 8)}"
-    }
-
     /**
      * 3-Layer Anti-Tamper Engine & Status Evaluator:
      * Layer 1: Cryptographic Issue Window
@@ -450,13 +367,9 @@ object LicenseManager {
 
         val timezoneGraceMs = 48L * 60L * 60L * 1000L
 
-        // AUTO-HEALING HIGH-WATER MARK:
-        // Calculates legitimate wall time and repairs any runaway future clocks automatically.
-        val healedHighWaterMark = if (lastVerifiedEpoch > now && now >= (issueEpoch - timezoneGraceMs)) {
-            now
-        } else {
-            maxOf(lastVerifiedEpoch, activationEpoch, issueEpoch)
-        }
+        // HIGH-WATER MARK: the latest time this phone ever showed.
+        // It is only lowered by the internet-time check (healRollbackLatch).
+        val healedHighWaterMark = maxOf(lastVerifiedEpoch, activationEpoch, issueEpoch)
 
         // LAYER 1: Hard clock check — system clock set earlier than license creation
         if (issueEpoch > 0L && now < (issueEpoch - timezoneGraceMs)) {
@@ -474,8 +387,8 @@ object LicenseManager {
             return OfflineLicenseStatus.ClockTampered(info.tamperReason!!)
         }
 
-        // LAYER 2: Rollback Latch — only triggers if clock was moved back before the issue window
-        if (now < (issueEpoch - timezoneGraceMs)) {
+        // LAYER 2: Rollback Latch — the clock is more than 48 hours behind the latest time ever seen
+        if (lastVerifiedEpoch > now + timezoneGraceMs) {
             prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, true).apply()
             val info = OfflineLicenseInfo(
                 tier = tier,
@@ -553,156 +466,63 @@ object LicenseManager {
     fun verifyAndUnlockKey(context: Context, enteredKey: String, selectedTier: ProTier? = null): UnlockResult {
         val cleanInput = enteredKey.trim().uppercase().replace(" ", "")
         if (cleanInput.isEmpty()) return UnlockResult.INVALID_KEY
+        
+        // Signed keys (HYPE2-) are the only accepted offline keys. Anything else is rejected below.
+        if (SignedLicenseVerifier.isSignedFormat(cleanInput)) {
+            val signed = SignedLicenseVerifier.verify(cleanInput, getDeviceCleanToken(context))
+                ?: return UnlockResult.INVALID_KEY
 
-        // Developer Test Override: Grants 30-day All Access pass for local QA
-        if (cleanInput == "ADMIN1234") {
-            val now = System.currentTimeMillis()
-            val expiry = now + (30L * 24L * 60L * 60L * 1000L)
+            val blockedPlans = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+                .getStringSet(KEY_BLOCKED_PLANS, emptySet()) ?: emptySet()
+            if ("ALL" in blockedPlans || signed.tier in blockedPlans) return UnlockResult.INVALID_KEY
+
+            val signedNow = System.currentTimeMillis()
+            val signedGraceMs = 48L * 60L * 60L * 1000L
+            if (signedNow < 1704067200000L || signedNow < (signed.issueEpoch - signedGraceMs)) {
+                return UnlockResult.CLOCK_ERROR
+            }
+            if (signedNow > signed.expiryEpoch) {
+                return UnlockResult.KEY_EXPIRED
+            }
+
+            val (sOic, sGmdss, sEw, sDm, sEm, sAll, sTier) = when (signed.tier) {
+                "OIC" -> Septuple(true, false, false, false, false, false, "OIC_NW")
+                "GOC" -> Septuple(false, true, false, false, false, false, "GMDSS_GOC")
+                "EW" -> Septuple(false, false, true, false, false, false, "ENGINE_OIC_EW")
+                "DM" -> Septuple(false, false, false, true, false, false, "DECK_MGT")
+                "EM" -> Septuple(false, false, false, false, true, false, "ENGINE_MGT")
+                else -> Septuple(true, true, true, true, true, true, "ALL_ACCESS")
+            }
+
             saveOfflineActivation(
                 context = context,
-                tier = "ALL_ACCESS",
-                duration = "1M",
-                activationEpoch = now,
-                issueEpoch = now,
-                expiryEpoch = expiry,
-                unlockOic = true,
-                unlockGmdss = true,
-                unlockEw = true,
-                unlockDm = true,
-                unlockEm = true,
-                unlockAll = true
+                tier = sTier,
+                duration = if (signed.duration == "EXP") "CUSTOM" else signed.duration,
+                activationEpoch = signedNow,
+                issueEpoch = signed.issueEpoch,
+                expiryEpoch = signed.expiryEpoch,
+                unlockOic = sOic,
+                unlockGmdss = sGmdss,
+                unlockEw = sEw,
+                unlockDm = sDm,
+                unlockEm = sEm,
+                unlockAll = sAll
             )
-            return UnlockResult.TERMINAL_ACTIVATED
-        }
 
-        // Parse key structure: HYPE-[TIER]-[DURATION]-[ISSUEDAY/EXPDAY]-[SIG1]-[SIG2]
-        // or compact HYPE[TIER][DUR][ISSUEDAY/EXPDAY][SIG]
-        val regexWithDashes = Regex("^HYPE-(ALL|OIC|GOC|EW|DM|EM)-(1W|1M|1Y|EXP|EX)-([0-9A-F]{4})-([0-9A-F]{4})-([0-9A-F]{4})$")
-        val regexCompact = Regex("^HYPE(ALL|OIC|GOC|EW|DM|EM)(1W|1M|1Y|EXP|EX)([0-9A-F]{4})([0-9A-F]{8})$")
+            syncTrustedTime(context)
 
-        var tierPart = ""
-        var durPart = ""
-        var dayPart = ""
-        var sigPart = ""
-
-        val matchDashes = regexWithDashes.find(cleanInput)
-        if (matchDashes != null) {
-            tierPart = matchDashes.groupValues[1]
-            durPart = matchDashes.groupValues[2]
-            dayPart = matchDashes.groupValues[3]
-            sigPart = matchDashes.groupValues[4] + matchDashes.groupValues[5]
-        } else {
-            val matchCompact = regexCompact.find(cleanInput)
-            if (matchCompact != null) {
-                tierPart = matchCompact.groupValues[1]
-                durPart = matchCompact.groupValues[2]
-                dayPart = matchCompact.groupValues[3]
-                sigPart = matchCompact.groupValues[4]
+            return when (signed.tier) {
+                "OIC" -> UnlockResult.OIC_NW_UNLOCKED
+                "GOC" -> UnlockResult.GMDSS_UNLOCKED
+                "EW" -> UnlockResult.ENGINE_OIC_EW_UNLOCKED
+                "DM" -> UnlockResult.DECK_MGT_UNLOCKED
+                "EM" -> UnlockResult.ENGINE_MGT_UNLOCKED
+                else -> UnlockResult.HYPERION_UNLOCKED
             }
         }
 
-        if (tierPart.isEmpty() || durPart.isEmpty() || dayPart.isEmpty() || sigPart.isEmpty()) {
-            return UnlockResult.INVALID_KEY
-        }
-
-        val cleanDevice = getDeviceCleanToken(context)
-        val expectedSig = computeSignature(cleanDevice, tierPart, durPart, dayPart)
-
-        if (sigPart != expectedSig) {
-            return UnlockResult.INVALID_KEY
-        }
-
-        val now = System.currentTimeMillis()
-
-        val expiryEpoch: Long
-        val issueEpoch: Long
-        val storedDuration: String
-
-        if (durPart == "EXP" || durPart == "EX") {
-            // dayPart encodes the exact target expiration calendar date in epoch days
-            val expDayEpoch = try {
-                dayPart.toLong(16) * (24L * 60L * 60L * 1000L)
-            } catch (_: Exception) {
-                return UnlockResult.INVALID_KEY
-            }
-
-            // Expiration is set to the very end of that chosen day (23:59:59.999 UTC)
-            val expCeiling = expDayEpoch + (23L * 3600L * 1000L + 59L * 60L * 1000L + 59L * 1000L)
-            if (now >= expCeiling) {
-                return UnlockResult.KEY_EXPIRED
-            }
-
-            // Clock sanity: device clock must not be set back to before year 2024
-            if (now < 1704067200000L) {
-                return UnlockResult.CLOCK_ERROR
-            }
-
-            expiryEpoch = expCeiling
-            issueEpoch = now
-            storedDuration = "CUSTOM"
-        } else {
-            val parsedIssueEpoch = try {
-                dayPart.toLong(16) * (24L * 60L * 60L * 1000L)
-            } catch (_: Exception) {
-                return UnlockResult.INVALID_KEY
-            }
-
-            // LAYER 1 Check: System clock substantially earlier than issue date (48h global timezone grace window)
-            val timezoneGraceMs = 48L * 60L * 60L * 1000L
-            if (now < (parsedIssueEpoch - timezoneGraceMs)) {
-                return UnlockResult.CLOCK_ERROR
-            }
-
-            val durationMs = when (durPart) {
-                "1W" -> 7L * 24L * 60L * 60L * 1000L
-                "1Y" -> 365L * 24L * 60L * 60L * 1000L
-                else -> 30L * 24L * 60L * 60L * 1000L // "1M" default
-            }
-
-            // The absolute ceiling past which the key can no longer be activated or reused
-            val absoluteKeyCeiling = parsedIssueEpoch + durationMs + (12L * 60L * 60L * 1000L)
-            if (now >= absoluteKeyCeiling) {
-                return UnlockResult.KEY_EXPIRED
-            }
-
-            // Candidate gets at most durationMs from now, capped by the key's absolute ceiling.
-            expiryEpoch = minOf(now + durationMs, absoluteKeyCeiling)
-            issueEpoch = parsedIssueEpoch
-            storedDuration = durPart
-        }
-
-        val (unlockOic, unlockGmdss, unlockEw, unlockDm, unlockEm, unlockAll, resolvedTier) = when (tierPart) {
-            "OIC" -> Septuple(true, false, false, false, false, false, "OIC_NW")
-            "GOC" -> Septuple(false, true, false, false, false, false, "GMDSS_GOC")
-            "EW" -> Septuple(false, false, true, false, false, false, "ENGINE_OIC_EW")
-            "DM" -> Septuple(false, false, false, true, false, false, "DECK_MGT")
-            "EM" -> Septuple(false, false, false, false, true, false, "ENGINE_MGT")
-            else -> Septuple(true, true, true, true, true, true, "ALL_ACCESS")
-        }
-
-        saveOfflineActivation(
-            context = context,
-            tier = resolvedTier,
-            duration = storedDuration,
-            activationEpoch = now,
-            issueEpoch = issueEpoch,
-            expiryEpoch = expiryEpoch,
-            unlockOic = unlockOic,
-            unlockGmdss = unlockGmdss,
-            unlockEw = unlockEw,
-            unlockDm = unlockDm,
-            unlockEm = unlockEm,
-            unlockAll = unlockAll
-        )
-
-        return when (tierPart) {
-            "OIC" -> UnlockResult.OIC_NW_UNLOCKED
-            "GOC" -> UnlockResult.GMDSS_UNLOCKED
-            "EW" -> UnlockResult.ENGINE_OIC_EW_UNLOCKED
-            "DM" -> UnlockResult.DECK_MGT_UNLOCKED
-            "EM" -> UnlockResult.ENGINE_MGT_UNLOCKED
-            else -> UnlockResult.HYPERION_UNLOCKED
-        }
+        // Old SHA-256 key formats are no longer accepted. Only signed HYPE2- keys activate.
+        return UnlockResult.INVALID_KEY
     }
 
     private data class Septuple(val oic: Boolean, val gmdss: Boolean, val ew: Boolean, val dm: Boolean, val em: Boolean, val all: Boolean, val tier: String)
@@ -834,6 +654,175 @@ object LicenseManager {
         setDeckMgtProUnlocked(context, false)
         setEngineMgtProUnlocked(context, false)
         setHyperionProUnlocked(context, false)
+    }
+
+    private const val KEY_BLOCKED_PLANS = "offline_blocked_plans"
+
+    /**
+     * Reads the real date from the internet (Google server) and locks any offline-key track
+     * whose end date has already passed, even if the phone clock was set back.
+     * If the phone is offline, nothing changes.
+     */
+    fun syncTrustedTime(context: Context) {
+        val appContext = context.applicationContext
+        kotlin.concurrent.thread(start = true, name = "trusted-time-sync") {
+            try {
+                val conn = java.net.URL("https://www.google.com/generate_204")
+                    .openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "HEAD"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                conn.instanceFollowRedirects = false
+                val serverNow = try {
+                    conn.connect()
+                    if (conn.responseCode == 204) conn.date else 0L
+                } finally {
+                    conn.disconnect()
+                }
+                if (serverNow < 1704067200000L) return@thread
+                healRollbackLatch(appContext, serverNow)
+                expireByTrustedTime(appContext, serverNow)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /**
+     * Lowers the rollback mark only when the phone clock agrees with the internet time,
+     * so a phone whose clock was once wrong can recover. A clock that is still set back is not healed.
+     */
+    private fun healRollbackLatch(context: Context, serverNow: Long) {
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) return
+        val toleranceMs = 48L * 60L * 60L * 1000L
+        val lastVerified = prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L)
+        val phoneClockIsCorrect = kotlin.math.abs(System.currentTimeMillis() - serverNow) <= toleranceMs
+        if (phoneClockIsCorrect && lastVerified > serverNow + toleranceMs) {
+            prefs.edit()
+                .putLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, serverNow)
+                .putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, false)
+                .apply()
+            init(context)
+        }
+    }
+
+    private fun expireByTrustedTime(context: Context, serverNow: Long) {
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_OFFLINE_LICENSE, false)) return
+
+        fun expired(track: Track): Boolean {
+            val exp = getOfflineTrackExpiry(context, track)
+            return exp > 0L && serverNow >= exp
+        }
+
+        val editor = prefs.edit()
+        var changed = false
+        if (expired(Track.DECK_OIC_NW)) {
+            editor.putBoolean("is_oic_unlocked", false)
+            setOicNwProUnlocked(context, false)
+            changed = true
+        }
+        if (expired(Track.GMDSS_GOC)) {
+            editor.putBoolean("is_gmdss_unlocked", false)
+            setGmdssProUnlocked(context, false)
+            changed = true
+        }
+        if (expired(Track.ENGINE_OIC_EW)) {
+            editor.putBoolean("is_engine_ew_unlocked", false).putBoolean("is_ew_unlocked", false)
+            setEngineOicEwProUnlocked(context, false)
+            changed = true
+        }
+        if (expired(Track.DECK_MGT)) {
+            editor.putBoolean("is_deck_mgt_unlocked", false).putBoolean("is_dm_unlocked", false)
+            setDeckMgtProUnlocked(context, false)
+            changed = true
+        }
+        if (expired(Track.ENGINE_MGT)) {
+            editor.putBoolean("is_engine_mgt_unlocked", false).putBoolean("is_em_unlocked", false)
+            setEngineMgtProUnlocked(context, false)
+            changed = true
+        }
+        if (changed) {
+            editor.putBoolean("is_all_access_unlocked", false)
+            editor.putBoolean("is_full_access_unlocked", false)
+            editor.apply()
+            init(context)
+        }
+    }
+
+    /**
+     * Downloads the blocked_keys list (Firebase Remote Config) and applies it.
+     * Format: DEVICECODE:PLAN,DEVICECODE:PLAN  (PLAN = ALL, OIC, GOC, EW, DM, EM)
+     * If the phone is offline, nothing changes.
+     */
+    fun syncBlockedKeys(context: Context) {
+        val appContext = context.applicationContext
+        kotlin.concurrent.thread(start = true, name = "blocked-keys-sync") {
+            try {
+                if (com.google.firebase.FirebaseApp.getApps(appContext).isEmpty()) {
+                    com.google.firebase.FirebaseApp.initializeApp(appContext)
+                }
+                val remoteConfig = com.google.firebase.remoteconfig.FirebaseRemoteConfig.getInstance()
+                try {
+                    com.google.android.gms.tasks.Tasks.await(remoteConfig.fetchAndActivate())
+                } catch (_: Exception) {
+                    return@thread
+                }
+                applyBlockedKeys(appContext, remoteConfig.getString("blocked_keys"))
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun applyBlockedKeys(context: Context, blockedList: String) {
+        val me = getDeviceCleanToken(context)
+        val blocked = blockedList.uppercase()
+            .split(",", ";", "\n")
+            .map { it.trim() }
+            .mapNotNull { entry ->
+                val parts = entry.split(":")
+                if (parts.size != 2) return@mapNotNull null
+                val device = parts[0].trim().removePrefix("HYPE-").replace("-", "")
+                if (device == me) parts[1].trim() else null
+            }
+            .toSet()
+
+        val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        editor.putStringSet(KEY_BLOCKED_PLANS, blocked)
+
+        if (blocked.isNotEmpty()) {
+            val all = "ALL" in blocked
+            val any = true
+            if (any) {
+                editor.putBoolean("is_all_access_unlocked", false)
+                editor.putBoolean("is_full_access_unlocked", false)
+            }
+            if (all || "OIC" in blocked) {
+                editor.putBoolean("is_oic_unlocked", false).remove("offline_expiry_oic")
+                setOicNwProUnlocked(context, false)
+            }
+            if (all || "GOC" in blocked) {
+                editor.putBoolean("is_gmdss_unlocked", false).remove("offline_expiry_gmdss")
+                setGmdssProUnlocked(context, false)
+            }
+            if (all || "EW" in blocked) {
+                editor.putBoolean("is_engine_ew_unlocked", false).putBoolean("is_ew_unlocked", false).remove("offline_expiry_ew")
+                setEngineOicEwProUnlocked(context, false)
+            }
+            if (all || "DM" in blocked) {
+                editor.putBoolean("is_deck_mgt_unlocked", false).putBoolean("is_dm_unlocked", false).remove("offline_expiry_dm")
+                setDeckMgtProUnlocked(context, false)
+            }
+            if (all || "EM" in blocked) {
+                editor.putBoolean("is_engine_mgt_unlocked", false).putBoolean("is_em_unlocked", false).remove("offline_expiry_em")
+                setEngineMgtProUnlocked(context, false)
+            }
+        }
+        editor.apply()
+
+        // Recompute what is unlocked (Google Play purchases stay unlocked)
+        init(context)
     }
 
     fun formatRemainingTime(expiryEpoch: Long, context: Context? = null): String {
@@ -1164,9 +1153,5 @@ object LicenseManager {
 
     fun setActivated(context: Context, activated: Boolean) {
         setHyperionProUnlocked(context, activated)
-    }
-
-    fun validateLegacyKeyDirect(context: Context, cleanKey: String): Boolean {
-        return verifyAndUnlockKey(context, cleanKey).isSuccess
     }
 }

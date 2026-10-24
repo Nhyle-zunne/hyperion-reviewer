@@ -38,6 +38,11 @@ import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Construction
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,7 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
@@ -138,6 +143,530 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+@Composable
+private fun PopupStat(
+    label: String,
+    value: String,
+    colors: StoreColors,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .background(colors.boxInactiveFill, RectangleShape)
+            .border(1.dp, colors.borderInactive, RectangleShape)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 15.sp
+            ),
+            color = colors.accentGreen,
+            maxLines = 1
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 8.sp,
+                letterSpacing = 0.8.sp
+            ),
+            color = colors.textMuted,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun PopupPlanBox(
+    cycle: BillingCycle,
+    formattedPrice: String,
+    savingsPercent: Int?,
+    isSelected: Boolean,
+    colors: StoreColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val label = when (cycle) {
+        BillingCycle.WEEKLY -> "WEEKLY"
+        BillingCycle.MONTHLY -> "MONTHLY"
+        BillingCycle.YEARLY -> "YEARLY"
+    }
+
+    Surface(
+        shape = RectangleShape,
+        color = if (isSelected) colors.accentGreen.copy(alpha = 0.14f) else colors.boxInactiveFill,
+        border = BorderStroke(
+            if (isSelected) 2.dp else 1.dp,
+            if (isSelected) colors.accentGreen else colors.borderInactive
+        ),
+        modifier = modifier
+            .height(76.dp)
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (savingsPercent != null && cycle == BillingCycle.YEARLY) {
+                Text(
+                    text = "SAVE $savingsPercent%",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 8.sp
+                    ),
+                    color = colors.accentGreen,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 10.sp
+                ),
+                color = if (isSelected) colors.textPrimary else colors.textMuted,
+                maxLines = 1,
+                softWrap = false
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = formattedPrice,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp
+                ),
+                color = if (isSelected) colors.accentGreen else colors.textPrimary,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+    }
+}
+
+@Composable
+private fun StorePopupCard(
+    productId: String,
+    viewModel: ReviewerViewModel,
+    billingManager: com.nhyle.hyperionmaritime.data.billing.BillingManager,
+    colors: StoreColors,
+    isEntitled: Boolean,
+    activeBadgeText: String,
+    selectedCardCycle: BillingCycle?,
+    onSelectCycle: (BillingCycle) -> Unit,
+    onPurchaseCycle: (BillingCycle) -> Unit,
+    onClose: () -> Unit
+) {
+    var shown by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { shown = true }
+
+    val title = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "DECK OIC-NW PASS"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "GMDSS GOC PASS"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE OIC-EW PASS"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT PASS"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT PASS"
+        else -> productId.uppercase()
+    }
+
+    val trackBadge = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "DECK TRACK"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "RADIO TRACK"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE TRACK"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT TRACK"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT TRACK"
+        else -> "PASS"
+    }
+
+    val track = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> Track.DECK_OIC_NW
+        BillingConstants.PRODUCT_GMDSS_PASS -> Track.GMDSS_GOC
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> Track.ENGINE_OIC_EW
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> Track.DECK_MGT
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> Track.ENGINE_MGT
+        else -> null
+    }
+
+    val questionCount = if (track != null) {
+        viewModel.getTrackQuestionCountFormatted(track).substringBefore(" ")
+    } else {
+        "ALL"
+    }
+
+    val competencies = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "12"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "2"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "13"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "18"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "14"
+        else -> "ALL"
+    }
+
+    val mockItems = track?.mockQuestions?.toString() ?: "-"
+
+    val icon = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> Icons.Default.Explore
+        BillingConstants.PRODUCT_GMDSS_PASS -> Icons.Default.CellTower
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> Icons.Default.Build
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> Icons.Default.Navigation
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> Icons.Default.Construction
+        else -> Icons.Default.Key
+    }
+
+    val activeCycle = selectedCardCycle ?: BillingCycle.YEARLY
+    val activeItem = billingManager.getProductItem(productId, activeCycle)
+
+    val perks = listOf(
+        "Full question bank unlocked",
+        "All $competencies competencies, nothing locked",
+        "Mock exams with competence-by-competence scoring",
+        "Works 100% offline, study at sea",
+        "Manage or cancel anytime in Google Play"
+    )
+
+    AnimatedVisibility(
+        visible = shown,
+        enter = fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.92f)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("product_card_$productId"),
+            shape = RectangleShape,
+            color = colors.cardBackground,
+            border = BorderStroke(2.dp, colors.accentGreen)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.cardBackground)
+                        .padding(14.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(colors.storeBackground, RectangleShape)
+                                .border(2.dp, colors.accentGreen, RectangleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = colors.accentGreen,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 15.sp
+                                ),
+                                color = colors.textPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = trackBadge,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = colors.accentGreen,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onClose,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = colors.textMuted,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(colors.borderInactive)
+                )
+
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PopupStat("QUESTIONS", questionCount, colors, Modifier.weight(1f))
+                        PopupStat("COMPETENCIES", competencies, colors, Modifier.weight(1f))
+                        PopupStat("MOCK EXAM", mockItems, colors, Modifier.weight(1f))
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        perks.forEach { perk ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = colors.accentGreen,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = perk,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp
+                                    ),
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "CHOOSE YOUR PLAN",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp
+                        ),
+                        color = colors.textMuted
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        BillingCycle.values().forEach { cycle ->
+                            val cycleItem = billingManager.getProductItem(productId, cycle)
+                            PopupPlanBox(
+                                cycle = cycle,
+                                formattedPrice = cycleItem.shortFormattedPrice,
+                                savingsPercent = cycleItem.savingsPercentage,
+                                isSelected = activeCycle == cycle,
+                                colors = colors,
+                                onClick = { onSelectCycle(cycle) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("cycle_box_${productId}_${cycle.name.lowercase()}")
+                            )
+                        }
+                    }
+
+                    if (isEntitled) {
+                        Surface(
+                            shape = RectangleShape,
+                            color = colors.storeBackground,
+                            border = BorderStroke(1.dp, colors.accentGreen.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("purchase_button_$productId")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = colors.accentGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = activeBadgeText,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    ),
+                                    color = colors.accentGreen,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { onPurchaseCycle(activeCycle) },
+                            shape = RectangleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accentGreen,
+                                contentColor = if (colors.isDark) Color.Black else Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("purchase_button_$productId")
+                        ) {
+                            Text(
+                                text = "UNLOCK — ${activeItem.shortFormattedPrice}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoreTile(
+    productId: String,
+    viewModel: ReviewerViewModel,
+    billingManager: com.nhyle.hyperionmaritime.data.billing.BillingManager,
+    colors: StoreColors,
+    isEntitled: Boolean,
+    onClick: () -> Unit
+) {
+    val title = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "DECK OIC-NW"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "GMDSS GOC"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "ENGINE OIC-EW"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "DECK MANAGEMENT"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "ENGINE MANAGEMENT"
+        else -> productId.uppercase()
+    }
+
+    val track = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> Track.DECK_OIC_NW
+        BillingConstants.PRODUCT_GMDSS_PASS -> Track.GMDSS_GOC
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> Track.ENGINE_OIC_EW
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> Track.DECK_MGT
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> Track.ENGINE_MGT
+        else -> null
+    }
+    val countText = if (track != null) viewModel.getTrackQuestionCountFormatted(track) else "Full Question Bank"
+
+    val icon = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> Icons.Default.Explore
+        BillingConstants.PRODUCT_GMDSS_PASS -> Icons.Default.CellTower
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> Icons.Default.Build
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> Icons.Default.Navigation
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> Icons.Default.Construction
+        else -> Icons.Default.Key
+    }
+
+    val fromPrice = billingManager.getProductItem(productId, BillingCycle.WEEKLY).shortFormattedPrice
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(124.dp)
+            .clickable { onClick() }
+            .testTag("store_tile_$productId"),
+        shape = RectangleShape,
+        color = colors.cardBackground,
+        border = BorderStroke(
+            1.dp,
+            if (isEntitled) colors.accentGreen.copy(alpha = 0.6f) else colors.borderInactive
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(colors.boxInactiveFill, RectangleShape)
+                    .border(1.dp, colors.borderInactive, RectangleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = colors.accentGreen,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.5.sp
+                ),
+                color = colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+
+            Text(
+                text = countText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp
+                ),
+                color = colors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = if (isEntitled) "✓ ACTIVE" else "FROM $fromPrice",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 11.sp
+                ),
+                color = colors.accentGreen,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 fun openGooglePlaySubscriptions(context: Context) {
     val uri = Uri.parse("https://play.google.com/store/account/subscriptions")
     val playStoreIntent = Intent(Intent.ACTION_VIEW, uri).apply {
@@ -182,6 +711,8 @@ fun StoreScreen(
     var selectedOffer by rememberSaveable {
         mutableStateOf<SelectedOffer?>(null)
     }
+
+    var openProductId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var sandboxConfirmProduct by remember { mutableStateOf<PlayProductItem?>(null) }
     var sandboxConfirmCycle by remember { mutableStateOf(BillingCycle.YEARLY) }
@@ -296,6 +827,124 @@ fun StoreScreen(
             val offlineInfo = LicenseManager.getOfflineLicenseInfo(context)
             val now = System.currentTimeMillis()
 
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("store_hero_banner"),
+                shape = RectangleShape,
+                color = colors.cardBackground,
+                border = BorderStroke(1.dp, colors.borderInactive)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accentGreen)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(colors.storeBackground, RectangleShape)
+                                .border(1.5.dp, colors.accentGreen, RectangleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = colors.accentGreen,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "PASS TERMINAL",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 2.sp
+                                ),
+                                color = colors.accentGreen
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "UNLOCK YOUR EXAM TRACK",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 16.sp
+                                ),
+                                color = colors.textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Full question bank, mock exams and scoring for each MARINA track.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp
+                                ),
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(colors.borderInactive)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "${BillingConstants.ALL_PRODUCT_IDS.count { it != BillingConstants.PRODUCT_ALL_ACCESS_PASS }}" to "TRACKS",
+                            "100%" to "OFFLINE",
+                            "ANYTIME" to "CANCEL"
+                        ).forEach { (value, label) ->
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(colors.boxInactiveFill, RectangleShape)
+                                    .border(1.dp, colors.borderInactive, RectangleShape)
+                                    .padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = value,
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 14.sp
+                                    ),
+                                    color = colors.accentGreen
+                                )
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 9.sp,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    color = colors.textMuted
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             val isOfflineOicCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "OIC_NW", "ALL", "OIC"))
             val isOfflineGmdssCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "GMDSS_GOC", "ALL", "GOC"))
             val isOfflineEwCovered = offlineInfo?.isActive == true && (offlineInfo.tier in listOf("ALL_ACCESS", "ENGINE_OIC_EW", "ALL", "EW"))
@@ -379,9 +1028,41 @@ fun StoreScreen(
                 )
             }
 
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SELECT TRACK",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 2.sp
+                    ),
+                    color = colors.textSecondary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .background(colors.borderInactive)
+                )
+            }
+
             BillingConstants.ALL_PRODUCT_IDS
                 .filter { it != BillingConstants.PRODUCT_ALL_ACCESS_PASS }
-                .forEach { productId ->
+                .chunked(2)
+                .forEach { rowIds ->
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                  ) {
+                    rowIds.forEach { productId ->
+                      Box(modifier = Modifier.weight(1f)) {
                     val isEntitled = when (productId) {
                         BillingConstants.PRODUCT_OIC_NW_PASS -> hasActiveOic
                         BillingConstants.PRODUCT_GMDSS_PASS -> hasActiveGmdss
@@ -423,62 +1104,68 @@ fun StoreScreen(
                     val isCardSelected = selectedOffer?.productId == productId
                     val selectedCardCycle = if (isCardSelected) selectedOffer?.cycle else null
 
-                    SharpProductCard(
+                    StoreTile(
                         productId = productId,
                         viewModel = viewModel,
                         billingManager = billingManager,
                         colors = colors,
                         isEntitled = isEntitled,
-                        activeBadgeText = activeBadgeText,
-                        isCardSelected = isCardSelected,
-                        selectedCardCycle = selectedCardCycle,
-                        onSelectCycle = { cycle ->
-                            selectedOffer = SelectedOffer(productId, cycle)
-                        },
-                        onPurchaseCycle = { cycle ->
-                            selectedOffer = SelectedOffer(productId, cycle)
-                            val activity = context.findActivity()
-                            val details = billingManager.getProductDetails(productId)
-                            if (activity != null && details != null) {
-                                billingManager.launchBillingFlow(activity, productId, cycle)
-                            } else if (activity != null && !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
-                                billingManager.launchBillingFlow(activity, productId, cycle)
-                            } else {
-                                val item = billingManager.getProductItem(productId, cycle)
-                                sandboxConfirmProduct = item
-                                sandboxConfirmCycle = cycle
+                        onClick = { openProductId = productId }
+                    )
+
+                    if (openProductId == productId) {
+                        HyperionDialog(
+                            onDismissRequest = {
+                                openProductId = null
+                                selectedOffer = null
+                            },
+                            properties = DialogProperties(usePlatformDefaultWidth = false)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                StorePopupCard(
+                                    onClose = {
+                                        openProductId = null
+                                        selectedOffer = null
+                                    },
+                                    productId = productId,
+                                    viewModel = viewModel,
+                                    billingManager = billingManager,
+                                    colors = colors,
+                                    isEntitled = isEntitled,
+                                    activeBadgeText = activeBadgeText,
+                                    selectedCardCycle = selectedCardCycle,
+                                    onSelectCycle = { cycle ->
+                                        selectedOffer = SelectedOffer(productId, cycle)
+                                    },
+                                    onPurchaseCycle = { cycle ->
+                                        selectedOffer = SelectedOffer(productId, cycle)
+                                        val activity = context.findActivity()
+                                        val details = billingManager.getProductDetails(productId)
+                                        if (activity != null && details != null) {
+                                            billingManager.launchBillingFlow(activity, productId, cycle)
+                                        } else if (activity != null && !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
+                                            billingManager.launchBillingFlow(activity, productId, cycle)
+                                        } else {
+                                            val item = billingManager.getProductItem(productId, cycle)
+                                            sandboxConfirmProduct = item
+                                            sandboxConfirmCycle = cycle
+                                        }
+                                    }
+                                )
                             }
                         }
-                    )
+                    }
+                      }
+                    }
+                    if (rowIds.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                  }
                 }
-
-            AnimatedVisibility(
-                visible = scrollState.canScrollForward && scrollState.value < 40,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "SCROLL DOWN FOR MORE PASSES ↓",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        ),
-                        color = colors.textMuted,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
 
             Box(
                 modifier = Modifier
@@ -682,7 +1369,7 @@ fun StoreScreen(
     }
 
     if (showExpiredPopup) {
-        Dialog(
+        HyperionDialog(
             onDismissRequest = { showExpiredPopup = false },
             properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         ) {
@@ -811,7 +1498,7 @@ fun StoreScreen(
     }
 
     sandboxConfirmProduct?.let { product ->
-        Dialog(
+        HyperionDialog(
             onDismissRequest = { sandboxConfirmProduct = null },
             properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
         ) {
@@ -1038,8 +1725,8 @@ private fun SharpProductCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1164,35 +1851,7 @@ private fun SharpProductCard(
                     }
                 }
             } else {
-                if (selectedCardCycle == null) {
-                    Button(
-                        onClick = { },
-                        enabled = false,
-                        shape = RectangleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            disabledContainerColor = colors.boxInactiveFill,
-                            disabledContentColor = colors.textMuted
-                        ),
-                        border = BorderStroke(1.dp, colors.borderInactive),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(38.dp)
-                            .testTag("purchase_button_$productId")
-                    ) {
-                        Text(
-                            text = "SELECT A PLAN TO UNLOCK",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.5.sp
-                            ),
-                            color = colors.textMuted,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                } else {
+                if (selectedCardCycle != null) {
                     val selectedItem = billingManager.getProductItem(productId, selectedCardCycle)
                     val buttonText = "UNLOCK — ${selectedItem.shortFormattedPrice}"
 
@@ -1248,7 +1907,7 @@ private fun SharpCycleBox(
         color = boxBg,
         border = BorderStroke(boxBorderWidth, boxBorderColor),
         modifier = modifier
-            .height(50.dp)
+            .height(44.dp)
             .clickable { onClick() }
     ) {
         Column(

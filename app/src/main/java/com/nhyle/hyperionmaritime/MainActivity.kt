@@ -7,10 +7,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.scaleIn
+import com.nhyle.hyperionmaritime.ui.motion.hyperionPageTransition
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -27,6 +30,7 @@ import androidx.compose.ui.Modifier
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.DailyCheckInDialog
+import com.nhyle.hyperionmaritime.ui.components.ResultsLoadingDialog
 import com.nhyle.hyperionmaritime.ui.components.HyperionDrawerContent
 import com.nhyle.hyperionmaritime.ui.components.PaywallDialog
 import com.nhyle.hyperionmaritime.ui.screens.*
@@ -53,6 +57,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +75,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,7 +86,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 
@@ -173,7 +179,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         val screen = viewModel.currentScreen.value
-        val isActiveQuestionScreen = screen is Screen.Quiz || screen is Screen.MockCompetence
+        val isActiveQuestionScreen = screen is Screen.Quiz || screen is Screen.MockCompetence || screen is Screen.QuickScanViewer
         if (isActiveQuestionScreen) {
             viewModel.studyTimeTracker.onAppForeground()
         }
@@ -192,6 +198,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
 
     val showPaywall by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
     val showDailyCheckIn by viewModel.showDailyCheckInDialog.collectAsStateWithLifecycle()
+    val termsAccepted by viewModel.hasAcceptedTerms.collectAsStateWithLifecycle()
+    val showBridge by viewModel.showBridge.collectAsStateWithLifecycle()
+    val isRepoWarming by viewModel.isRepoWarming.collectAsStateWithLifecycle()
+    val showResultsLoading by viewModel.showResultsLoading.collectAsStateWithLifecycle()
 
     // Handle drawer opening events emitted from ViewModel
     LaunchedEffect(Unit) {
@@ -215,11 +225,12 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
         Surface(
             modifier = Modifier.fillMaxSize()
         ) {
+            Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
                 targetState = currentScreen,
-                transitionSpec = {
-                    fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
-                },
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter,
+                transitionSpec = { hyperionPageTransition() },
                 label = "screen_transition"
             ) { screen ->
                 when (screen) {
@@ -245,7 +256,9 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel,
                         competenceId = screen.competenceId,
                         isCrpMode = screen.isCrpMode,
-                        isOperationalReview = screen.isOperationalReview
+                        isOperationalReview = screen.isOperationalReview,
+                        isBookmarksMode = screen.isBookmarksMode,
+                        isMistakesMode = screen.isMistakesMode
                     )
                     is Screen.Flashcards -> FlashcardScreen(
                         viewModel = viewModel
@@ -306,6 +319,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         competenceId = screen.competenceId,
                         track = screen.track
                     )
+                    is Screen.SessionReview -> SessionReviewScreen(
+                        viewModel = viewModel,
+                        sessionId = screen.sessionId
+                    )                    
                     is Screen.Store -> StoreScreen(
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
@@ -322,10 +339,35 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
+                    is Screen.MTestMImport -> MTestMImportScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
                     else -> TrackSelectionScreen(
                         viewModel = viewModel
                     )
                 }
+            }
+
+            AnimatedVisibility(
+                visible = showBridge && termsAccepted,
+                enter = fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                    scaleIn(initialScale = 0.98f, animationSpec = tween(240, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(150))
+            ) {
+                TerminalLoadingDialog(
+                    isRepoWarming = isRepoWarming,
+                    onClose = { viewModel.closeBridge() }
+                )
+            }
+
+            AnimatedVisibility(
+                visible = showResultsLoading,
+                enter = fadeIn(tween(200, easing = FastOutSlowInEasing)),
+                exit = fadeOut(tween(140))
+            ) {
+                ResultsLoadingDialog(onFinished = { viewModel.dismissResultsLoading() })
+            }
             }
         }
     }
@@ -349,36 +391,44 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
         )
     }
 
-    val termsAccepted by viewModel.hasAcceptedTerms.collectAsStateWithLifecycle()
     val isDashboard = currentScreen is Screen.TrackSelection || currentScreen is Screen.Home
 
-    if (showDailyCheckIn && termsAccepted && isDashboard) {
+    if (showDailyCheckIn && termsAccepted && isDashboard && !showBridge) {
         DailyCheckInDialog(
             viewModel = viewModel,
             onDismiss = { viewModel.dismissDailyCheckInDialog() }
         )
     }
-
-    val isRepoWarming by viewModel.isRepoWarming.collectAsStateWithLifecycle()
-    if (isRepoWarming && termsAccepted) {
-        TerminalLoadingDialog()
-    }
 }
 
 @Composable
-fun TerminalLoadingDialog() {
+fun TerminalLoadingDialog(isRepoWarming: Boolean = false, onClose: () -> Unit = {}) {
     val colors = LocalSpaghettiColors.current
     val stepState = remember { mutableIntStateOf(0) }
+    var minStep1Reached by remember { mutableStateOf(false) }
+    var countdown by remember { mutableStateOf<Int?>(null) }
+    val isReady = countdown != null
 
     BackHandler(enabled = true) { /* Intercept back press while indexing */ }
 
     LaunchedEffect(Unit) {
-        delay(280L)
+        delay(350L)
         stepState.intValue = 1
-        delay(350L)
-        stepState.intValue = 2
-        delay(350L)
-        stepState.intValue = 3
+        delay(400L)
+        minStep1Reached = true
+    }
+
+    val readyForStep2 = minStep1Reached && !isRepoWarming
+    LaunchedEffect(readyForStep2) {
+        if (readyForStep2) {
+            stepState.intValue = 2
+            delay(150L)
+            stepState.intValue = 3
+            delay(150L)
+            countdown = 1
+            delay(250L)
+            onClose()
+        }
     }
 
     val transition = rememberInfiniteTransition(label = "terminalLoading")
@@ -395,7 +445,8 @@ fun TerminalLoadingDialog() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background.copy(alpha = 0.88f)),
+            .background(colors.background.copy(alpha = 0.88f))
+            .clickable(enabled = isReady) { onClose() },
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -451,7 +502,7 @@ fun TerminalLoadingDialog() {
                             letterSpacing = 0.5.sp
                         )
                         Text(
-                            text = "INDEXING QUESTION BANKS...",
+                            text = if (isReady) "QUESTION BANKS INDEXED" else "INDEXING QUESTION BANKS...",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = colors.accent,
@@ -512,16 +563,16 @@ fun TerminalLoadingDialog() {
 
                 Surface(
                     shape = RectangleShape,
-                    color = colors.surface2,
-                    border = BorderStroke(1.dp, colors.border),
+                    color = if (isReady) colors.success.copy(alpha = 0.15f) else colors.surface2,
+                    border = BorderStroke(1.dp, if (isReady) colors.success else colors.border),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "PLEASE WAIT · SYSTEM INITIALIZING",
+                        text = if (isReady) "SYSTEM READY · OPENING IN ${countdown ?: 3}..." else "PLEASE WAIT · SYSTEM INITIALIZING",
                         modifier = Modifier.padding(vertical = 8.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
-                        color = colors.muted,
+                        color = if (isReady) colors.success else colors.muted,
                         letterSpacing = 1.sp,
                         textAlign = TextAlign.Center
                     )

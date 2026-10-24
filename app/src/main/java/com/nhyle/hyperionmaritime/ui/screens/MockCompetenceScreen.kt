@@ -1,5 +1,9 @@
 package com.nhyle.hyperionmaritime.ui.screens
-
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
+import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -27,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Lock
@@ -83,6 +89,7 @@ fun MockCompetenceScreen(
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val timeRemaining by viewModel.timeRemainingSeconds.collectAsState()
     val userStates by viewModel.userQuestionStates.collectAsState()
+    val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
     val isExamSubmitted by viewModel.isExamSubmitted.collectAsState()
     val completedCompetences by viewModel.completedCompetences.collectAsState()
 
@@ -118,11 +125,21 @@ fun MockCompetenceScreen(
     val headerIconColor = if (isDark) MaritimeGoldBright else Color(0xFFFFFFFF)
     val headerBorder = if (isDark) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline) else BorderStroke(1.dp, Color(0xFF1E293B))
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.background)
-    ) {
+    val currentDensity = LocalDensity.current
+    val textScale by viewModel.questionTextScale.collectAsState()
+    val scaledDensity = remember(currentDensity, textScale) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * textScale
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(colors.background)
+        ) {
         // Compact Exam Header
         val minutes = timeRemaining / 60
         val seconds = timeRemaining % 60
@@ -157,31 +174,37 @@ fun MockCompetenceScreen(
                 )
             }
 
-            // Right side: Compact countdown readout
-            Surface(
-                color = colors.surface2,
-                border = BorderStroke(1.dp, colors.error),
-                shape = RectangleShape
+            // Right side: Compact countdown readout + Settings
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Surface(
+                    color = colors.surface2,
+                    border = BorderStroke(1.dp, colors.error),
+                    shape = RectangleShape
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Timer,
-                        contentDescription = null,
-                        tint = colors.error,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = formattedRemainingTime,
-                        color = colors.error,
-                        fontSize = 13.sp,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = colors.error,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = formattedRemainingTime,
+                            color = colors.error,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
+                QuestionSettingsMenu(viewModel = viewModel)
             }
         }
 
@@ -234,7 +257,6 @@ fun MockCompetenceScreen(
 
                 itemsIndexed(compQuestions, key = { _, q -> q.id }) { index, question ->
                     val state = userStates[question.id]
-                    val isFlagged = state?.isFlagged == true
                     val selectedIndex = state?.selectedIndex
 
                     MockQuestionItemCard(
@@ -242,17 +264,16 @@ fun MockCompetenceScreen(
                         totalItems = totalQuestions,
                         question = question,
                         selectedIndex = selectedIndex,
-                        isFlagged = isFlagged,
+                        isFlagged = false,
+                        isBookmarked = bookmarkedIds.contains(question.id),
                         isExamSubmitted = isExamSubmitted,
                         onSelectOption = { optIdx ->
                             if (!isExamSubmitted) {
                                 viewModel.selectOptionForQuestion(question.id, optIdx)
                             }
                         },
-                        onToggleFlag = {
-                            if (!isExamSubmitted) {
-                                viewModel.toggleFlagForQuestion(question.id)
-                            }
+                        onToggleBookmark = {
+                            viewModel.toggleBookmark(question.id)
                         }
                     )
                 }
@@ -365,6 +386,7 @@ fun MockCompetenceScreen(
                 }
             }
         }
+    }
     }
 
     // Non-dismissible Competence Locked Dialog
@@ -523,11 +545,12 @@ private fun MockQuestionItemCard(
     question: Question,
     selectedIndex: Int?,
     isFlagged: Boolean,
+    isBookmarked: Boolean,
     isExamSubmitted: Boolean,
     onSelectOption: (Int) -> Unit,
-    onToggleFlag: () -> Unit
+    onToggleBookmark: () -> Unit
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = LocalSpaghettiColors.current.isDark
     val cardBg = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFFFFFFF)
     val isCorrect = selectedIndex == question.correctAnswerIndex
     val cardBorder = if (isDark) {
@@ -538,7 +561,7 @@ private fun MockQuestionItemCard(
     } else {
         BorderStroke(
             width = if (isFlagged) 1.5.dp else 1.dp,
-            color = if (isFlagged) Color(0xFFD97706) else if (selectedIndex != null) Color(0xFF0284C7) else Color(0xFFCBD5E1)
+            color = if (isFlagged) Color(0xFFD97706) else if (selectedIndex != null) Color(0xFF075985) else Color(0xFF64748B)
         )
     }
 
@@ -611,13 +634,13 @@ private fun MockQuestionItemCard(
                     }
                 } else {
                     IconButton(
-                        onClick = onToggleFlag,
+                        onClick = onToggleBookmark,
                         modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
-                            imageVector = if (isFlagged) Icons.Default.Flag else Icons.Default.OutlinedFlag,
-                            contentDescription = "Flag Item",
-                            tint = if (isFlagged) MaritimeGoldBright else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
+                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else (if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF64748B))
                         )
                     }
                 }
@@ -633,7 +656,7 @@ private fun MockQuestionItemCard(
                     fontWeight = if (isDark) FontWeight.Medium else FontWeight.SemiBold,
                     lineHeight = 22.sp
                 ),
-                color = if (isDark) MaterialTheme.colorScheme.onSurface else Color(0xFF0F172A)
+                color = if (isDark) MaterialTheme.colorScheme.onSurface else Color.Black
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -656,7 +679,7 @@ private fun MockQuestionItemCard(
                         isExamSubmitted && isThisCorrect -> BorderStroke(1.5.dp, if (isDark) PassGreen else Color(0xFF16A34A))
                         isExamSubmitted && isSelected && !isThisCorrect -> BorderStroke(1.5.dp, Color(0xFFDC2626))
                         isDark -> BorderStroke(if (isSelected) 1.5.dp else 0.75.dp, if (isSelected) SeaCyan else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                        else -> BorderStroke(if (isSelected) 1.5.dp else 1.dp, if (isSelected) Color(0xFF0284C7) else Color(0xFFE2E8F0))
+                        else -> BorderStroke(if (isSelected) 2.dp else 1.dp, if (isSelected) Color(0xFF075985) else Color(0xFF64748B))
                     }
                     val letterBg = when {
                         isExamSubmitted && isThisCorrect -> if (isDark) PassGreen else Color(0xFF16A34A)
@@ -674,9 +697,9 @@ private fun MockQuestionItemCard(
                     val optionTextColor = when {
                         isExamSubmitted && isThisCorrect -> if (isDark) PassGreen else Color(0xFF15803D)
                         isExamSubmitted && isSelected && !isThisCorrect -> if (isDark) Color(0xFFFF6B6B) else Color(0xFFDC2626)
-                        isSelected -> if (isDark) Color.White else Color(0xFF0C4A6E)
+                        isSelected -> if (isDark) Color.White else Color.Black
                         isDark -> MaterialTheme.colorScheme.onSurface
-                        else -> Color(0xFF1E293B)
+                        else -> Color.Black
                     }
 
                     Surface(
@@ -727,7 +750,7 @@ private fun MockQuestionItemCard(
                                 enabled = !isExamSubmitted,
                                 colors = RadioButtonDefaults.colors(
                                     selectedColor = if (isDark) SeaCyan else Color(0xFF0284C7),
-                                    unselectedColor = if (isDark) MaterialTheme.colorScheme.outline else Color(0xFF94A3B8)
+                                    unselectedColor = if (isDark) MaterialTheme.colorScheme.outline else Color(0xFF64748B)
                                 )
                             )
                         }

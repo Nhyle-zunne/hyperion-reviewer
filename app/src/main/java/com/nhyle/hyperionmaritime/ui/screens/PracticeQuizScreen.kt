@@ -74,7 +74,11 @@ import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.CurrentQuestionStats
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.ui.components.MaritimeCompetenceBadge
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
+import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
 import com.nhyle.hyperionmaritime.ui.components.QuestionAttemptStatsCard
 import com.nhyle.hyperionmaritime.ui.components.QuestionPaletteDialog
@@ -105,10 +109,21 @@ fun PracticeQuizScreen(
         }
     }
 
-    if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
-        IntensiveDrillScreen(viewModel = viewModel, modifier = interactionModifier)
-    } else {
-        StandardDrillScreen(viewModel = viewModel, modifier = interactionModifier)
+    val currentDensity = LocalDensity.current
+    val textScale by viewModel.questionTextScale.collectAsState()
+    val scaledDensity = remember(currentDensity, textScale) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * textScale
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        if (deliveryMode == DrillDeliveryMode.INTENSIVE) {
+            IntensiveDrillScreen(viewModel = viewModel, modifier = interactionModifier)
+        } else {
+            StandardDrillScreen(viewModel = viewModel, modifier = interactionModifier)
+        }
     }
 
     if (showIdleDialog) {
@@ -327,12 +342,18 @@ private fun IntensiveDrillScreen(
                     }
                 }
 
-                IconButton(onClick = { viewModel.toggleBookmark(currentQuestion.id) }) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = "Bookmark",
-                        tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(onClick = { viewModel.toggleBookmark(currentQuestion.id) }) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Bookmark",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    QuestionSettingsMenu(viewModel = viewModel)
                 }
             }
         }
@@ -789,6 +810,7 @@ private fun StandardDrillScreen(
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    QuestionSettingsMenu(viewModel = viewModel, showDrillAutomations = true)
                 }
             }
         }
@@ -1017,6 +1039,9 @@ private fun StandardDrillScreen(
             },
             onDismiss = {
                 viewModel.setPaletteOpen(false)
+            },
+            onJumpToNumber = { index ->
+                viewModel.jumpToQuestion(index)
             }
         )
     }

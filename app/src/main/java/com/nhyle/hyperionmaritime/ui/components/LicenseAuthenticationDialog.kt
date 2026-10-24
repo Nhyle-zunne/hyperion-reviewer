@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 
 @Composable
@@ -39,7 +39,7 @@ fun LicenseAuthenticationDialog(
     val titleColor = if (isDark) Color.White else Color(0xFF0F172A)
     val subtextColor = if (isDark) Color(0xFF8E9BAE) else Color(0xFF64748B)
 
-    Dialog(
+    HyperionDialog(
         onDismissRequest = {}, // Non-cancelable while verifying
         properties = DialogProperties(
             dismissOnBackPress = false,

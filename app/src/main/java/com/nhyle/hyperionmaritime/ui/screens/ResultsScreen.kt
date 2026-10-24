@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.BorderStroke
@@ -38,11 +39,15 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import com.nhyle.hyperionmaritime.data.util.InAppReviewHelper
+import com.nhyle.hyperionmaritime.data.util.findActivity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +87,8 @@ fun ResultsScreen(
     val isCrpMode by viewModel.isCrpMode.collectAsState()
 
     var selectedTab by remember { mutableStateOf(0) } // 0: Breakdown, 1: Question Review
+    var selectedCompetenceFilter by remember { mutableStateOf<String?>(null) }
+    var reviewMissedOnly by remember { mutableStateOf(false) }
 
     BackHandler {
         viewModel.finishExamToHome()
@@ -108,6 +115,18 @@ fun ResultsScreen(
     val isPassed = result.isPassed
     val statusColor = if (isPassed) colors.success else colors.error
     val isMockExam = result.mode == QuizMode.MOCK_EXAM
+    val showResultsLoading by viewModel.showResultsLoading.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(result, showResultsLoading) {
+        // Trigger review for completed mock exams OR passed drills (never on failure)
+        val eligibleForReview = if (isMockExam) true else isPassed
+        if (eligibleForReview && !showResultsLoading) {
+            context.findActivity()?.let { activity ->
+                InAppReviewHelper.maybePromptReview(activity)
+            }
+        }
+    }
 
     // Resolve drill identity (e.g., C1, Part 4, or specific title)
     val compId = activeCompetenceId
@@ -297,7 +316,12 @@ fun ResultsScreen(
 
                     MianRuleCard(
                         ruleColor = compColor,
-                        containerColor = colors.surface
+                        containerColor = colors.surface,
+                        onClick = {
+                            selectedCompetenceFilter = comp.competenceId
+                            reviewMissedOnly = false
+                            selectedTab = 1
+                        }
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -354,92 +378,378 @@ fun ResultsScreen(
                             Spacer(modifier = Modifier.height(6.dp))
 
                             SpaghettiProgressBar(progress = (comp.percentage / 100.0).toFloat())
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "BROWSE QUESTIONS →",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 0.5.sp,
+                                    color = colors.accent
+                                )
+                            }
                         }
                     }
                 }
             } else {
-                // TAB 1: QUESTION REVIEW
-                item {
-                    MianSectionHeader(title = "FULL ITEM-BY-ITEM AUDIT")
+                // TAB 1: QUESTION REVIEW (SEPARATED BY COMPETENCE & QUICK SCAN)
+                if (result.competenceScores.size > 1) {
+                    item {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                ResultsFilterChip(
+                                    label = "ALL (${result.questionResults.size})",
+                                    selected = selectedCompetenceFilter == null
+                                ) {
+                                    selectedCompetenceFilter = null
+                                }
+                            }
+                            items(result.competenceScores) { comp ->
+                                ResultsFilterChip(
+                                    label = "${comp.competenceId} (${comp.score}/${comp.totalQuestions})",
+                                    selected = selectedCompetenceFilter == comp.competenceId,
+                                    borderColor = if (comp.isPassed) Color(0xFF22C55E) else colors.error
+                                ) {
+                                    selectedCompetenceFilter = comp.competenceId
+                                }
+                            }
+                        }
+                    }
                 }
 
-                items(result.questionResults) { itemResult ->
-                    var isExpanded by remember { mutableStateOf(false) }
-                    val itemColor = if (itemResult.isCorrect) colors.success else colors.error
+                val compItems = if (selectedCompetenceFilter == null) {
+                    result.questionResults
+                } else {
+                    result.questionResults.filter { it.competenceId.equals(selectedCompetenceFilter, ignoreCase = true) }
+                }
+                val missedInComp = compItems.count { !it.isCorrect }
 
-                    MianRuleCard(
-                        ruleColor = itemColor,
-                        containerColor = colors.surface,
-                        onClick = { isExpanded = !isExpanded }
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(RectangleShape)
-                                            .background(if (itemResult.isCorrect) colors.success else colors.error)
-                                            .border(1.dp, colors.border),
-                                        contentAlignment = Alignment.Center
+                        ResultsFilterChip(
+                            label = "ALL ${compItems.size}",
+                            selected = !reviewMissedOnly
+                        ) {
+                            reviewMissedOnly = false
+                        }
+                        ResultsFilterChip(
+                            label = "MISSED $missedInComp",
+                            selected = reviewMissedOnly
+                        ) {
+                            reviewMissedOnly = true
+                        }
+                    }
+                }
+
+                val displayedItems = compItems.filter { !reviewMissedOnly || !it.isCorrect }
+
+                if (displayedItems.isEmpty()) {
+                    item {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            shape = RectangleShape,
+                            color = colors.surface2,
+                            border = BorderStroke(1.dp, colors.border)
+                        ) {
+                            Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = if (compItems.isEmpty()) "No questions found for this competence." else "No missed questions for this competence!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.muted,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(displayedItems.size) { idx ->
+                        val itemResult = displayedItems[idx]
+                        val fullQ = remember(activeQuestions, itemResult.questionId) {
+                            activeQuestions.firstOrNull { it.id == itemResult.questionId }
+                        }
+                        val isUnanswered = itemResult.selectedOptionIndex == null && itemResult.selectedOptionText == null
+                        val statusColor = when {
+                            isUnanswered -> Color(0xFFFFB300)
+                            itemResult.isCorrect -> Color(0xFF22C55E)
+                            else -> colors.error
+                        }
+                        val statusText = when {
+                            isUnanswered -> "NOT ANSWERED"
+                            itemResult.isCorrect -> "CORRECT"
+                            else -> "WRONG"
+                        }
+
+                        MianRuleCard(
+                            ruleColor = statusColor,
+                            containerColor = colors.surface
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RectangleShape,
+                                        color = colors.surface2,
+                                        border = BorderStroke(1.dp, colors.border)
                                     ) {
-                                        Icon(
-                                            imageVector = if (itemResult.isCorrect) Icons.Default.Check else Icons.Default.Close,
-                                            contentDescription = null,
-                                            tint = colors.primaryForeground,
-                                            modifier = Modifier.size(16.dp)
+                                        Text(
+                                            text = "${itemResult.competenceId} • ITEM ${idx + 1}/${displayedItems.size}".uppercase(),
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 1.sp,
+                                            color = colors.foreground
                                         )
                                     }
+                                    Surface(
+                                        shape = RectangleShape,
+                                        color = colors.surface2,
+                                        border = BorderStroke(1.dp, statusColor)
+                                    ) {
+                                        Text(
+                                            text = statusText,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp,
+                                            letterSpacing = 1.sp,
+                                            color = statusColor
+                                        )
+                                    }
+                                }
 
-                                    Spacer(modifier = Modifier.width(10.dp))
-
+                                if (fullQ != null && fullQ.topic.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
                                     Text(
-                                        text = "${itemResult.competenceId} • ITEM ${itemResult.questionId}".uppercase(),
+                                        text = "TOPIC: ${fullQ.topic.uppercase()}",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.foreground,
-                                        fontSize = 11.sp,
-                                        letterSpacing = 1.sp
+                                        color = colors.primary,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 10.sp,
+                                        letterSpacing = 0.5.sp
                                     )
                                 }
 
-                                Icon(
-                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = "Expand",
-                                    tint = colors.muted
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Text(
+                                    text = itemResult.questionText,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.foreground,
+                                    lineHeight = 22.sp
                                 )
-                            }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
 
-                            Text(
-                                text = itemResult.questionText,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.foreground,
-                                maxLines = if (isExpanded) Int.MAX_VALUE else 2
-                            )
+                                if (fullQ != null && fullQ.options.isNotEmpty()) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        fullQ.options.forEachIndexed { optIndex, optionText ->
+                                            val isCorrectOption = optIndex == fullQ.correctAnswerIndex
+                                            val isPicked = optIndex == itemResult.selectedOptionIndex
+                                            val isWrongPick = isPicked && !isCorrectOption
+                                            val optionLetter = when (optIndex) {
+                                                0 -> "A"
+                                                1 -> "B"
+                                                2 -> "C"
+                                                3 -> "D"
+                                                else -> "${optIndex + 1}"
+                                            }
+                                            val green = Color(0xFF22C55E)
+                                            val optBorderColor = when {
+                                                isCorrectOption -> green
+                                                isWrongPick -> colors.error
+                                                else -> colors.border
+                                            }
+                                            val optBadgeBg = when {
+                                                isCorrectOption -> green
+                                                isWrongPick -> colors.error
+                                                else -> colors.surface2
+                                            }
+                                            val optLetterColor = if (isCorrectOption || isWrongPick) Color.White else colors.muted
 
-                            AnimatedVisibility(visible = isExpanded) {
-                                Column(modifier = Modifier.padding(top = 10.dp)) {
-                                    Text(
-                                        text = "YOUR ANSWER: ${itemResult.selectedOptionText ?: "Unanswered"}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (itemResult.isCorrect) colors.success else colors.error,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (!itemResult.isCorrect) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "CORRECT ANSWER: ${itemResult.correctOptionText}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = colors.success,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RectangleShape,
+                                                color = colors.surface2,
+                                                border = BorderStroke(if (isCorrectOption || isWrongPick) 1.5.dp else 1.dp, optBorderColor)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(10.dp),
+                                                    verticalAlignment = Alignment.Top
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(24.dp)
+                                                            .clip(RectangleShape)
+                                                            .background(optBadgeBg)
+                                                            .border(1.dp, optBorderColor),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = optionLetter,
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            fontSize = 11.sp,
+                                                            color = optLetterColor
+                                                        )
+                                                    }
+
+                                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = optionText,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = colors.foreground,
+                                                            lineHeight = 18.sp,
+                                                            fontWeight = if (isCorrectOption || isPicked) FontWeight.Bold else FontWeight.Normal
+                                                        )
+
+                                                        if (isCorrectOption) {
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Check,
+                                                                    contentDescription = null,
+                                                                    tint = green,
+                                                                    modifier = Modifier.size(12.dp)
+                                                                )
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(
+                                                                    text = if (isPicked) "YOUR ANSWER · CORRECT" else "CORRECT ANSWER",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.ExtraBold,
+                                                                    color = green,
+                                                                    fontSize = 9.sp,
+                                                                    letterSpacing = 0.5.sp
+                                                                )
+                                                            }
+                                                        } else if (isWrongPick) {
+                                                            Spacer(modifier = Modifier.height(4.dp))
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Close,
+                                                                    contentDescription = null,
+                                                                    tint = colors.error,
+                                                                    modifier = Modifier.size(12.dp)
+                                                                )
+                                                                Spacer(modifier = Modifier.width(4.dp))
+                                                                Text(
+                                                                    text = "YOUR ANSWER",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    fontWeight = FontWeight.ExtraBold,
+                                                                    color = colors.error,
+                                                                    fontSize = 9.sp,
+                                                                    letterSpacing = 0.5.sp
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RectangleShape,
+                                            color = colors.surface2,
+                                            border = BorderStroke(1.dp, if (itemResult.isCorrect) Color(0xFF22C55E) else colors.error)
+                                        ) {
+                                            Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (itemResult.isCorrect) Icons.Default.Check else Icons.Default.Close,
+                                                    contentDescription = null,
+                                                    tint = if (itemResult.isCorrect) Color(0xFF22C55E) else colors.error,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "YOUR ANSWER: ${itemResult.selectedOptionText ?: "Unanswered"}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (itemResult.isCorrect) Color(0xFF22C55E) else colors.error
+                                                )
+                                            }
+                                        }
+
+                                        if (!itemResult.isCorrect && itemResult.correctOptionText.isNotBlank()) {
+                                            Surface(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shape = RectangleShape,
+                                                color = colors.surface2,
+                                                border = BorderStroke(1.dp, Color(0xFF22C55E))
+                                            ) {
+                                                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF22C55E),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text(
+                                                        text = "CORRECT: ${itemResult.correctOptionText}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF22C55E)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                val explanation = fullQ?.rationale ?: itemResult.rationale
+                                if (!explanation.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RectangleShape,
+                                        color = colors.surface2,
+                                        border = BorderStroke(1.dp, colors.border)
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = "EXPLANATION & MARITIME RATIONALE",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = colors.primary,
+                                                fontSize = 10.sp,
+                                                letterSpacing = 1.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = explanation,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colors.foreground,
+                                                lineHeight = 18.sp
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -546,5 +856,38 @@ fun ResultsScreen(
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun ResultsFilterChip(
+    label: String,
+    selected: Boolean,
+    borderColor: Color? = null,
+    onClick: () -> Unit
+) {
+    val colors = LocalSpaghettiColors.current
+    val strokeColor = when {
+        selected -> colors.accent
+        borderColor != null -> borderColor
+        else -> colors.border
+    }
+    Surface(
+        shape = RectangleShape,
+        color = if (selected) colors.accent else colors.surface2,
+        border = BorderStroke(1.dp, strokeColor),
+        modifier = Modifier
+            .clip(RectangleShape)
+            .clickable { onClick() }
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = 11.sp,
+            letterSpacing = 0.5.sp,
+            color = if (selected) colors.primaryForeground else colors.foreground
+        )
     }
 }

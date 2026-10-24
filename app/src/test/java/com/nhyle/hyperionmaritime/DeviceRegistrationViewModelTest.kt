@@ -88,17 +88,4 @@ class DeviceRegistrationViewModelTest {
         assertEquals("ERR: PLEASE ENTER A PROMO CODE", state.promoError)
     }
 
-    @Test
-    fun testMasterKeyActivatesAllModulesWithoutTouchingRemoteConfig() {
-        viewModel.onActivationKeyChange("ADMIN1234")
-        viewModel.activateDeviceWithKey(context)
-
-        val state = viewModel.uiState.value
-        assertTrue(state.isLicensed)
-        assertTrue(state.isOicLicensed)
-        assertTrue(state.isGmdssLicensed)
-        assertTrue(state.isAllAccessLicensed)
-        assertEquals("OFFLINE_PASS", state.licenseType)
-        assertNull(state.keyError)
-    }
 }

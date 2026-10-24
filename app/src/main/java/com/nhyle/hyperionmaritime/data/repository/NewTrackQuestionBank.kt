@@ -123,11 +123,7 @@ object NewTrackQuestionBank {
 
                 seenNumbers.add(no)
 
-                val diff = when ((no % 3 + 3) % 3) {
-                    1 -> Difficulty.EASY
-                    2 -> Difficulty.MODERATE
-                    else -> Difficulty.DIFFICULT
-                }
+                val diff = classifyQuestionDifficulty(qText, options, no)
 
                 val qId = String.format("%s-%s-%04d", idPrefix, competence.competenceId, no)
                 questions.add(
@@ -200,5 +196,50 @@ object NewTrackQuestionBank {
             }
         }
         return result
+    }
+
+    private fun classifyQuestionDifficulty(qText: String, options: List<String>, fallbackNo: Int): Difficulty {
+        val lower = qText.lowercase()
+        val totalOptionLen = options.sumOf { it.length }
+
+        // 1. Calculations, formulas, quantitative navigation, and stability
+        val isCalculationOrFormula = lower.contains("calculate") ||
+                lower.contains("formula") ||
+                lower.contains("degrees") ||
+                lower.contains("knots") ||
+                lower.contains("bearing") ||
+                lower.contains("draft") ||
+                lower.contains("displacement") ||
+                lower.contains("stability") ||
+                lower.contains("metacentric") ||
+                Regex("""\b\d+(\.\d+)?\s*(m|ft|rpm|nm|kts|deg|°)\b""").containsMatchIn(lower)
+
+        // 2. High-level analysis / master decision making
+        val isEvaluation = lower.contains("immediate action") ||
+                lower.contains("in accordance with solas") ||
+                lower.contains("master's responsibility") ||
+                lower.contains("salvage") ||
+                lower.contains("severe damage")
+
+        if (isCalculationOrFormula || isEvaluation || (qText.length > 220 && totalOptionLen > 180)) {
+            return Difficulty.DIFFICULT
+        }
+
+        // 3. Situational procedures and rules application
+        val isApplication = lower.contains("action to be taken") ||
+                lower.contains("what should you do") ||
+                lower.contains("in the event of") ||
+                lower.contains("colregs rule") ||
+                lower.contains("procedure") ||
+                lower.contains("precaution") ||
+                lower.contains("during cargo") ||
+                lower.contains("prior to")
+
+        if (isApplication || qText.length > 130 || totalOptionLen > 120) {
+            return Difficulty.MODERATE
+        }
+
+        // 4. Default to Easy for definitions, factual recall, and terminology
+        return Difficulty.EASY
     }
 }

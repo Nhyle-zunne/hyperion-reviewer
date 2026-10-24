@@ -33,7 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.viewmodel.DeviceRegistrationViewModel
 
 @Composable
@@ -49,7 +49,7 @@ fun DeviceRegistrationScreen(
     }
 
     if (uiState.isVerifyingOnLaunch) {
-        Dialog(onDismissRequest = { /* Non-dismissible while verifying */ }) {
+        HyperionDialog(onDismissRequest = { /* Non-dismissible while verifying */ }) {
             Card(
                 shape = RoundedCornerShape(4.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF0B1321)),

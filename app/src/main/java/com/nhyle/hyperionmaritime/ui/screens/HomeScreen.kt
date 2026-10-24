@@ -21,15 +21,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Gavel
@@ -39,9 +42,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -59,7 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.window.Dialog
+import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -67,8 +73,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
@@ -76,7 +84,11 @@ import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
+import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
@@ -97,6 +109,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
+    val isDarkMode = colors.isDark
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
     val mistakeEntries by viewModel.mistakeEntries.collectAsState()
@@ -126,6 +139,7 @@ fun HomeScreen(
         Track.ENGINE_MGT -> regState.emTimeLeft
     }
     var showMockExamWarningDialog by remember { mutableStateOf(false) }
+    var showMockFunctionSelectionDialog by remember { mutableStateOf(false) }
     var showSearchLockedDialog by remember { mutableStateOf(false) }
     var showUpgradeRequiredDialog by remember { mutableStateOf(false) }
     var lockedFeatureName by remember { mutableStateOf("") }
@@ -144,12 +158,22 @@ fun HomeScreen(
         viewModel.navigateBack()
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(colors.background)
-            .navigationBarsPadding()
-    ) {
+    val currentDensity = LocalDensity.current
+    val textScale by viewModel.questionTextScale.collectAsState()
+    val scaledDensity = remember(currentDensity, textScale) {
+        Density(
+            density = currentDensity.density,
+            fontScale = currentDensity.fontScale * textScale
+        )
+    }
+
+    CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(colors.background)
+                .navigationBarsPadding()
+        ) {
         MaritimeTopBar(
             title = when (selectedTrack) {
                 Track.DECK_OIC_NW -> "OIC-NW Operational Track"
@@ -170,11 +194,21 @@ fun HomeScreen(
                 }
             },
             isSearchLocked = !isTrackUnlocked,
-            onHistoryClick = { viewModel.navigateTo(Screen.History) },
-            onBookmarksClick = { viewModel.navigateTo(Screen.Bookmarks) },
-            onVaultClick = { viewModel.navigateTo(Screen.Vault) },
+            onBookmarksClick = {
+                if (isTrackUnlocked) {
+                    viewModel.navigateTo(Screen.Bookmarks)
+                } else {
+                    lockedFeatureName = "Bookmarked Questions"
+                    showUpgradeRequiredDialog = true
+                }
+            },
             bookmarkCount = totalBookmarks,
-            vaultCount = totalMistakes
+            settingsMenu = {
+                QuestionSettingsMenu(
+                    viewModel = viewModel,
+                    showOnlyTextSize = true
+                )
+            }
         )
 
         LazyColumn(
@@ -205,212 +239,275 @@ fun HomeScreen(
                 }
             }
 
+            // Compact Performance Overview Section (Tightened spacing)
             item {
-                // Section Header: PERFORMANCE
-                MianSectionHeader(title = "PERFORMANCE OVERVIEW")
-            }
-
-            item {
-                // Live KPI Stats Grid (Editorial 4-column layout)
-                StatsGrid(
-                    examsCount = totalExamsTaken,
-                    avgScore = averageScore,
-                    mistakeCount = totalMistakes,
-                    bookmarkCount = totalBookmarks
-                )
-            }
-
-            item {
-                // Section Header: EXAMINATION MODES
-                MianSectionHeader(title = "EXAMINATION MODES")
-            }
-
-            // Quick Mode Launchers
-            if (selectedTrack == Track.DECK_OIC_NW) {
-                item {
-                    ModeLauncherCard(
-                        title = "MARINA CRP-Based Practice",
-                        subtitle = "Standard review • 2,065 official review questions across 12 competencies (F1: 1,531, F2: 205, F3: 329)\nNote: Independently developed review based on MARINA references.",
-                        badge = "STANDARD REVIEW",
-                        badgeColor = colors.success,
-                        icon = Icons.Default.School,
-                        accentColor = colors.success,
-                        onClick = {
-                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
-                        }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(colors.border)
                     )
-                }
-            } else if (selectedTrack == Track.GMDSS_GOC) {
-                val c1Val = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C1
-                val c2Val = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C2
-                val totalVal = c1Val + c2Val
-                val totalStr = "%,d".format(totalVal)
-                val c1Str = c1Val.toString()
-                val c2Str = c2Val.toString()
-                item {
-                    ModeLauncherCard(
-                        title = "GMDSS Operational Review",
-                        subtitle = "Standard review • $totalStr questions across 2 operational competencies (C1: $c1Str questions, C2: $c2Str questions)",
-                        badge = "STANDARD REVIEW",
-                        badgeColor = colors.success,
-                        icon = Icons.Default.School,
-                        accentColor = colors.success,
-                        onClick = {
-                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = false, isOperationalReview = true))
-                        }
+                    Text(
+                        text = "PERFORMANCE OVERVIEW",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Start
                     )
-                }
-            } else {
-                val totalCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
-                val totalStr = "%,d".format(totalCount)
-                val compCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
-                item {
-                    ModeLauncherCard(
-                        title = when (selectedTrack) {
-                            Track.ENGINE_OIC_EW -> "ENGINE OIC-EW OPERATIONAL REVIEW"
-                            Track.DECK_MGT -> "DECK MANAGEMENT STANDARD REVIEW"
-                            Track.ENGINE_MGT -> "ENGINE MANAGEMENT STANDARD REVIEW"
-                            else -> "Standard Review"
-                        },
-                        subtitle = "Standard review • $totalStr questions across $compCount competencies",
-                        badge = "STANDARD REVIEW",
-                        badgeColor = colors.success,
-                        icon = Icons.Default.School,
-                        accentColor = colors.success,
-                        onClick = {
-                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
-                        }
+                    StatsGrid(
+                        examsCount = totalExamsTaken,
+                        avgScore = averageScore,
+                        mistakeCount = totalMistakes,
+                        bookmarkCount = totalBookmarks
                     )
                 }
             }
 
+            // Compact Examination Modes Header
             item {
-                val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
-                val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
-                val qCountStr = "%,d".format(qCount)
-
-                ModeLauncherCard(
-                    title = "Practice All Questions",
-                    subtitle = "Practice across all $compCount competencies ($qCountStr questions available).",
-                    badge = if (isTrackUnlocked) "CUSTOMIZABLE" else "LOCKED",
-                    badgeColor = if (isTrackUnlocked) colors.foreground else colors.muted,
-                    icon = Icons.Default.Tune,
-                    accentColor = colors.foreground,
-                    isLuminous = isTrackUnlocked,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = false, isOperationalReview = false))
-                        } else {
-                            lockedFeatureName = "Practice All Questions"
-                            showUpgradeRequiredDialog = true
-                        }
-                    }
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(colors.border)
+                    )
+                    Text(
+                        text = "EXAMINATION MODES",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Start
+                    )
+                }
             }
 
-            item {
-                ModeLauncherCard(
-                    title = "Official Timed Mock Exam",
-                    subtitle = when (selectedTrack) {
-                        Track.DECK_OIC_NW -> "Competency-based timing • 1 min/item • 70% Cutoff"
-                        Track.GMDSS_GOC -> "Competency-based timing • Operator standard • 70% Cutoff"
-                        Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> "Competency-based timing • 1 min/item • 70% Cutoff"
-                    },
-                    badge = if (isTrackUnlocked) "STCW TOS MOCK" else "LOCKED",
-                    badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
-                    icon = Icons.Default.Timer,
-                    accentColor = colors.accent,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            showMockExamWarningDialog = true
-                        } else {
-                            lockedFeatureName = "Official Timed Mock Exam"
-                            showUpgradeRequiredDialog = true
-                        }
-                    }
-                )
+            val freeReviewerTitle = when (selectedTrack) {
+                Track.DECK_OIC_NW -> "OIC-NW FREE REVIEWER"
+                Track.GMDSS_GOC -> "GMDSS FREE REVIEWER"
+                Track.ENGINE_OIC_EW -> "ENGINE OIC-EW FREE REVIEWER"
+                Track.DECK_MGT -> "DECK MANAGEMENT FREE REVIEWER"
+                Track.ENGINE_MGT -> "ENGINE MANAGEMENT FREE REVIEWER"
             }
 
-            item {
-                ModeLauncherCard(
-                    title = "Quick Scan Material",
-                    subtitle = "Direct question & answer reference review",
-                    badge = if (isTrackUnlocked) "QUICK SCAN" else "LOCKED",
-                    badgeColor = if (isTrackUnlocked) colors.success else colors.muted,
-                    icon = Icons.AutoMirrored.Filled.MenuBook,
-                    accentColor = if (isTrackUnlocked) colors.success else colors.accent,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            viewModel.navigateTo(Screen.QuickScanCompetenceSelect(selectedTrack))
-                        } else {
-                            lockedFeatureName = "Quick Scan Material"
-                            showUpgradeRequiredDialog = true
-                        }
-                    }
-                )
+            val freeReviewerSubtitle = when (selectedTrack) {
+                Track.DECK_OIC_NW -> "2,065 questions across 12 competencies (F1, F2, F3)."
+                Track.GMDSS_GOC -> {
+                    val c1 = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C1
+                    val c2 = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C2
+                    "%,d questions across 2 operational competencies.".format(c1 + c2)
+                }
+                else -> {
+                    val totalCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
+                    val compCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+                    "%,d questions across %d competencies.".format(totalCount, compCount)
+                }
             }
 
+            val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
+            val qCountStr = "%,d".format(qCount)
+
+            // Row 1: Free Reviewer (Top-Left) + Practice All Questions (Top-Right)
             item {
-                ModeLauncherCard(
-                    title = "Flashcard Revision Mode",
-                    subtitle = "Active recall study • Tap to flip cards • Key verification & Bloom's taxonomy breakdown",
-                    badge = if (isTrackUnlocked) "ACTIVE RECALL" else "LOCKED",
-                    badgeColor = if (isTrackUnlocked) colors.foreground else colors.muted,
-                    icon = Icons.Default.Style,
-                    accentColor = colors.foreground,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            viewModel.navigateTo(Screen.Flashcards)
-                        } else {
-                            lockedFeatureName = "Flashcard Revision Mode"
-                            showUpgradeRequiredDialog = true
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = freeReviewerTitle,
+                            subtitle = freeReviewerSubtitle,
+                            badge = "FREE ACCESS",
+                            badgeColor = colors.foreground,
+                            icon = Icons.Default.School,
+                            accentColor = colors.foreground,
+                            isLocked = false,
+                            onClick = {
+                                if (selectedTrack == Track.GMDSS_GOC) {
+                                    viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = false, isOperationalReview = true))
+                                } else {
+                                    viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = true))
+                                }
+                            }
+                        )
                     }
-                )
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "PRACTICE ALL QUESTIONS",
+                            subtitle = "$qCountStr questions across $compCount competencies.",
+                            badge = if (isTrackUnlocked) "CUSTOMIZABLE" else "LOCKED",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.Default.Tune,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = false, isOperationalReview = false))
+                                } else {
+                                    lockedFeatureName = "Practice All Questions"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
+            // Row 2: Quick Scan Material (Below Free Reviewer) + Timed Mock Exam (Below Practice All)
             item {
-                ModeLauncherCard(
-                    title = "Mistakes Notebook (Vault)",
-                    subtitle = "$totalMistakes questions to redeem. Removed after 2 consecutive correct answers.",
-                    badge = if (!isTrackUnlocked) "LOCKED" else if (totalMistakes > 0) "$totalMistakes ITEMS" else "EMPTY",
-                    badgeColor = if (isTrackUnlocked && totalMistakes > 0) colors.accent else colors.muted,
-                    icon = Icons.Default.AutoFixHigh,
-                    accentColor = colors.accent,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            viewModel.navigateTo(Screen.Vault)
-                        } else {
-                            lockedFeatureName = "Mistakes Notebook (Vault)"
-                            showUpgradeRequiredDialog = true
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "QUICK SCAN MATERIAL",
+                            subtitle = "Direct question & answer reference review.",
+                            badge = if (isTrackUnlocked) "QUICK SCAN" else "LOCKED",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.QuickScanCompetenceSelect(selectedTrack))
+                                } else {
+                                    lockedFeatureName = "Quick Scan Material"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
                     }
-                )
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "TIMED MOCK EXAM",
+                            subtitle = "70% Cutoff • 1 min/item • Function lock-in",
+                            badge = if (isTrackUnlocked) "STCW MOCK" else "LOCKED",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.Default.Timer,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    showMockExamWarningDialog = true
+                                } else {
+                                    lockedFeatureName = "Official Timed Mock Exam"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
+            // Row 3: Flashcards + Mistakes Notebook
             item {
-                ModeLauncherCard(
-                    title = "Session Log",
-                    subtitle = "Past mock exam attempts, Bloom's scoring, and 70% competence diagnostics",
-                    badge = if (!isTrackUnlocked) "LOCKED" else if (examRecords.isNotEmpty()) "${examRecords.size} LOGS" else "EMPTY",
-                    badgeColor = if (isTrackUnlocked) colors.foreground else colors.muted,
-                    icon = Icons.Default.Analytics,
-                    accentColor = colors.foreground,
-                    isLocked = !isTrackUnlocked,
-                    onClick = {
-                        if (isTrackUnlocked) {
-                            viewModel.navigateTo(Screen.History)
-                        } else {
-                            lockedFeatureName = "Session Log & History"
-                            showUpgradeRequiredDialog = true
-                        }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "FLASHCARD REVISION",
+                            subtitle = "Active recall • Tap to flip cards • Key verification",
+                            badge = if (isTrackUnlocked) "ACTIVE RECALL" else "LOCKED",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.Default.Style,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.Flashcards)
+                                } else {
+                                    lockedFeatureName = "Flashcard Revision Mode"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
                     }
-                )
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "MISTAKES NOTEBOOK",
+                            subtitle = "$totalMistakes questions to redeem. Cleared after 2 correct.",
+                            badge = if (!isTrackUnlocked) "LOCKED" else if (totalMistakes > 0) "$totalMistakes ITEMS" else "EMPTY",
+                            badgeColor = if (isTrackUnlocked && totalMistakes > 0) colors.accent else colors.muted,
+                            icon = Icons.Default.AutoFixHigh,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.Vault)
+                                } else {
+                                    lockedFeatureName = "Mistakes Notebook (Vault)"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Row 4: Session Log + Search Bank
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "SESSION LOG",
+                            subtitle = "Past mock exam attempts & diagnostics.",
+                            badge = if (!isTrackUnlocked) "LOCKED" else if (examRecords.isNotEmpty()) "${examRecords.size} LOGS" else "EMPTY",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.Default.Analytics,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.History)
+                                } else {
+                                    lockedFeatureName = "Session Log & History"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
+                    }
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "SEARCH QUESTION BANK",
+                            subtitle = "Search by keyword, item code, or competence.",
+                            badge = if (isTrackUnlocked) "DATABASE" else "LOCKED",
+                            badgeColor = if (isTrackUnlocked) colors.accent else colors.muted,
+                            icon = Icons.Default.Search,
+                            accentColor = colors.accent,
+                            isLocked = !isTrackUnlocked,
+                            onClick = {
+                                if (isTrackUnlocked) {
+                                    viewModel.navigateTo(Screen.Search)
+                                } else {
+                                    lockedFeatureName = "Question Bank Search"
+                                    showUpgradeRequiredDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             item {
@@ -428,7 +525,7 @@ fun HomeScreen(
             Track.ENGINE_MGT -> "Engine Management"
             Track.DECK_MGT -> "Deck Management"
         }
-        Dialog(
+        HyperionDialog(
             onDismissRequest = { showUpgradeRequiredDialog = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
@@ -488,7 +585,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Check the Hyperion Store to view available upgrade tracks and unlock full question banks.",
+                        text = "Check the Bond Store to view available upgrade tracks and unlock full question banks.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.muted,
                         lineHeight = 18.sp
@@ -498,6 +595,26 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Surface(
+                            onClick = { showUpgradeRequiredDialog = false },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp),
+                            shape = RectangleShape,
+                            color = colors.surface2,
+                            border = BorderStroke(1.dp, colors.border)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "NO",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.foreground,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
                         Surface(
                             onClick = {
                                 showUpgradeRequiredDialog = false
@@ -515,26 +632,6 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = colors.accentForeground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = { showUpgradeRequiredDialog = false },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.surface2,
-                            border = BorderStroke(1.dp, colors.border)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "NO",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.foreground,
                                     letterSpacing = 1.sp
                                 )
                             }
@@ -587,16 +684,236 @@ fun HomeScreen(
                 MianButton(
                     onClick = {
                         showMockExamWarningDialog = false
-                        viewModel.startTimedMockExam(selectedTrack)
+                        showMockFunctionSelectionDialog = true
                     },
                     accent = true
                 ) {
-                    Text("START EXAM", fontWeight = FontWeight.ExtraBold)
+                    Text("PROCEED", fontWeight = FontWeight.ExtraBold)
                 }
             },
             dismissButton = {
                 OutlinedButton(
                     onClick = { showMockExamWarningDialog = false },
+                    shape = RectangleShape,
+                    border = BorderStroke(1.dp, colors.border)
+                ) {
+                    Text("CANCEL", color = colors.foreground, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Function Selection Modal for Mock Exam
+    if (showMockFunctionSelectionDialog) {
+        val allTrackCompetences = remember(selectedTrack) {
+            MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack)
+        }
+        val distinctFunctions = remember(allTrackCompetences) {
+            allTrackCompetences.map { it.functionId }.distinct()
+        }
+        var selectedFunctions by remember { mutableStateOf<Set<String>>(emptySet()) }
+        val allSelected = distinctFunctions.isNotEmpty() && selectedFunctions.size == distinctFunctions.size
+
+        AlertDialog(
+            onDismissRequest = { showMockFunctionSelectionDialog = false },
+            modifier = Modifier
+                .border(BorderStroke(1.5.dp, colors.border), RectangleShape)
+                .fillMaxWidth(0.95f),
+            shape = RectangleShape,
+            containerColor = colors.surface,
+            title = {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(colors.accent)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "SELECT EXAM FUNCTIONS",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.foreground,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Choose which functions to include in this Mock Examination. Nothing is selected by default.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.muted
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Toggle All Action
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (selectedFunctions.isEmpty()) "0 FUNCTIONS SELECTED" else "${selectedFunctions.size} OF ${distinctFunctions.size} SELECTED",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.muted,
+                            letterSpacing = 0.5.sp
+                        )
+
+                        Text(
+                            text = if (allSelected) "DESELECT ALL" else "SELECT ALL",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.accent,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier
+                                .clip(RectangleShape)
+                                .clickable {
+                                    selectedFunctions = if (allSelected) emptySet() else distinctFunctions.toSet()
+                                }
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(distinctFunctions) { funcId ->
+                            val isSelected = funcId in selectedFunctions
+                            val funcTitle = MaritimeCompetenceRegistry.getFunctionTitle(funcId, selectedTrack)
+                            val permitItems = MaritimeCompetenceRegistry.getPermitItemsForFunction(funcId, selectedTrack)
+
+                            Surface(
+                                shape = RectangleShape,
+                                color = if (isSelected) {
+                                    if (isDarkMode) Color(0xFF0F172A) else Color(0xFFDCFCE7)
+                                } else {
+                                    colors.surface2
+                                },
+                                border = BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                    color = if (isSelected) {
+                                        if (isDarkMode) Color(0xFF22C55E) else Color(0xFF15803D)
+                                    } else {
+                                        colors.border
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RectangleShape)
+                                    .clickable {
+                                        selectedFunctions = if (isSelected) {
+                                            selectedFunctions - funcId
+                                        } else {
+                                            selectedFunctions + funcId
+                                        }
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .clip(RectangleShape)
+                                            .background(
+                                                if (isSelected) {
+                                                    if (isDarkMode) Color(0xFF22C55E) else Color(0xFF15803D)
+                                                } else {
+                                                    Color.Transparent
+                                                }
+                                            )
+                                            .border(
+                                                width = 1.5.dp,
+                                                color = if (isSelected) {
+                                                    if (isDarkMode) Color(0xFF22C55E) else Color(0xFF15803D)
+                                                } else {
+                                                    colors.muted
+                                                },
+                                                shape = RectangleShape
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = funcId.uppercase(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (isSelected) {
+                                                    if (isDarkMode) Color(0xFF4ADE80) else Color(0xFF14532D)
+                                                } else {
+                                                    colors.foreground
+                                                },
+                                                fontSize = 11.sp,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                            Text(
+                                                text = "$permitItems items",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = colors.muted,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = funcTitle,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = colors.foreground,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                MianButton(
+                    onClick = {
+                        if (selectedFunctions.isNotEmpty()) {
+                            showMockFunctionSelectionDialog = false
+                            viewModel.startTimedMockExam(selectedTrack, selectedFunctions)
+                        }
+                    },
+                    enabled = selectedFunctions.isNotEmpty(),
+                    accent = true
+                ) {
+                    Text("PROCEED", fontWeight = FontWeight.ExtraBold)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showMockFunctionSelectionDialog = false },
                     shape = RectangleShape,
                     border = BorderStroke(1.dp, colors.border)
                 ) {
@@ -659,6 +976,7 @@ fun HomeScreen(
             }
         )
     }
+    }
 }
 
 @Composable
@@ -672,12 +990,13 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp)
+                .padding(16.dp)
         ) {
+            // Tier 1: Authority Spec & Single Status Pill
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
                     shape = RectangleShape,
@@ -686,12 +1005,12 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
                 ) {
                     Text(
                         text = "STCW '78 AS AMENDED",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = colors.foreground,
-                        fontSize = 10.sp,
-                        letterSpacing = 1.2.sp,
+                        fontSize = 9.5.sp,
+                        letterSpacing = 1.sp,
                         textAlign = TextAlign.Start
                     )
                 }
@@ -712,34 +1031,17 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
                 )
             }
 
-            if (isUnlocked && !timeLeft.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    shape = RectangleShape,
-                    color = colors.surface2,
-                    border = BorderStroke(1.dp, androidx.compose.ui.graphics.Color(0xFF00E599).copy(alpha = 0.5f))
-                ) {
-                    Text(
-                        text = "⏱ TIME LEFT: $timeLeft",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = androidx.compose.ui.graphics.Color(0xFF00E599),
-                        fontSize = 10.sp,
-                        letterSpacing = 0.5.sp
-                    )
-                }
-            }
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Spacer(modifier = Modifier.height(14.dp))
-
+            // Tier 2: Category Eyebrow & Authoritative Track Title
             Text(
-                text = "HYPERION",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = colors.foreground,
-                letterSpacing = (-0.8).sp,
-                textAlign = TextAlign.Start
+                text = "HYPERION MARITIME LICENSURE",
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                color = colors.muted,
+                fontSize = 9.sp,
+                letterSpacing = 1.2.sp
             )
 
             Spacer(modifier = Modifier.height(2.dp))
@@ -753,33 +1055,108 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
                     Track.ENGINE_MGT -> "ENGINE MANAGEMENT REVIEWER"
                 },
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = colors.accent,
+                fontWeight = FontWeight.Black,
+                color = colors.foreground,
+                fontSize = 15.sp,
                 letterSpacing = (-0.2).sp,
                 textAlign = TextAlign.Start
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
+            // Tier 3: Structured Metadata Chips
             val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
             val qCountStr = "%,d".format(qCount)
             val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).size
+            val functionsStr = when (track) {
+                Track.DECK_OIC_NW -> "FUNCTIONS 1-3"
+                Track.GMDSS_GOC -> "GOC DISTRESS"
+                Track.DECK_MGT -> "FUNCTIONS 1-3"
+                else -> "FUNCTIONS 1-4"
+            }
 
-            Text(
-                text = when (track) {
-                    Track.DECK_OIC_NW -> "Functions 1, 2, and 3 • $qCountStr total questions across $compCount competencies • Bloom's taxonomy weighted scoring"
-                    Track.GMDSS_GOC -> "GOC Standard Radio Equipment, Distress & Safety Procedures • $qCountStr total questions available"
-                    Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT -> {
-                        val funcList = if (track == Track.DECK_MGT) "1, 2, and 3" else "1, 2, 3, and 4"
-                        "Functions $funcList • $qCountStr total questions across $compCount competencies • Bloom's taxonomy weighted scoring"
-                    }
-                },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.muted,
-                lineHeight = 18.sp,
-                textAlign = TextAlign.Start
-            )
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RectangleShape,
+                    color = colors.surface2,
+                    border = BorderStroke(1.dp, colors.border.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = "$qCountStr ITEMS",
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.foreground,
+                        fontSize = 8.5.sp,
+                        maxLines = 1
+                    )
+                }
+
+                Surface(
+                    shape = RectangleShape,
+                    color = colors.surface2,
+                    border = BorderStroke(1.dp, colors.border.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = "$compCount COMPETENCIES",
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.foreground,
+                        fontSize = 8.5.sp,
+                        maxLines = 1
+                    )
+                }
+
+                Surface(
+                    shape = RectangleShape,
+                    color = colors.surface2,
+                    border = BorderStroke(1.dp, colors.border.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = functionsStr,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.foreground,
+                        fontSize = 8.5.sp,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            // Tier 4: Clean Expiry Footer (if unlocked with time remaining)
+            if (isUnlocked && !timeLeft.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = "Access Pass: $timeLeft",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = colors.accent,
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.4.sp
+                    )
+                }
+            }
         }
     }
 }
@@ -888,297 +1265,148 @@ private fun StatColumn(
 }
 
 @Composable
-private fun ModeLauncherCard(
+private fun CompactModeBox(
     title: String,
     subtitle: String,
     badge: String,
     badgeColor: Color,
     icon: ImageVector,
     accentColor: Color,
-    isLuminous: Boolean = false,
     isLocked: Boolean = false,
     onClick: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
-    val isDark = colors.isDark
 
-    if (isLuminous) {
-        val infiniteTransition = rememberInfiniteTransition(label = "luminousTransition")
-
-        val glowAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.45f,
-            targetValue = 0.95f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1500, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "glowAlpha"
-        )
-
-        val shimmerOffset by infiniteTransition.animateFloat(
-            initialValue = -300f,
-            targetValue = 1200f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(2200, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "shimmer"
-        )
-
-        val mintAura1 = if (isDark) Color(0xFF10B981) else Color(0xFF15803D)
-        val cyanAura2 = if (isDark) Color(0xFF06D6A0) else Color(0xFF16A34A)
-        val brightCyanHighlight = if (isDark) Color(0xFF00FFA3) else Color(0xFF15803D)
-        val baseSurface = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9)
-
-        val sweepBorderBrush = if (isDark) {
-            Brush.linearGradient(
-                colors = listOf(
-                    mintAura1.copy(alpha = 0.6f),
-                    brightCyanHighlight.copy(alpha = glowAlpha),
-                    cyanAura2.copy(alpha = 0.7f),
-                    brightCyanHighlight.copy(alpha = 0.9f),
-                    mintAura1.copy(alpha = 0.6f)
-                ),
-                start = Offset(shimmerOffset, 0f),
-                end = Offset(shimmerOffset + 400f, 200f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(152.dp)
+            .clip(RectangleShape)
+            .background(colors.surface)
+            .border(
+                1.dp,
+                if (isLocked) colors.border.copy(alpha = 0.5f) else colors.border,
+                RectangleShape
             )
-        } else {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFF15803D),
-                    Color(0xFF16A34A),
-                    Color(0xFF15803D)
-                )
-            )
-        }
-
-        val containerSurfaceBrush = if (isDark) {
-            Brush.linearGradient(
-                colors = listOf(
-                    baseSurface,
-                    Color(0xFF14221C),
-                    baseSurface
-                ),
-                start = Offset(shimmerOffset * 0.5f, 0f),
-                end = Offset(shimmerOffset * 0.5f + 500f, 200f)
-            )
-        } else {
-            Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFFF1F5F9),
-                    Color(0xFFE2E8F0),
-                    Color(0xFFF1F5F9)
-                )
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            contentAlignment = Alignment.Center
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            if (isDark) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .blur(20.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                colors = listOf(
-                                    mintAura1.copy(alpha = glowAlpha * 0.55f),
-                                    cyanAura2.copy(alpha = glowAlpha * 0.70f),
-                                    brightCyanHighlight.copy(alpha = glowAlpha * 0.55f)
-                                )
-                            ),
-                            shape = RectangleShape
-                        )
-                )
-            }
-
-            MianRuleCard(
-                ruleColor = if (isDark) brightCyanHighlight else Color(0xFF15803D),
-                containerColor = Color.Transparent,
-                border = BorderStroke(1.5.dp, sweepBorderBrush),
-                onClick = onClick
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(containerSurfaceBrush)
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(RectangleShape)
-                                    .background(if (isDark) Color(0xFF064E3B).copy(alpha = 0.7f) else Color(0xFFE2E8F0))
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isDark) brightCyanHighlight.copy(alpha = glowAlpha) else Color(0xFF15803D),
-                                        shape = RectangleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = title,
-                                    tint = if (isDark) brightCyanHighlight else Color(0xFF15803D),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Text(
-                                text = title.uppercase(),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isDark) Color.White else Color(0xFF0F172A),
-                                letterSpacing = (-0.1).sp,
-                                textAlign = TextAlign.Start
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Surface(
-                            shape = RectangleShape,
-                            color = if (isDark) mintAura1.copy(alpha = 0.2f) else Color(0xFF15803D).copy(alpha = 0.12f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isDark) brightCyanHighlight.copy(alpha = 0.6f) else Color(0xFF15803D)
-                            )
-                        ) {
-                            Text(
-                                text = badge,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isDark) brightCyanHighlight else Color(0xFF15803D),
-                                fontSize = 9.sp,
-                                letterSpacing = 0.8.sp
-                            )
-                        }
-                    }
-
-                    if (subtitle.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Text(
-                            text = subtitle,
-                            modifier = Modifier.fillMaxWidth(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isDark) Color(0xFFA7F3D0) else Color(0xFF15803D),
-                            lineHeight = 18.sp,
-                            textAlign = TextAlign.Start
-                        )
-                    }
-                }
-            }
-        }
-    } else {
-        val containerBg = if (isLocked) {
-            if (isDark) Color(0xFF0B0F17) else Color(0xFFE2E8F0)
-        } else {
-            colors.surface
-        }
-        val ruleBorder = if (isLocked) {
-            if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1)
-        } else {
-            colors.border
-        }
-        val cardIcon = if (isLocked) Icons.Default.Lock else icon
-        val iconTint = if (isLocked) colors.accent else accentColor
-
-        MianRuleCard(
-            ruleColor = ruleBorder,
-            containerColor = containerBg,
-            onClick = onClick
-        ) {
-            Column(
+            // Top Accent Line (Store-style aesthetic)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .height(3.dp)
+                    .background(if (isLocked) colors.muted.copy(alpha = 0.35f) else accentColor)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Header Row: Left has Icon + Title, Right has anchored Badge Tag
+                // Top row: Icon box + Monospace Badge
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RectangleShape)
-                                .background(if (isLocked) (if (isDark) Color(0xFF1E293B) else Color(0xFFCBD5E1)) else colors.surface2)
-                                .border(1.dp, ruleBorder),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = cardIcon,
-                                contentDescription = title,
-                                tint = iconTint,
-                                modifier = Modifier.size(20.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(
+                                if (isLocked) colors.surface2 else accentColor.copy(alpha = 0.12f),
+                                RectangleShape
                             )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Text(
-                            text = title.uppercase(),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (isLocked) (if (isDark) colors.muted else Color(0xFF334155)) else colors.foreground,
-                            letterSpacing = (-0.1).sp,
-                            textAlign = TextAlign.Start
+                            .border(
+                                1.dp,
+                                if (isLocked) colors.border.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.3f),
+                                RectangleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isLocked) Icons.Default.Lock else icon,
+                            contentDescription = null,
+                            tint = if (isLocked) colors.muted else accentColor,
+                            modifier = Modifier.size(15.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Surface(
-                        shape = RectangleShape,
-                        color = if (isLocked) (if (isDark) colors.surface2 else Color(0xFFCBD5E1).copy(alpha = 0.5f)) else colors.surface2,
-                        border = BorderStroke(1.dp, ruleBorder)
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (isLocked) colors.surface2 else badgeColor.copy(alpha = 0.12f),
+                                RectangleShape
+                            )
+                            .border(
+                                1.dp,
+                                if (isLocked) colors.border.copy(alpha = 0.4f) else badgeColor.copy(alpha = 0.35f),
+                                RectangleShape
+                            )
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = badge,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = badgeColor,
-                            fontSize = 9.sp,
-                            letterSpacing = 0.8.sp
+                            color = if (isLocked) colors.muted else badgeColor,
+                            fontSize = 8.5.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp,
+                            maxLines = 1
                         )
                     }
                 }
 
-                // Description Column placed below the header row with Modifier.fillMaxWidth()
-                if (subtitle.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                // Middle: Mode Title and Subtitle
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isLocked) colors.muted else colors.foreground,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Text(
                         text = subtitle,
-                        modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isLocked) (if (isDark) colors.muted.copy(alpha = 0.7f) else Color(0xFF475569)) else colors.muted,
-                        lineHeight = 18.sp,
-                        textAlign = TextAlign.Start
+                        color = colors.muted,
+                        fontSize = 9.5.sp,
+                        lineHeight = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                // Bottom: Action status indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (isLocked) "REQUIRES UPGRADES" else "SELECT MODE",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isLocked) colors.muted.copy(alpha = 0.8f) else accentColor.copy(alpha = 0.85f),
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Icon(
+                        imageVector = if (isLocked) Icons.Default.Lock else Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = if (isLocked) colors.muted.copy(alpha = 0.6f) else accentColor,
+                        modifier = Modifier.size(11.dp)
                     )
                 }
             }
