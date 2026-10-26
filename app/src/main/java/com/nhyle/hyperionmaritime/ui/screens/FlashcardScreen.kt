@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.DifficultyBadge
@@ -82,8 +83,15 @@ fun FlashcardScreen(
     var currentIndex by remember { mutableIntStateOf(0) }
     var isFlipped by remember { mutableStateOf(false) }
 
-    val trackQuestions = remember(selectedTrack) {
-        MaritimeQuestionBank.getQuestionsByTrack(selectedTrack, isProUnlocked = true)
+    val activeQuizMode by viewModel.activeQuizMode.collectAsState()
+    val activeQuestions by viewModel.activeQuestions.collectAsState()
+
+    val trackQuestions = remember(selectedTrack, activeQuizMode, activeQuestions) {
+        if (activeQuizMode == QuizMode.MISTAKES && activeQuestions.isNotEmpty()) {
+            activeQuestions
+        } else {
+            MaritimeQuestionBank.getQuestionsByTrack(selectedTrack, isProUnlocked = true)
+        }
     }
 
     val filteredQuestions = remember(trackQuestions, selectedComp) {

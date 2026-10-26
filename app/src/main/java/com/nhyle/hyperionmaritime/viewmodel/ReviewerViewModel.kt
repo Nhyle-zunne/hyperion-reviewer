@@ -2571,6 +2571,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startMistakesConfiguredPractice(
+        competenceId: String? = null,
         deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
         startItem: Int = 1,
         endItem: Int? = null,
@@ -2588,7 +2589,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _activeDrillDeliveryMode.value = deliveryMode
         _activeQuizMode.value = QuizMode.MISTAKES
         _activeFunctionId.value = null
-        _activeCompetenceId.value = "MISTAKES"
+        _activeCompetenceId.value = competenceId ?: "MISTAKES"
         _activePartLabel.value = null
         _currentQuestionIndex.value = 0
         _showSubmitDialog.value = false
@@ -2597,7 +2598,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         activeEvaluationAttemptCommittedId = null
 
         val currentTrack = _selectedTrack.value
-        val trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+        var trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+        if (competenceId != null) {
+            trackMistakes = trackMistakes.filter { entry ->
+                entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
+            }
+        }
         var questions = trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
         }
@@ -2654,6 +2660,81 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         autoSaveCurrentSession()
         _currentScreen.value = Screen.Quiz
         startStudyTrackingForCurrentSession()
+    }
+
+    fun startMistakesMockExam(competenceId: String? = null) {
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        currentActiveSessionId = java.util.UUID.randomUUID().toString()
+        resumingRecordId = null
+        _isExamSubmitted.value = false
+        _isCrpMode.value = false
+        _activeDrillDeliveryMode.value = DrillDeliveryMode.STANDARD
+        _activeQuizMode.value = QuizMode.MOCK_EXAM
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = competenceId ?: "MISTAKES"
+        _activePartLabel.value = null
+        _currentQuestionIndex.value = 0
+        _showSubmitDialog.value = false
+        _isPaletteOpen.value = false
+        _isShuffled.value = true
+        activeEvaluationAttemptCommittedId = null
+
+        val currentTrack = _selectedTrack.value
+        var trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+        if (competenceId != null) {
+            trackMistakes = trackMistakes.filter { entry ->
+                entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
+            }
+        }
+        val questions = trackMistakes.map { entry ->
+            MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
+        }.shuffled()
+
+        if (questions.isEmpty()) return
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _firstAttemptStatus.value = emptyMap()
+        _timeRemainingSeconds.value = questions.size * 60
+        _selectedChoiceIndex.value = null
+        _isAnswerEvaluated.value = false
+
+        autoSaveCurrentSession()
+        _currentScreen.value = Screen.MockHub
+        startStudyTrackingForCurrentSession()
+    }
+
+    fun startMistakesFlashcards(competenceId: String? = null) {
+        timerJob?.cancel()
+        purgeExamSessionFromBackStack()
+        currentActiveSessionId = java.util.UUID.randomUUID().toString()
+        resumingRecordId = null
+        _isExamSubmitted.value = false
+        _isCrpMode.value = false
+        _activeDrillDeliveryMode.value = DrillDeliveryMode.STANDARD
+        _activeQuizMode.value = QuizMode.MISTAKES
+        _activeFunctionId.value = null
+        _activeCompetenceId.value = competenceId ?: "MISTAKES"
+        _activePartLabel.value = null
+        _currentQuestionIndex.value = 0
+
+        val currentTrack = _selectedTrack.value
+        var trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
+        if (competenceId != null) {
+            trackMistakes = trackMistakes.filter { entry ->
+                entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
+            }
+        }
+        val questions = trackMistakes.map { entry ->
+            MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
+        }
+
+        if (questions.isEmpty()) return
+
+        _activeQuestions.value = questions
+        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _currentScreen.value = Screen.Flashcards
     }
 
     fun exitQuizToHome() {

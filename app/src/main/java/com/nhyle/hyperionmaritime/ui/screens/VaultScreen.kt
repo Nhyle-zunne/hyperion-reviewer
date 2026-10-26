@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
@@ -27,7 +29,10 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -56,6 +61,7 @@ import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.local.MistakeEntry
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuizMode
+import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
@@ -83,26 +89,40 @@ fun VaultScreen(
     var showClearDialog by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
+    var expandedCompetencies by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
-    val questionsToRedeem = trackMistakes.map { entry ->
-        MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-    }
-
-    val filteredMistakes = remember(trackMistakes, searchQuery) {
+    val allMistakes = mistakeEntries
+    val filteredMistakes = remember(allMistakes, searchQuery) {
         if (searchQuery.isBlank()) {
-            trackMistakes
+            allMistakes
         } else {
             val query = searchQuery.trim().lowercase()
-            trackMistakes.filter { entry ->
+            allMistakes.filter { entry ->
                 val q = MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
                 q.questionText.lowercase().contains(query) ||
                 q.id.lowercase().contains(query) ||
                 q.functionId.lowercase().contains(query) ||
                 q.competenceId.lowercase().contains(query) ||
+                entry.track.lowercase().contains(query) ||
                 q.options.any { it.lowercase().contains(query) } ||
                 q.explanation.lowercase().contains(query)
             }
+        }
+    }
+
+    val groupedByTrack = remember(filteredMistakes) {
+        filteredMistakes.groupBy { entry ->
+            val trackStr = entry.track.trim()
+            Track.entries.find {
+                it.name.equals(trackStr, ignoreCase = true) ||
+                it.shortName.equals(trackStr, ignoreCase = true) ||
+                it.title.equals(trackStr, ignoreCase = true)
+            } ?: entry.question.track
+        }.mapValues { (_, entries) ->
+            entries.groupBy { entry ->
+                val comp = entry.competenceId.ifBlank { entry.question.competenceId }.trim()
+                if (comp.isBlank()) "GENERAL" else comp
+            }.toSortedMap()
         }
     }
 
@@ -165,15 +185,15 @@ fun VaultScreen(
     ) {
         MaritimeTopBar(
             title = "MISTAKES NOTEBOOK (VAULT)",
-            subtitle = "${trackMistakes.size} ITEMS TO REDEEM",
+            subtitle = "${allMistakes.size} ITEMS TO REDEEM",
             showBackButton = false,
             onMenuClick = onOpenDrawer,
-            onClearAllClick = if (trackMistakes.isNotEmpty()) {
+            onClearAllClick = if (allMistakes.isNotEmpty()) {
                 { showClearDialog = true }
             } else null
         )
 
-        if (trackMistakes.isEmpty()) {
+        if (allMistakes.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -227,7 +247,7 @@ fun VaultScreen(
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Text(
-                                text = "REDEMPTION QUEUE (${trackMistakes.size} QUESTIONS)",
+                                text = "REDEMPTION QUEUE (${allMistakes.size} QUESTIONS)",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = colors.foreground,
@@ -240,27 +260,21 @@ fun VaultScreen(
                                 color = colors.muted
                             )
                             Spacer(modifier = Modifier.height(14.dp))
-                            MianButton(
+                            OutlinedButton(
                                 onClick = {
-                                    if (questionsToRedeem.isNotEmpty()) {
-                                        viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true))
+                                    if (allMistakes.isNotEmpty()) {
+                                        viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = null))
                                     }
                                 },
-                                accent = true,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RectangleShape,
+                                border = BorderStroke(1.dp, colors.accent),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "START VAULT REDEMPTION PRACTICE",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp,
-                                    letterSpacing = 1.sp
-                                )
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp), tint = colors.accent)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("PRACTICE ALL MISTAKES (${allMistakes.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -314,7 +328,7 @@ fun VaultScreen(
                 }
 
                 item {
-                    MianSectionHeader(title = if (searchQuery.isBlank()) "CURRENT VAULT ITEMS" else "SEARCH RESULTS (${filteredMistakes.size})")
+                    MianSectionHeader(title = if (searchQuery.isBlank()) "MISTAKES BY TRACK & COMPETENCE" else "SEARCH RESULTS (${filteredMistakes.size})")
                 }
 
                 if (filteredMistakes.isEmpty()) {
@@ -334,14 +348,145 @@ fun VaultScreen(
                         }
                     }
                 } else {
-                    items(filteredMistakes) { mistake ->
-                        val question = MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == mistake.questionId } ?: mistake.question
-                        VaultMistakeCard(
-                            mistake = mistake,
-                            question = question,
-                            requiredPasses = requiredMistakePasses,
-                            onRemove = { viewModel.removeMistake(mistake.questionId) }
-                        )
+                    groupedByTrack.forEach { (track, compMap) ->
+                        val trackTotalMistakes = compMap.values.sumOf { it.size }
+                        item(key = "track_header_${track.name}") {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp, bottom = 2.dp),
+                                shape = RectangleShape,
+                                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                                border = BorderStroke(1.5.dp, colors.accent)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.title.uppercase(),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.foreground,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = "$trackTotalMistakes mistake${if (trackTotalMistakes > 1) "s" else ""} in this track",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.muted
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = {
+                                            viewModel.setTrack(track)
+                                            viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = null))
+                                        },
+                                        shape = RectangleShape,
+                                        border = BorderStroke(1.dp, colors.accent),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp), tint = colors.accent)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Practice Track", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        compMap.forEach { (competenceId, mistakesInComp) ->
+                            val compKey = "${track.name}_$competenceId"
+                            val isCompExpanded = compKey in expandedCompetencies || searchQuery.isNotBlank()
+                            item(key = "comp_header_$compKey") {
+                                Card(
+                                    onClick = {
+                                        expandedCompetencies = if (compKey in expandedCompetencies) {
+                                            expandedCompetencies - compKey
+                                        } else {
+                                            expandedCompetencies + compKey
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 6.dp, bottom = 4.dp),
+                                    shape = RectangleShape,
+                                    colors = CardDefaults.cardColors(containerColor = colors.surface2),
+                                    border = BorderStroke(1.dp, colors.border)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            val trackPrefix = when (track) {
+                                                Track.DECK_OIC_NW -> "OIC-NW"
+                                                Track.GMDSS_GOC -> "GMDSS"
+                                                Track.ENGINE_OIC_EW -> "OIC-EW"
+                                                Track.DECK_MGT -> "DECK-MGT"
+                                                Track.ENGINE_MGT -> "ENGINE-MGT"
+                                            }
+                                            val compCode = if (competenceId.uppercase().startsWith("C")) competenceId.uppercase() else "C$competenceId"
+                                            Text(
+                                                text = "$trackPrefix $compCode",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = colors.foreground,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                            Text(
+                                                text = "${mistakesInComp.size} mistake${if (mistakesInComp.size > 1) "s" else ""} to redeem",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = colors.muted
+                                            )
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    viewModel.setTrack(track)
+                                                    viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = competenceId))
+                                                },
+                                                shape = RectangleShape,
+                                                border = BorderStroke(1.dp, colors.accent),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                            ) {
+                                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp), tint = colors.accent)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Practice", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            }
+                                            Icon(
+                                                imageVector = if (isCompExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                contentDescription = if (isCompExpanded) "Collapse" else "Expand",
+                                                tint = colors.foreground,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isCompExpanded) {
+                                items(mistakesInComp, key = { it.questionId }) { mistake ->
+                                    val question = MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == mistake.questionId } ?: mistake.question
+                                    VaultMistakeCard(
+                                        mistake = mistake,
+                                        question = question,
+                                        requiredPasses = requiredMistakePasses,
+                                        onRemove = { viewModel.removeMistake(mistake.questionId) }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 

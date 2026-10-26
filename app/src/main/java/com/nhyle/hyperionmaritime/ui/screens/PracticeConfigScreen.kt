@@ -199,7 +199,17 @@ fun PracticeConfigScreen(
             val list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
             (if (isTrackLicensed) list.size else minOf(list.size, 5)).coerceAtLeast(1)
         } else if (isMistakesMode) {
-            val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
+            var trackMistakes = mistakeEntries.filter { entry ->
+                entry.track.equals(selectedTrack.name, ignoreCase = true) ||
+                entry.track.equals(selectedTrack.shortName, ignoreCase = true) ||
+                entry.track.equals(selectedTrack.title, ignoreCase = true) ||
+                entry.question.track == selectedTrack
+            }
+            if (competenceId != null) {
+                trackMistakes = trackMistakes.filter { entry ->
+                    entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
+                }
+            }
             val questions = trackMistakes.mapNotNull { entry ->
                 MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId }
             }
@@ -1718,6 +1728,7 @@ fun PracticeConfigScreen(
                             )
                         } else if (isMistakesMode) {
                             viewModel.startMistakesConfiguredPractice(
+                                competenceId = competenceId,
                                 deliveryMode = selectedDeliveryFormat,
                                 startItem = launchStart,
                                 endItem = launchEnd,
