@@ -91,6 +91,16 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                     )
                 }
 
+                if (account.activePlaySubscriptionsLinked > 0) {
+                    Text(
+                        text = "GOOGLE PLAY SUBSCRIPTIONS LINKED: ${account.activePlaySubscriptionsLinked}",
+                        color = colors.accent,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.7.sp
+                    )
+                }
+
                 account.message?.takeIf { it.isNotBlank() }?.let { status ->
                     Text(
                         text = status,

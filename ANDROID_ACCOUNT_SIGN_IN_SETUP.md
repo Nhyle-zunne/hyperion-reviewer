@@ -26,3 +26,12 @@ For CI, set HYPERION_GOOGLE_WEB_CLIENT_ID as a GitHub Actions secret/environment
 ## Before releasing to Google Play
 
 Review the Play Console Data safety answers and Privacy Policy to disclose account sign-in and processing/storage of account email, authentication session, and account-linked license entitlement data. Never ship a Supabase service-role key or a Google OAuth client secret in the Android app.
+
+
+## Existing Google Play subscription linking
+
+Once the matching backend branch is deployed and configured, the signed-in Android app re-queries owned Play subscriptions and submits each purchase token to the authenticated `link-google-play-subscription` Edge Function. The function verifies tokens with Google's `purchases.subscriptionsv2.get` endpoint before creating a separate Google Play entitlement; it never overwrites a website checkout or admin-issued entitlement.
+
+The backend needs the `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` Supabase Edge Function secret containing a service account JSON that is authorized for the Android Publisher API in Play Console. Do not put that JSON, private key or OAuth client secret in the Android app. The backend migration must be applied and the Edge Function deployed before this part can work.
+
+Linking is an explicit authenticated account association: existing users open the Android app on the Google Play account that owns the subscription, sign into their Hyperion account, then tap Sync. A Play purchase already linked to another Hyperion account is rejected rather than silently moved.

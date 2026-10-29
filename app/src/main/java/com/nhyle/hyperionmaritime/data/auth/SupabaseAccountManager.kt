@@ -14,6 +14,7 @@ import androidx.security.crypto.MasterKey
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.nhyle.hyperionmaritime.BuildConfig
+import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,8 @@ data class SupabaseAccountState(
     val email: String? = null,
     val isLoading: Boolean = false,
     val message: String? = null,
-    val activeWebsiteLicenses: Int = 0
+    val activeWebsiteLicenses: Int = 0,
+    val activePlaySubscriptionsLinked: Int = 0
 )
 
 private data class SupabaseSession(
@@ -182,20 +184,31 @@ object SupabaseAccountManager {
         try {
             val result = withContext(Dispatchers.IO) {
                 val freshSession = getFreshSession(context, initialSession)
+                val playLinkResult = syncGooglePlayPurchases(context, freshSession)
                 val licenseCount = syncEntitlements(context, freshSession)
-                freshSession to licenseCount
+                Triple(freshSession, licenseCount, playLinkResult)
             }
             val session = result.first
             val count = result.second
+            val playLinks = result.third
+            val messageParts = mutableListOf<String>()
+            messageParts += if (count == 0) {
+                "No active website or linked Google Play licenses were found for this account."
+            } else {
+                "Synced $count active license track${if (count == 1) "" else "s"}."
+            }
+            if (playLinks.activeCount > 0) {
+                messageParts += "Verified ${playLinks.activeCount} Google Play subscription${if (playLinks.activeCount == 1) "" else "s"} for this account."
+            }
+            if (playLinks.hadFailures) {
+                messageParts += "Some Google Play subscriptions could not be linked yet. Existing app access is unchanged; try Sync again after the server is configured."
+            }
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
                 isLoading = false,
                 activeWebsiteLicenses = count,
-                message = if (count == 0) {
-                    "No active website licenses were found for this account."
-                } else {
-                    "Synced $count active website license${if (count == 1) "" else "s"}."
-                }
+                activePlaySubscriptionsLinked = playLinks.activeCount,
+                message = messageParts.joinToString(" ")
             )
         } catch (_: Exception) {
             _state.value = _state.value.copy(
@@ -206,8 +219,38 @@ object SupabaseAccountManager {
         }
     }
 
-    private fun exchangeGoogleIdToken(idToken: String, rawNonce: String): SupabaseSession {
-        val payload = JSONObject()
+    private data class PlayLinkSyncResult(val activeCount: Int, val hadFailures: Boolean)
+
+    private suspend fun syncGooglePlayPurchases(context: Context, session: SupabaseSession): PlayLinkSyncResult {
+        return try {
+            val billing = BillingManager.getInstance(context.applicationContext)
+            billing.queryPurchasesAsync()
+            val purchases = billing.getOwnedPurchasesForAccountLinking()
+            var activeCount = 0
+            var hadFailures = false
+            for (purchase in purchases) {
+                try {
+                    val body = requestText(
+                        method = "POST",
+                        url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/link-google-play-subscription",
+                        accessToken = session.accessToken,
+                        jsonBody = JSONObject().put("purchaseToken", purchase.purchaseToken)
+                    )
+                    val response = JSONObject(body)
+                    if (response.optBoolean("active", false)) activeCount++
+                } catch (_: Exception) {
+                    // An unconfigured backend or a token already linked to another user must not
+                    // block website entitlement sync or alter existing Google Play access.
+                    hadFailures = true
+                }
+            }
+            PlayLinkSyncResult(activeCount, hadFailures)
+        } catch (_: Exception) {
+            PlayLinkSyncResult(activeCount = 0, hadFailures = true)
+        }
+    }
+
+    private fun exchangeGoogleIdToken(idToken: String, rawNonce: String): SupabaseSession {        val payload = JSONObject()
             .put("provider", "google")
             .put("id_token", idToken)
             .put("nonce", rawNonce)
@@ -233,35 +276,40 @@ object SupabaseAccountManager {
     }
 
     private fun syncEntitlements(context: Context, session: SupabaseSession): Int {
-        val url = BuildConfig.SUPABASE_URL.trimEnd('/') +
-            "/rest/v1/entitlements?select=track_id,expires_at,status&status=eq.active"
-        val response = requestText(
+        val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/"
+        val websiteRows = JSONArray(requestText(
             method = "GET",
-            url = url,
+            url = baseUrl + "entitlements?select=track_id,expires_at,status&status=eq.active",
             accessToken = session.accessToken
-        )
-        val rows = JSONArray(response)
+        ))
+        val playRows = JSONArray(requestText(
+            method = "GET",
+            url = baseUrl + "google_play_entitlements?select=track_id,expires_at,status&status=eq.active",
+            accessToken = session.accessToken
+        ))
         val now = System.currentTimeMillis()
         val expiryByTrack = Track.values().associateWith { 0L }.toMutableMap()
 
-        for (index in 0 until rows.length()) {
-            val row = rows.optJSONObject(index) ?: continue
-            if (row.optString("status") != "active") continue
-            val track = when (row.optString("track_id")) {
-                "DECK_OIC_NW" -> Track.DECK_OIC_NW
-                "GMDSS_GOC" -> Track.GMDSS_GOC
-                "ENGINE_OIC_EW" -> Track.ENGINE_OIC_EW
-                "DECK_MGT" -> Track.DECK_MGT
-                "ENGINE_MGT" -> Track.ENGINE_MGT
-                else -> null
-            } ?: continue
-            val expiryText = row.optString("expires_at")
-            if (expiryText.isBlank() || expiryText == "null") continue
-            val expiry = try { parseEpochMillis(expiryText) } catch (_: Exception) { continue }
-            if (expiry > now) {
-                expiryByTrack[track] = maxOf(expiryByTrack[track] ?: 0L, expiry)
+        fun applyRows(rows: JSONArray) {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                if (row.optString("status") != "active") continue
+                val track = when (row.optString("track_id")) {
+                    "DECK_OIC_NW" -> Track.DECK_OIC_NW
+                    "GMDSS_GOC" -> Track.GMDSS_GOC
+                    "ENGINE_OIC_EW" -> Track.ENGINE_OIC_EW
+                    "DECK_MGT" -> Track.DECK_MGT
+                    "ENGINE_MGT" -> Track.ENGINE_MGT
+                    else -> null
+                } ?: continue
+                val expiryText = row.optString("expires_at")
+                if (expiryText.isBlank() || expiryText == "null") continue
+                val expiry = try { parseEpochMillis(expiryText) } catch (_: Exception) { continue }
+                if (expiry > now) expiryByTrack[track] = maxOf(expiryByTrack[track] ?: 0L, expiry)
             }
         }
+        applyRows(websiteRows)
+        applyRows(playRows)
 
         if (!LicenseManager.saveAccountEntitlements(context, session.userId, expiryByTrack)) {
             throw IllegalStateException("Could not securely cache account licenses on this device.")
