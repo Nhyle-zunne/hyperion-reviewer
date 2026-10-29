@@ -98,9 +98,10 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -s "$APK"
           test -x "$APKSIGNER"
-          "$APKSIGNER" verify --print-certs "$APK" \
-            | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' \
-            | head -n 1 > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+          # apksigner writes certificate details to stderr on some SDK versions.
+          "$APKSIGNER" verify --print-certs "$APK" 2>&1 \
+            | awk -F': ' '/Signer #1 certificate SHA-1 digest:/ { print $NF; found=1; exit } END { if (!found) exit 1 }' \
+            > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
           test -s app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
 
       - name: Write test-build configuration note
