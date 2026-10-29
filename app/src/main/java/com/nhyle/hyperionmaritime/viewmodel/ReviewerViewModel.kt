@@ -717,6 +717,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 promoTick++
                 if (promoTick >= 3) {
                     promoTick = 0
+                    // Periodically recheck bounded account entitlement expiry as well as local promo state.
+                    refreshUnlockStates()
                     if (_registrationUiState.value.licenseType == "PROMO_PASS") {
                         verifyLicenseState(application, isSilent = true)
                     }
