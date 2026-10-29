@@ -91,9 +91,11 @@ object SupabaseAccountManager {
             }
 
             val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            val appContext = activity.applicationContext
             val session = withContext(Dispatchers.IO) {
                 exchangeGoogleIdToken(idToken, rawNonce).also {
-                    storeSession(activity.applicationContext, it)
+                    LicenseManager.setCurrentAccountUserId(appContext, it.userId)
+                    storeSession(appContext, it)
                 }
             }
             _state.value = SupabaseAccountState(
@@ -125,10 +127,12 @@ object SupabaseAccountManager {
             null
         }
         if (saved == null) {
+            LicenseManager.setCurrentAccountUserId(appContext, null)
             _state.value = SupabaseAccountState()
             return
         }
 
+        LicenseManager.setCurrentAccountUserId(appContext, saved.userId)
         _state.value = SupabaseAccountState(
             email = saved.email.ifBlank { null },
             isLoading = false
@@ -259,7 +263,7 @@ object SupabaseAccountManager {
             }
         }
 
-        if (!LicenseManager.saveAccountEntitlements(context, expiryByTrack)) {
+        if (!LicenseManager.saveAccountEntitlements(context, session.userId, expiryByTrack)) {
             throw IllegalStateException("Could not securely cache account licenses on this device.")
         }
         return expiryByTrack.values.count { it > now }

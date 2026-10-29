@@ -175,6 +175,8 @@ object LicenseManager {
 
     private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
     private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
+    private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
+    private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
     private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
     private const val ACCOUNT_OFFLINE_GRACE_MS = 72L * 60L * 60L * 1000L
     @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
@@ -306,6 +308,9 @@ object LicenseManager {
 
     private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
         val prefs = accountEntitlementPreferences(context) ?: return false
+        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
+        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
         val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
         val now = System.currentTimeMillis()
         if (syncedAt <= 0L || now < syncedAt - 5L * 60L * 1000L || now - syncedAt > ACCOUNT_OFFLINE_GRACE_MS) {
@@ -315,15 +320,26 @@ object LicenseManager {
     }
 
     /** Stores active, server-read website entitlements with a bounded offline grace period. */
-    fun saveAccountEntitlements(context: Context, expiryByTrack: Map<Track, Long>): Boolean {
+    fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
+        if (userId.isBlank()) return false
         val prefs = accountEntitlementPreferences(context) ?: return false
-        val editor = prefs.edit().putLong(ACCOUNT_SYNCED_AT_KEY, System.currentTimeMillis())
+        val editor = prefs.edit()
+            .putString(ACCOUNT_OWNER_USER_ID_KEY, userId)
+            .putString(ACCOUNT_CURRENT_USER_ID_KEY, userId)
+            .putLong(ACCOUNT_SYNCED_AT_KEY, System.currentTimeMillis())
         Track.values().forEach { track ->
             editor.putLong(accountExpiryKey(track), expiryByTrack[track] ?: 0L)
         }
         editor.apply()
         refreshAccountEntitlementFlows(context)
         return true
+    }
+
+    fun setCurrentAccountUserId(context: Context, userId: String?) {
+        accountEntitlementPreferences(context)?.edit()
+            ?.putString(ACCOUNT_CURRENT_USER_ID_KEY, userId.orEmpty())
+            ?.apply()
+        refreshAccountEntitlementFlows(context)
     }
 
     fun clearAccountEntitlements(context: Context) {
