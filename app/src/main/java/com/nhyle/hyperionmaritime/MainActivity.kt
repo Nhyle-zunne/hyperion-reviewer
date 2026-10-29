@@ -254,8 +254,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel
                     )
                     is Screen.Home -> HomeScreen(
-                        viewModel = viewModel,
-                        onAccountClick = { showAccountDialog = true }
+                        viewModel = viewModel
                     )
                     is Screen.PracticeCompetenceSelect -> PracticeCompetenceSelectScreen(
                         viewModel = viewModel,
