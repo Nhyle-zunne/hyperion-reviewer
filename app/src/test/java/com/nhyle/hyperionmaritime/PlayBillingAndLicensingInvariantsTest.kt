@@ -6,6 +6,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
+import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
+import java.io.IOException
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
@@ -66,6 +68,26 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.init(context)
+    }
+
+    @Test
+    fun missingOptionalPlayEntitlementsTableDoesNotBlockWebsiteLicenseSync() {
+        assertTrue(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (404): Could not find the table 'public.google_play_entitlements' in the schema cache")
+            )
+        )
+        assertFalse(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (403): permission denied for table google_play_entitlements")
+            )
+        )
+        assertFalse(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (404): row not found")
+            )
+        )
+        assertFalse(isMissingGooglePlayEntitlementsTable(IOException("Network timeout")))
     }
 
     @Test

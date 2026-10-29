@@ -52,6 +52,19 @@ private data class SupabaseSession(
 )
 
 /**
+ * The Google Play entitlement table is an optional extension until its backend migration
+ * is released. Treat only a PostgREST "table not found" 404 for that exact table as empty;
+ * permission, session, and network errors must still fail closed.
+ */
+internal fun isMissingGooglePlayEntitlementsTable(error: Throwable): Boolean {
+    if (error !is IOException) return false
+    val message = error.message.orEmpty()
+    return message.contains("Supabase request failed (404):", ignoreCase = true) &&
+        message.contains("google_play_entitlements", ignoreCase = true) &&
+        (message.contains("table", ignoreCase = true) || message.contains("schema cache", ignoreCase = true))
+}
+
+/**
  * Optional native Google sign-in against Hyperion's existing Supabase Auth project.
  * Website entitlements are loaded with the user's JWT and remain protected by database RLS.
  */
@@ -292,11 +305,18 @@ object SupabaseAccountManager {
             url = baseUrl + "entitlements?select=track_id,expires_at,status&status=eq.active",
             accessToken = session.accessToken
         ))
-        val playRows = JSONArray(requestText(
-            method = "GET",
-            url = baseUrl + "google_play_entitlements?select=track_id,expires_at,status&status=eq.active",
-            accessToken = session.accessToken
-        ))
+        val playRows = try {
+            JSONArray(requestText(
+                method = "GET",
+                url = baseUrl + "google_play_entitlements?select=track_id,expires_at,status&status=eq.active",
+                accessToken = session.accessToken
+            ))
+        } catch (error: IOException) {
+            // Older production schemas won't have this optional table before the linking
+            // migration is released. Keep ordinary website-license sync working while the
+            // optional Google Play-linking backend is unavailable.
+            if (isMissingGooglePlayEntitlementsTable(error)) JSONArray() else throw error
+        }
         val now = System.currentTimeMillis()
         val expiryByTrack = Track.values().associateWith { 0L }.toMutableMap()
 
