@@ -71,8 +71,21 @@ The compiled release bundle will be generated at: `app/build/outputs/bundle/rele
 2. **Data Privacy & Zero Tracking:** Candidate test results, study streaks, and diagnostic records remain strictly on the local device. No advertising trackers, marketing SDKs, or external telemetry are embedded.
 3. **Google Play Policy Compliant:** Clear subscription disclosures, transparent pricing matrices, and direct Google Play subscription management workflows.
 
-The modified file list confirms the updates are in order[cite: 10]:
-* `app/build.gradle.kts` contains the `versionName = "1.0.0"` update[cite: 10].
-* `app/proguard-rules.pro` contains the closing bracket fixes[cite: 10].
-* `metadata.json` reflects the 5-track scope[cite: 10].
-* `my-upload-key.jks` is ready for release signing[cite: 10].
+## Release signing and Google Play Internal testing
+
+Release signing is fail-closed: `app/build.gradle.kts` will not package a release unless signing credentials are explicitly supplied outside source control. For a local release build, configure these values in your developer-local Gradle properties file (for example `~/.gradle/gradle.properties`) or environment variables:
+
+```properties
+KEYSTORE_PATH=/absolute/path/to/your-upload-keystore.jks
+STORE_PASSWORD=your-keystore-password
+KEY_ALIAS=upload
+KEY_PASSWORD=your-key-password
+```
+
+Never put actual values in a repository-committed file. The debug build uses Android Gradle Plugin's generated debug key; do not commit a custom debug keystore.
+
+The GitHub Actions workflow **Android internal-testing App Bundle** builds and verifies a signed `.aab` using repository Actions secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON`, and `HYPERION_GOOGLE_WEB_CLIENT_ID`. It writes the keystore only to the temporary runner directory and uploads the signed bundle as an artifact. To build the account-linking feature, select branch `feature/android-account-signin-and-web-licenses` in the workflow's **Run workflow** dropdown; this does not merge or publish that branch automatically.
+
+Signing files, Firebase configuration, exported certificates, APKs, and AABs are excluded by `.gitignore`. A file removed in a later commit can still exist in older Git history. Do not put a private keystore or password into source control; restrict repository-history access and decide whether history cleanup is needed before relying on a signing key that was previously committed.
+
+Before uploading to Play Console, verify the new upload-key reset is effective and that the bundle's version code is greater than the latest version already accepted for this app.
