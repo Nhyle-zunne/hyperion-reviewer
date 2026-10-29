@@ -49,6 +49,8 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +81,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
@@ -106,6 +109,7 @@ import com.nhyle.hyperionmaritime.viewmodel.Screen
 @Composable
 fun HomeScreen(
     viewModel: ReviewerViewModel,
+    onAccountClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
@@ -131,6 +135,7 @@ fun HomeScreen(
     val isActivated by viewModel.isActivated.collectAsState()
     val isAnyProUnlocked = isOicNwProUnlocked || isGmdssProUnlocked || isEngineOicEwProUnlocked || isDeckMgtProUnlocked || isEngineMgtProUnlocked || isHyperionProUnlocked || isActivated
     val regState by viewModel.registrationUiState.collectAsState()
+    val accountState by SupabaseAccountManager.state.collectAsState()
     val trackTimeLeft = when (selectedTrack) {
         Track.DECK_OIC_NW -> regState.oicTimeLeft
         Track.GMDSS_GOC -> regState.gmdssTimeLeft
@@ -224,6 +229,40 @@ fun HomeScreen(
                     isUnlocked = isTrackUnlocked,
                     timeLeft = trackTimeLeft
                 )
+            }
+
+            item {
+                OutlinedButton(
+                    onClick = onAccountClick,
+                    shape = RectangleShape,
+                    border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.65f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (accountState.email.isNullOrBlank()) "SIGN IN WITH GOOGLE" else "MY HYPERION ACCOUNT",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 11.sp,
+                        letterSpacing = 0.8.sp,
+                        textAlign = TextAlign.Start,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = colors.muted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             // Resume Active Session Card (if unfinished session exists)
