@@ -21,6 +21,7 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.nhyle.hyperionmaritime.BuildConfig
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -615,6 +616,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             when (billingResult.responseCode) {
                 BillingClient.BillingResponseCode.OK -> {
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
+                    val hasCompletedPurchase = purchases.orEmpty().any {
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED
+                    }
                     purchases?.forEach { purchase ->
                         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
                             val ackParams = AcknowledgePurchaseParams.newBuilder()
@@ -624,6 +628,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         }
                     }
                     queryPurchasesAsync()
+                    if (hasCompletedPurchase) {
+                        syncAccountAfterPlayPurchaseChanged()
+                    }
                 }
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
                     Log.i(TAG, "Purchase cancelled by user")
@@ -633,6 +640,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     Log.i(TAG, "Item already owned. Re-querying purchases to restore entitlement.")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                     queryPurchasesAsync()
+                    syncAccountAfterPlayPurchaseChanged()
                 }
                 else -> {
                     Log.e(TAG, "Purchase flow error: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -644,6 +652,18 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun syncAccountAfterPlayPurchaseChanged() {
+        try {
+            SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(appContext)
+        } catch (e: Exception) {
+            Log.w(
+                TAG,
+                "Google Play purchase was processed, but Hyperion account sync could not start. Retry from My Hyperion Account.",
+                e
+            )
         }
     }
 
