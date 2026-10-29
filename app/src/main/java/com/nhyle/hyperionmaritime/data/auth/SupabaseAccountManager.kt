@@ -1,0 +1,394 @@
+package com.nhyle.hyperionmaritime.data.auth
+
+import android.app.Activity
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Base64
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.nhyle.hyperionmaritime.BuildConfig
+import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+import java.security.SecureRandom
+import java.time.Instant
+import java.time.OffsetDateTime
+
+data class SupabaseAccountState(
+    val email: String? = null,
+    val isLoading: Boolean = false,
+    val message: String? = null,
+    val activeWebsiteLicenses: Int = 0
+)
+
+private data class SupabaseSession(
+    val accessToken: String,
+    val refreshToken: String,
+    val userId: String,
+    val email: String,
+    val expiresAtMillis: Long
+)
+
+/**
+ * Optional native Google sign-in against Hyperion's existing Supabase Auth project.
+ * Website entitlements are loaded with the user's JWT and remain protected by database RLS.
+ */
+object SupabaseAccountManager {
+    private const val SESSION_PREFS = "hyperion_supabase_session"
+    private const val CONNECT_TIMEOUT_MS = 15_000
+    private const val READ_TIMEOUT_MS = 20_000
+    private const val SESSION_REFRESH_MARGIN_MS = 60_000L
+
+    private val _state = MutableStateFlow(SupabaseAccountState())
+    val state: StateFlow<SupabaseAccountState> = _state.asStateFlow()
+
+    suspend fun signInWithGoogle(activity: Activity) {
+        _state.value = _state.value.copy(isLoading = true, message = null)
+        try {
+            val webClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID.trim()
+            if (webClientId.isBlank()) {
+                throw IllegalStateException(
+                    "Google sign-in needs setup for this build. Configure HYPERION_GOOGLE_WEB_CLIENT_ID with the Web OAuth client ID configured for Google in Supabase, then rebuild."
+                )
+            }
+
+            val rawNonce = randomNonce()
+            val option = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(webClientId)
+                .setNonce(sha256Hex(rawNonce))
+                .build()
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(option)
+                .build()
+
+            val credentialResponse = CredentialManager.create(activity).getCredential(
+                context = activity,
+                request = request
+            )
+            val credential = credentialResponse.credential as? CustomCredential
+                ?: throw IllegalStateException("Google sign-in did not return a Google ID token.")
+            if (credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                throw IllegalStateException("Google sign-in returned an unsupported credential.")
+            }
+
+            val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+            val session = withContext(Dispatchers.IO) {
+                exchangeGoogleIdToken(idToken, rawNonce).also {
+                    storeSession(activity.applicationContext, it)
+                }
+            }
+            _state.value = SupabaseAccountState(
+                email = session.email.ifBlank { null },
+                isLoading = true,
+                message = "Signed in. Checking your website licenses…"
+            )
+            syncAndUpdateState(activity.applicationContext, session)
+        } catch (_: GetCredentialCancellationException) {
+            _state.value = _state.value.copy(isLoading = false, message = "Sign-in cancelled.")
+        } catch (e: GetCredentialException) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed. Please try again."
+            )
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = e.message?.takeIf { it.isNotBlank() } ?: "Unable to sign in right now. Please try again."
+            )
+        }
+    }
+
+    suspend fun restoreSessionAndSync(context: Context) {
+        val appContext = context.applicationContext
+        val saved = try {
+            withContext(Dispatchers.IO) { readSession(appContext) }
+        } catch (_: Exception) {
+            null
+        }
+        if (saved == null) {
+            _state.value = SupabaseAccountState()
+            return
+        }
+
+        _state.value = SupabaseAccountState(
+            email = saved.email.ifBlank { null },
+            isLoading = false
+        )
+        try {
+            val session = withContext(Dispatchers.IO) { getFreshSession(appContext, saved) }
+            syncAndUpdateState(appContext, session)
+        } catch (_: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = "Could not refresh website licenses. Connect to the internet and tap Sync to retry."
+            )
+        }
+    }
+
+    suspend fun refreshWebsiteLicenses(context: Context) {
+        val appContext = context.applicationContext
+        _state.value = _state.value.copy(isLoading = true, message = null)
+        try {
+            val saved = withContext(Dispatchers.IO) { readSession(appContext) }
+                ?: throw IllegalStateException("Sign in with Google first to sync your website licenses.")
+            val session = withContext(Dispatchers.IO) { getFreshSession(appContext, saved) }
+            syncAndUpdateState(appContext, session)
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = e.message?.takeIf { it.isNotBlank() } ?: "Website license sync failed. Please try again."
+            )
+        }
+    }
+
+    fun signOut(context: Context) {
+        try {
+            sessionPreferences(context.applicationContext).edit().clear().apply()
+        } catch (_: Exception) {
+            // Still clear the separately stored account entitlement cache.
+        }
+        LicenseManager.clearAccountEntitlements(context.applicationContext)
+        _state.value = SupabaseAccountState(message = "Signed out. Google Play purchases remain available.")
+    }
+
+    private suspend fun syncAndUpdateState(context: Context, initialSession: SupabaseSession) {
+        _state.value = _state.value.copy(
+            email = initialSession.email.ifBlank { null },
+            isLoading = true
+        )
+        try {
+            val result = withContext(Dispatchers.IO) {
+                val freshSession = getFreshSession(context, initialSession)
+                val licenseCount = syncEntitlements(context, freshSession)
+                freshSession to licenseCount
+            }
+            val session = result.first
+            val count = result.second
+            _state.value = SupabaseAccountState(
+                email = session.email.ifBlank { null },
+                isLoading = false,
+                activeWebsiteLicenses = count,
+                message = if (count == 0) {
+                    "No active website licenses were found for this account."
+                } else {
+                    "Synced $count active website license${if (count == 1) "" else "s"}."
+                }
+            )
+        } catch (_: Exception) {
+            _state.value = _state.value.copy(
+                email = initialSession.email.ifBlank { null },
+                isLoading = false,
+                message = "Signed in, but website licenses could not be refreshed. Connect to the internet and tap Sync to retry."
+            )
+        }
+    }
+
+    private fun exchangeGoogleIdToken(idToken: String, rawNonce: String): SupabaseSession {
+        val payload = JSONObject()
+            .put("provider", "google")
+            .put("id_token", idToken)
+            .put("nonce", rawNonce)
+        val body = requestText(
+            method = "POST",
+            url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/auth/v1/token?grant_type=id_token",
+            jsonBody = payload
+        )
+        return parseSession(JSONObject(body), fallback = null)
+    }
+
+    private fun getFreshSession(context: Context, session: SupabaseSession): SupabaseSession {
+        if (session.expiresAtMillis > System.currentTimeMillis() + SESSION_REFRESH_MARGIN_MS) {
+            return session
+        }
+        val payload = JSONObject().put("refresh_token", session.refreshToken)
+        val body = requestText(
+            method = "POST",
+            url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/auth/v1/token?grant_type=refresh_token",
+            jsonBody = payload
+        )
+        return parseSession(JSONObject(body), fallback = session).also { storeSession(context, it) }
+    }
+
+    private fun syncEntitlements(context: Context, session: SupabaseSession): Int {
+        val url = BuildConfig.SUPABASE_URL.trimEnd('/') +
+            "/rest/v1/entitlements?select=track_id,expires_at,status&status=eq.active"
+        val response = requestText(
+            method = "GET",
+            url = url,
+            accessToken = session.accessToken
+        )
+        val rows = JSONArray(response)
+        val now = System.currentTimeMillis()
+        val expiryByTrack = Track.values().associateWith { 0L }.toMutableMap()
+
+        for (index in 0 until rows.length()) {
+            val row = rows.optJSONObject(index) ?: continue
+            if (row.optString("status") != "active") continue
+            val track = when (row.optString("track_id")) {
+                "DECK_OIC_NW" -> Track.DECK_OIC_NW
+                "GMDSS_GOC" -> Track.GMDSS_GOC
+                "ENGINE_OIC_EW" -> Track.ENGINE_OIC_EW
+                "DECK_MGT" -> Track.DECK_MGT
+                "ENGINE_MGT" -> Track.ENGINE_MGT
+                else -> null
+            } ?: continue
+            val expiryText = row.optString("expires_at")
+            if (expiryText.isBlank() || expiryText == "null") continue
+            val expiry = try { parseEpochMillis(expiryText) } catch (_: Exception) { continue }
+            if (expiry > now) {
+                expiryByTrack[track] = maxOf(expiryByTrack[track] ?: 0L, expiry)
+            }
+        }
+
+        if (!LicenseManager.saveAccountEntitlements(context, expiryByTrack)) {
+            throw IllegalStateException("Could not securely cache account licenses on this device.")
+        }
+        return expiryByTrack.values.count { it > now }
+    }
+
+    private fun parseEpochMillis(value: String): Long {
+        return try {
+            Instant.parse(value).toEpochMilli()
+        } catch (_: Exception) {
+            OffsetDateTime.parse(value).toInstant().toEpochMilli()
+        }
+    }
+
+    private fun parseSession(json: JSONObject, fallback: SupabaseSession?): SupabaseSession {
+        val user = json.optJSONObject("user")
+        val accessToken = json.optString("access_token")
+        val refreshToken = json.optString("refresh_token").takeIf { it.isNotBlank() }
+            ?: fallback?.refreshToken.orEmpty()
+        val userId = user?.optString("id")?.takeIf { it.isNotBlank() }
+            ?: fallback?.userId.orEmpty()
+        val email = user?.optString("email")?.takeIf { it.isNotBlank() }
+            ?: fallback?.email.orEmpty()
+        val expiresIn = json.optLong("expires_in", 3600L).coerceAtLeast(60L)
+        if (accessToken.isBlank() || refreshToken.isBlank() || userId.isBlank()) {
+            throw IOException("Supabase did not return a complete authenticated session.")
+        }
+        return SupabaseSession(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            userId = userId,
+            email = email,
+            expiresAtMillis = System.currentTimeMillis() + expiresIn * 1000L
+        )
+    }
+
+    private fun storeSession(context: Context, session: SupabaseSession) {
+        sessionPreferences(context).edit()
+            .putString("access_token", session.accessToken)
+            .putString("refresh_token", session.refreshToken)
+            .putString("user_id", session.userId)
+            .putString("email", session.email)
+            .putLong("expires_at_ms", session.expiresAtMillis)
+            .apply()
+    }
+
+    private fun readSession(context: Context): SupabaseSession? {
+        val prefs = sessionPreferences(context)
+        val accessToken = prefs.getString("access_token", null) ?: return null
+        val refreshToken = prefs.getString("refresh_token", null) ?: return null
+        val userId = prefs.getString("user_id", null) ?: return null
+        return SupabaseSession(
+            accessToken = accessToken,
+            refreshToken = refreshToken,
+            userId = userId,
+            email = prefs.getString("email", "").orEmpty(),
+            expiresAtMillis = prefs.getLong("expires_at_ms", 0L)
+        )
+    }
+
+    private fun sessionPreferences(context: Context): SharedPreferences {
+        val appContext = context.applicationContext
+        val masterKey = MasterKey.Builder(appContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            appContext,
+            SESSION_PREFS,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    private fun randomNonce(): String {
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+    }
+
+    private fun sha256Hex(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+
+    private fun requestText(
+        method: String,
+        url: String,
+        accessToken: String? = null,
+        jsonBody: JSONObject? = null
+    ): String {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Accept", "application/json")
+            if (!accessToken.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $accessToken")
+            }
+            if (jsonBody != null) {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            }
+        }
+
+        try {
+            if (jsonBody != null) {
+                connection.outputStream.use { stream ->
+                    stream.write(jsonBody.toString().toByteArray(StandardCharsets.UTF_8))
+                }
+            }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            if (status !in 200..299) {
+                val apiMessage = try {
+                    val error = JSONObject(body)
+                    error.optString("msg").takeIf { it.isNotBlank() }
+                        ?: error.optString("message").takeIf { it.isNotBlank() }
+                        ?: error.optString("error_description").takeIf { it.isNotBlank() }
+                        ?: error.optString("error").takeIf { it.isNotBlank() }
+                        ?: "Request rejected."
+                } catch (_: Exception) {
+                    "Request rejected."
+                }
+                throw IOException("Supabase request failed ($status): $apiMessage")
+            }
+            return body
+        } finally {
+            connection.disconnect()
+        }
+    }
+}
