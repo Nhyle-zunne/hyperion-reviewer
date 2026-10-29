@@ -791,16 +791,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
      * regardless of internet failure, billing disconnection, or sea voyage status.
      */
     fun isTrackUnlocked(track: Track = _selectedTrack.value): Boolean {
-        // Fast-path reactive state check
-        val reactiveUnlocked = when (track) {
-            Track.DECK_OIC_NW -> isOicNwProUnlocked.value
-            Track.GMDSS_GOC -> isGmdssProUnlocked.value
-            Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked.value
-            Track.DECK_MGT -> isDeckMgtProUnlocked.value
-            Track.ENGINE_MGT -> isEngineMgtProUnlocked.value
-            else -> false
-        }
-        if (reactiveUnlocked) return true
+        // Reactive flows are UI state, not authorization. Account-linked grants can
+        // expire while the screen remains open, so every gate check must re-read the
+        // authoritative timestamped sources below instead of trusting a cached "unlocked" bit.
 
         try {
             val app = getApplication<Application>()
@@ -828,6 +821,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 }
                 if (LicenseManager.isTrackProUnlocked(app, track) ||
                     LicenseManager.isHyperionProUnlocked(app)) {
+                    return true
+                }
+
+                // Hype Pass is a separate, time-limited local overlay. Recheck its
+                // actual expiry here now that reactive UI state is not itself trusted.
+                val hypePass = HypePassManager.getActivePass(app)
+                if (hypePass != null && !hypePass.isExpired() &&
+                    (hypePass.coversAll ||
+                        (track == Track.DECK_OIC_NW && hypePass.coversDeck) ||
+                        (track == Track.GMDSS_GOC && hypePass.coversRadio))) {
                     return true
                 }
             }
