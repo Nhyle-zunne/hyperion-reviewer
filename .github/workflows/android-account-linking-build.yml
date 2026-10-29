@@ -1,9 +1,6 @@
 name: Android account-linking build
 
 on:
-  push:
-    branches:
-      - feature/android-account-signin-and-web-licenses
   pull_request:
     branches:
       - main
@@ -87,4 +84,4 @@ jobs:
       - name: Compile and run unit tests
         # Real Firebase/OAuth configuration and a real-device sign-in test
         # are still required before release.
-        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
+        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest assembleDebug
