@@ -30,11 +30,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android 36 platform
-        run: sdkmanager "platforms;android-36" "platform-tools"
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" "platforms;android-36" "platform-tools"
 
       - name: Install compatible Gradle
         uses: gradle/actions/setup-gradle@v4
