@@ -28,6 +28,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.DailyCheckInDialog
 import com.nhyle.hyperionmaritime.ui.components.ResultsLoadingDialog
@@ -98,6 +99,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MaritimeQuestionBank.init(applicationContext)
         LicenseManager.init(applicationContext)
+        lifecycleScope.launch {
+            SupabaseAccountManager.restoreSessionAndSync(applicationContext)
+        }
 
         // Warm up the question bank on an I/O thread so opening a track is instant
         lifecycleScope.launch(Dispatchers.IO) {
@@ -198,6 +202,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
 
     val showPaywall by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
     val showDailyCheckIn by viewModel.showDailyCheckInDialog.collectAsStateWithLifecycle()
+    var showAccountDialog by remember { mutableStateOf(false) }
     val termsAccepted by viewModel.hasAcceptedTerms.collectAsStateWithLifecycle()
     val showBridge by viewModel.showBridge.collectAsStateWithLifecycle()
     val isRepoWarming by viewModel.isRepoWarming.collectAsStateWithLifecycle()
@@ -218,6 +223,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                 viewModel = viewModel,
                 onCloseDrawer = {
                     scope.launch { drawerState.close() }
+                },
+                onAccountClick = {
+                    scope.launch { drawerState.close() }
+                    showAccountDialog = true
                 }
             )
         }
@@ -398,6 +407,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
             viewModel = viewModel,
             onDismiss = { viewModel.dismissDailyCheckInDialog() }
         )
+    }
+
+    if (showAccountDialog) {
+        AccountSignInDialog(onDismiss = { showAccountDialog = false })
     }
 }
 

@@ -1,6 +1,9 @@
 package com.nhyle.hyperionmaritime.data.util
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import android.os.SystemClock
 import android.provider.Settings
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -170,6 +173,12 @@ object LicenseManager {
     const val PREFS_NAME = "hyperion_license_prefs"
     const val SECURE_PREFS_NAME = "secure_license_prefs"
 
+    private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
+    private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
+    private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
+    private const val ACCOUNT_OFFLINE_GRACE_MS = 72L * 60L * 60L * 1000L
+    @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
+
     const val KEY_OFFLINE_LICENSE = "is_offline_license"
     const val KEY_OFFLINE_TIER = "offline_license_tier"
     const val KEY_OFFLINE_DURATION = "offline_license_duration"
@@ -267,6 +276,72 @@ object LicenseManager {
         _isProActivatedFlow.value = active
     }
 
+    private fun accountEntitlementPreferences(context: Context): SharedPreferences? {
+        accountEntitlementPrefsCache?.let { return it }
+        return try {
+            synchronized(this) {
+                accountEntitlementPrefsCache ?: run {
+                    val appContext = context.applicationContext
+                    val masterKey = MasterKey.Builder(appContext)
+                        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                        .build()
+                    EncryptedSharedPreferences.create(
+                        appContext,
+                        ACCOUNT_ENTITLEMENTS_PREFS,
+                        masterKey,
+                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    ).also { accountEntitlementPrefsCache = it }
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun accountExpiryKey(track: Track): String = ACCOUNT_EXPIRY_PREFIX + track.name
+
+    private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
+        val prefs = accountEntitlementPreferences(context) ?: return false
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        val now = System.currentTimeMillis()
+        if (syncedAt <= 0L || now < syncedAt - 5L * 60L * 1000L || now - syncedAt > ACCOUNT_OFFLINE_GRACE_MS) {
+            return false
+        }
+        return prefs.getLong(accountExpiryKey(track), 0L) > now
+    }
+
+    /** Stores active, server-read website entitlements with a bounded offline grace period. */
+    fun saveAccountEntitlements(context: Context, expiryByTrack: Map<Track, Long>): Boolean {
+        val prefs = accountEntitlementPreferences(context) ?: return false
+        val editor = prefs.edit().putLong(ACCOUNT_SYNCED_AT_KEY, System.currentTimeMillis())
+        Track.values().forEach { track ->
+            editor.putLong(accountExpiryKey(track), expiryByTrack[track] ?: 0L)
+        }
+        editor.apply()
+        refreshAccountEntitlementFlows(context)
+        return true
+    }
+
+    fun clearAccountEntitlements(context: Context) {
+        accountEntitlementPreferences(context)?.edit()?.clear()?.apply()
+        refreshAccountEntitlementFlows(context)
+    }
+
+    fun refreshAccountEntitlementFlows(context: Context) {
+        val oic = isOicNwProUnlocked(context)
+        val gmdss = isGmdssProUnlocked(context)
+        val ew = isEngineOicEwProUnlocked(context)
+        val deckMgt = isDeckMgtProUnlocked(context)
+        val engineMgt = isEngineMgtProUnlocked(context)
+        _isOicNwProUnlockedFlow.value = oic
+        _isGmdssProUnlockedFlow.value = gmdss
+        _isEngineOicEwProUnlockedFlow.value = ew
+        _isDeckMgtProUnlockedFlow.value = deckMgt
+        _isEngineMgtProUnlockedFlow.value = engineMgt
+        _isHyperionProUnlockedFlow.value = isHyperionProUnlocked(context) || (oic && gmdss && ew && deckMgt && engineMgt)
+        _isProActivatedFlow.value = oic || gmdss || ew || deckMgt || engineMgt
+    }
     /**
      * Purges old permanent clearance / lifetime licenses that were issued under previous system.
      */
@@ -992,7 +1067,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineOicNwUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.DECK_OIC_NW) || isOfflineOicNwUnlocked(context)
     }
 
     fun isGmdssProUnlocked(context: Context): Boolean {
@@ -1002,7 +1077,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineGmdssUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.GMDSS_GOC) || isOfflineGmdssUnlocked(context)
     }
 
     fun isEngineOicEwProUnlocked(context: Context): Boolean {
@@ -1012,7 +1087,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineEngineOicEwUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.ENGINE_OIC_EW) || isOfflineEngineOicEwUnlocked(context)
     }
 
     fun isDeckMgtProUnlocked(context: Context): Boolean {
@@ -1022,7 +1097,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineDeckMgtUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.DECK_MGT) || isOfflineDeckMgtUnlocked(context)
     }
 
     fun isEngineMgtProUnlocked(context: Context): Boolean {
@@ -1032,7 +1107,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineEngineMgtUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.ENGINE_MGT) || isOfflineEngineMgtUnlocked(context)
     }
 
     fun isHyperionProUnlocked(context: Context): Boolean {
@@ -1042,7 +1117,7 @@ object LicenseManager {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineHyperionUnlocked(context)
+        return Track.values().all { isAccountTrackUnlocked(context, it) } || isOfflineHyperionUnlocked(context)
     }
 
     fun isMasterProUnlocked(context: Context): Boolean = isHyperionProUnlocked(context)

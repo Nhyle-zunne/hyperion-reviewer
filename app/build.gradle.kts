@@ -8,16 +8,23 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
-android {
-  namespace = "com.nhyle.hyperionmaritime"
+val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID").orNull
+  ?: System.getenv("HYPERION_GOOGLE_WEB_CLIENT_ID")
+  ?: ""
+val escapedGoogleWebClientId = googleWebClientId.replace("\\", "\\\\").replace("\"", "\\\"")
+
+android {  namespace = "com.nhyle.hyperionmaritime"
   compileSdk = 36
 
   defaultConfig {
     applicationId = "com.nhyle.hyperionmaritime"
+    buildConfigField("String", "SUPABASE_URL", "\"https://evnjoezffghtrzqacwcj.supabase.co\"")
+    buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_3QAooJa46k2g9PaUNbTOLA_1UXxAIeR\"")
+    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
     minSdk = 24
     targetSdk = 36
-    versionCode = 64
-    versionName = "1.0.7"
+    versionCode = 65
+    versionName = "1.0.8"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -100,6 +107,11 @@ dependencies {
   // WorkManager & Security
   implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+  // Native Google sign-in via Android Credential Manager
+  implementation("androidx.credentials:credentials:1.6.0")
+  implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+  implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
 
   // Google Play Billing & In-App Updates & Reviews
   implementation("com.android.billingclient:billing-ktx:8.0.0")

@@ -47,3 +47,9 @@
 -keep interface com.android.billingclient.api.** { *; }
 -keep class com.nhyle.hyperionmaritime.data.billing.** { *; }
 -keepclassmembers class com.nhyle.hyperionmaritime.data.billing.** { *; }
+
+# Android Credential Manager / Google ID token sign-in
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** {
+  *;
+}
