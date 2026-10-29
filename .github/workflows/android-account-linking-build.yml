@@ -47,9 +47,44 @@ jobs:
         with:
           gradle-version: '8.11.1'
 
+      - name: Create temporary Firebase config for compile-only CI
+        # The repository intentionally does not contain production Firebase
+        # configuration. This placeholder only satisfies the Google Services
+        # Gradle plugin for compiling; it cannot authenticate to a real project.
+        run: |
+          cat > app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "hyperion-ci-placeholder",
+              "storage_bucket": "hyperion-ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:0123456789abcdef",
+                  "android_client_info": {
+                    "package_name": "com.nhyle.hyperionmaritime"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyCI_PLACEHOLDER_NOT_FOR_PRODUCTION"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+
       - name: Compile and run unit tests
-        # google-services.json is deliberately not committed. Exclude only its
-        # generated-resource task for this credential-free compile check; a
-        # separate device test with the real Firebase/OAuth configuration is
-        # still required before release.
-        run: gradle --no-daemon --stacktrace -x processDebugGoogleServices testDebugUnitTest assembleDebug
+        # Real Firebase/OAuth configuration and a real-device sign-in test
+        # are still required before release.
+        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
