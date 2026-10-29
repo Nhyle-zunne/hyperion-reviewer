@@ -13,6 +13,21 @@ val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID"
   ?: ""
 val escapedGoogleWebClientId = googleWebClientId.replace("\\", "\\\\").replace("\"", "\\\"")
 
+// Release artifacts must be signed only with credentials supplied outside version control.
+// Deliberately do not fall back to the repository's tracked keystore or the default
+// "android" password values when those credentials are missing.
+fun configuredSigningValue(name: String): String? =
+  providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+    ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
+val releaseKeystorePath = configuredSigningValue("KEYSTORE_PATH")
+val releaseStorePassword = configuredSigningValue("STORE_PASSWORD")
+val releaseKeyAlias = configuredSigningValue("KEY_ALIAS") ?: "upload"
+val releaseKeyPassword = configuredSigningValue("KEY_PASSWORD")
+val releaseSigningConfigured = releaseKeystorePath != null &&
+  releaseStorePassword != null &&
+  releaseKeyPassword != null
+
 android {
   namespace = "com.nhyle.hyperionmaritime"
   compileSdk = 36
@@ -32,11 +47,12 @@ android {
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD") ?: "android"
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
+      if (releaseSigningConfigured) {
+        storeFile = file(requireNotNull(releaseKeystorePath))
+        storePassword = requireNotNull(releaseStorePassword)
+        keyAlias = releaseKeyAlias
+        keyPassword = requireNotNull(releaseKeyPassword)
+      }
     }
   }
 
@@ -46,7 +62,7 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else null
       ndk {
         debugSymbolLevel = "FULL"
       }
@@ -75,6 +91,21 @@ android {
       isIncludeAndroidResources = true
       isReturnDefaultValues = true
     }
+  }
+}
+
+// Fail closed when a release APK/AAB is requested without externally supplied signing
+// credentials. Debug builds and debug CI remain independent of production signing keys.
+gradle.taskGraph.whenReady { graph ->
+  val releaseArtifactRequested = graph.allTasks.any { task ->
+    task.name in setOf("assembleRelease", "bundleRelease", "packageRelease")
+  }
+  if (releaseArtifactRequested && !releaseSigningConfigured) {
+    throw GradleException(
+      "Release signing is not configured. Supply KEYSTORE_PATH, STORE_PASSWORD, and " +
+        "KEY_PASSWORD through secure Gradle user properties or environment variables. " +
+        "Do not use a keystore or default password stored in source control."
+    )
   }
 }
 
