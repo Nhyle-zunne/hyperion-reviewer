@@ -42,7 +42,7 @@ jobs:
       - name: Install compatible Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
+          gradle-version: '8.13'
 
       - name: Create temporary Firebase config for compile-only CI
         # The repository intentionally does not contain production Firebase
