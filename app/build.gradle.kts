@@ -94,18 +94,27 @@ android {
   }
 }
 
-// Fail closed when a release APK/AAB is requested without externally supplied signing
-// credentials. Debug builds and debug CI remain independent of production signing keys.
-gradle.taskGraph.whenReady { graph ->
-  val releaseArtifactRequested = graph.allTasks.any { task ->
-    task.name in setOf("assembleRelease", "bundleRelease", "packageRelease")
-  }
-  if (releaseArtifactRequested && !releaseSigningConfigured) {
-    throw GradleException(
-      "Release signing is not configured. Supply KEYSTORE_PATH, STORE_PASSWORD, and " +
-        "KEY_PASSWORD through secure Gradle user properties or environment variables. " +
-        "Do not use a keystore or default password stored in source control."
-    )
+// Fail closed before release packaging/signing tasks execute. Debug builds and debug CI
+// remain independent of production signing keys. Avoid task-graph callbacks here because
+// Gradle's task-graph API exposes a Groovy Closure signature that does not compile reliably
+// as a Kotlin DSL lambda across Gradle versions.
+tasks.matching {
+  name in setOf(
+    "assembleRelease",
+    "bundleRelease",
+    "packageRelease",
+    "packageReleaseBundle",
+    "signReleaseBundle"
+  )
+}.configureEach {
+  doFirst {
+    if (!releaseSigningConfigured) {
+      throw GradleException(
+        "Release signing is not configured. Supply KEYSTORE_PATH, STORE_PASSWORD, and " +
+          "KEY_PASSWORD through secure Gradle user properties or environment variables. " +
+          "Do not use a keystore or default password stored in source control."
+      )
+    }
   }
 }
 
