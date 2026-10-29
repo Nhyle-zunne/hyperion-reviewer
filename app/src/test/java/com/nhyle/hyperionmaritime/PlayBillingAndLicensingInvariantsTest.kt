@@ -5,6 +5,9 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
+import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
+import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
+import java.io.IOException
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
@@ -65,6 +68,51 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.init(context)
+    }
+
+    @Test
+    fun missingOptionalPlayEntitlementsTableDoesNotBlockWebsiteLicenseSync() {
+        assertTrue(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (404): Could not find the table 'public.google_play_entitlements' in the schema cache")
+            )
+        )
+        assertFalse(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (403): permission denied for table google_play_entitlements")
+            )
+        )
+        assertFalse(
+            isMissingGooglePlayEntitlementsTable(
+                IOException("Supabase request failed (404): row not found")
+            )
+        )
+        assertFalse(isMissingGooglePlayEntitlementsTable(IOException("Network timeout")))
+    }
+
+    @Test
+    fun accountLinkingIncludesAllOwnedProductsAndSkipsMockTokens() {
+        val purchases = collectPlayPurchasesForAccountLinking(
+            allAccessToken = "token_all_access",
+            oicNwToken = "token_oic",
+            gmdssToken = "mock_sandbox_sub_token_not_real",
+            engineOicEwToken = "token_engine",
+            deckMgtToken = null,
+            engineMgtToken = "token_engine_management"
+        )
+
+        assertEquals(4, purchases.size)
+        assertEquals(BillingConstants.PRODUCT_ALL_ACCESS_PASS, purchases.first().productId)
+        assertTrue(purchases.any {
+            it.productId == BillingConstants.PRODUCT_OIC_NW_PASS && it.purchaseToken == "token_oic"
+        })
+        assertTrue(purchases.any {
+            it.productId == BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS && it.purchaseToken == "token_engine"
+        })
+        assertTrue(purchases.any {
+            it.productId == BillingConstants.PRODUCT_ENGINE_MGT_PASS && it.purchaseToken == "token_engine_management"
+        })
+        assertFalse(purchases.any { it.purchaseToken.startsWith("mock_sandbox_sub_token_") })
     }
 
     @Test

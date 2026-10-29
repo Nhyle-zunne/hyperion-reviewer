@@ -21,6 +21,7 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.nhyle.hyperionmaritime.BuildConfig
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -215,6 +216,26 @@ object BillingConstants {
 /**
  * State representation of active Google Play entitlements with active plan metadata.
  */
+data class PlayPurchaseForAccountLinking(val productId: String, val purchaseToken: String)
+
+internal fun collectPlayPurchasesForAccountLinking(
+    allAccessToken: String?,
+    oicNwToken: String?,
+    gmdssToken: String?,
+    engineOicEwToken: String?,
+    deckMgtToken: String?,
+    engineMgtToken: String?
+): List<PlayPurchaseForAccountLinking> = listOf(
+    allAccessToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ALL_ACCESS_PASS, it) },
+    oicNwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_OIC_NW_PASS, it) },
+    gmdssToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_GMDSS_PASS, it) },
+    engineOicEwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS, it) },
+    deckMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_DECK_MGT_PASS, it) },
+    engineMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_MGT_PASS, it) }
+).filterNotNull()
+    .filter { it.purchaseToken.isNotBlank() && !it.purchaseToken.startsWith("mock_sandbox_sub_token_") }
+    .distinctBy { it.purchaseToken }
+
 data class TrackEntitlements(
     val oicNwPlan: ActivePlanInfo? = null,
     val gmdssPlan: ActivePlanInfo? = null,
@@ -542,6 +563,22 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun isTrackUnlocked(track: Track): Boolean = _entitlements.value.isTrackUnlocked(track)
 
+    /**
+     * Returns Play tokens from the current BillingClient-owned subscription snapshot.
+     * Tokens are only sent to Hyperion's authenticated backend for Google verification.
+     */
+    fun getOwnedPurchasesForAccountLinking(): List<PlayPurchaseForAccountLinking> {
+        val owned = _entitlements.value
+        return collectPlayPurchasesForAccountLinking(
+            allAccessToken = owned.allAccessPlan?.purchaseToken,
+            oicNwToken = owned.oicNwPlan?.purchaseToken,
+            gmdssToken = owned.gmdssPlan?.purchaseToken,
+            engineOicEwToken = owned.engineOicEwPlan?.purchaseToken,
+            deckMgtToken = owned.deckMgtPlan?.purchaseToken,
+            engineMgtToken = owned.engineMgtPlan?.purchaseToken
+        )
+    }
+
     suspend fun queryPurchasesAsync() = withContext(Dispatchers.IO) {
         if (!billingClient.isReady) {
             Log.w(TAG, "BillingClient not ready for queryPurchasesAsync")
@@ -579,6 +616,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             when (billingResult.responseCode) {
                 BillingClient.BillingResponseCode.OK -> {
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
+                    val hasCompletedPurchase = purchases.orEmpty().any {
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED
+                    }
                     purchases?.forEach { purchase ->
                         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
                             val ackParams = AcknowledgePurchaseParams.newBuilder()
@@ -588,6 +628,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         }
                     }
                     queryPurchasesAsync()
+                    if (hasCompletedPurchase) {
+                        syncAccountAfterPlayPurchaseChanged()
+                    }
                 }
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
                     Log.i(TAG, "Purchase cancelled by user")
@@ -597,6 +640,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     Log.i(TAG, "Item already owned. Re-querying purchases to restore entitlement.")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                     queryPurchasesAsync()
+                    syncAccountAfterPlayPurchaseChanged()
                 }
                 else -> {
                     Log.e(TAG, "Purchase flow error: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -608,6 +652,18 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     }
                 }
             }
+        }
+    }
+
+    private suspend fun syncAccountAfterPlayPurchaseChanged() {
+        try {
+            SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(appContext)
+        } catch (e: Exception) {
+            Log.w(
+                TAG,
+                "Google Play purchase was processed, but Hyperion account sync could not start. Retry from My Hyperion Account.",
+                e
+            )
         }
     }
 
