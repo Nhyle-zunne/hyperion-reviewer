@@ -38,12 +38,6 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD") ?: "android"
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
-    }
   }
 
   buildTypes {
@@ -58,7 +52,9 @@ android {
       }
     }
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      // Use Gradle's standard debug keystore so CI and developer machines do not
+      // depend on a generated keystore being tracked in the repository.
+      signingConfig = signingConfigs.getByName("debug")
     }
   }
 
