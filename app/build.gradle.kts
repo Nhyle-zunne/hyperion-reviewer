@@ -99,7 +99,7 @@ android {
 // Gradle's task-graph API exposes a Groovy Closure signature that does not compile reliably
 // as a Kotlin DSL lambda across Gradle versions.
 tasks.matching {
-  name in setOf(
+  it.name in setOf(
     "assembleRelease",
     "bundleRelease",
     "packageRelease",
