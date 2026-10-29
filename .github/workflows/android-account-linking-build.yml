@@ -81,13 +81,37 @@ jobs:
           }
           JSON
 
-      - name: Compile and run unit tests and create a test APK
+      - name: Build installable debug APK
         # The Web OAuth client ID is optional for a compile-only build. When the
         # repository secret is configured, the debug APK can exercise Google sign-in.
         # Production Firebase config and real-device acceptance testing remain separate.
         env:
           HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
-        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest assembleDebug
+        run: gradle --no-daemon --max-workers=2 --stacktrace assembleDebug
+
+      - name: Export debug signing-certificate SHA-1
+        run: |
+          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey \
+            | sed -n 's/^[[:space:]]*SHA1: //p' \
+            | head -n 1 > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+          test -s app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+
+      - name: Write test-build configuration note
+        env:
+          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          {
+            echo "Hyperion Maritime Android debug test build"
+            echo "Package: com.nhyle.hyperionmaritime"
+            echo "Debug signing-certificate SHA-1 is in DEBUG_CERT_SHA1.txt."
+            if [ -n "$HYPERION_GOOGLE_WEB_CLIENT_ID" ]; then
+              echo "Web OAuth client ID: supplied to this build (value intentionally not printed)."
+            else
+              echo "Web OAuth client ID: NOT supplied. Google sign-in will show the setup-required error until the HYPERION_GOOGLE_WEB_CLIENT_ID GitHub Actions secret is configured and the build is rebuilt."
+            fi
+            echo "Register this debug signing SHA-1 in the Android OAuth client in Google Cloud before testing native Google sign-in."
+            echo "This is a debug-signed sideload build, not a Play Store release."
+          } > app/build/outputs/apk/debug/TESTING_README.txt
 
       - name: Write APK checksum
         run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS.txt
@@ -99,5 +123,10 @@ jobs:
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/SHA256SUMS.txt
+            app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+            app/build/outputs/apk/debug/TESTING_README.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Run Android unit tests
+        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest
