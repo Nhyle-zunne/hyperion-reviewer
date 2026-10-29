@@ -13,7 +13,8 @@ val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID"
   ?: ""
 val escapedGoogleWebClientId = googleWebClientId.replace("\\", "\\\\").replace("\"", "\\\"")
 
-android {  namespace = "com.nhyle.hyperionmaritime"
+android {
+  namespace = "com.nhyle.hyperionmaritime"
   compileSdk = 36
 
   defaultConfig {

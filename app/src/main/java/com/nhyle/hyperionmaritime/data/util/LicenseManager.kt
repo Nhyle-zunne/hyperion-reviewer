@@ -301,6 +301,9 @@ object LicenseManager {
 
     private fun accountExpiryKey(track: Track): String = ACCOUNT_EXPIRY_PREFIX + track.name
 
+    fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
+        isAccountTrackUnlocked(context.applicationContext, track)
+
     private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
         val prefs = accountEntitlementPreferences(context) ?: return false
         val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)

@@ -427,6 +427,15 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val offlineHyp = if (isClockTampered) false else LicenseManager.isOfflineHyperionUnlocked(app)
         val activatedOffline = offlineOic || offlineGmdss || offlineEw || offlineDm || offlineEm
 
+        // Website subscriptions are separate from Play Billing and device-bound offline keys.
+        // LicenseManager only exposes these when the encrypted cache is fresh and the server expiry has not passed.
+        val accountOic = LicenseManager.isAccountEntitlementUnlocked(app, Track.DECK_OIC_NW)
+        val accountGmdss = LicenseManager.isAccountEntitlementUnlocked(app, Track.GMDSS_GOC)
+        val accountEw = LicenseManager.isAccountEntitlementUnlocked(app, Track.ENGINE_OIC_EW)
+        val accountDm = LicenseManager.isAccountEntitlementUnlocked(app, Track.DECK_MGT)
+        val accountEm = LicenseManager.isAccountEntitlementUnlocked(app, Track.ENGINE_MGT)
+        val accountAllAccess = accountOic && accountGmdss && accountEw && accountDm && accountEm
+
         // Temporary Hype Pass Layer (Device-bound, read-only overlay)
         val hypePass = if (app != null) HypePassManager.getActivePass(app) else null
         val isHypeDeck = hypePass != null && (hypePass.coversDeck || hypePass.coversAll) && !hypePass.isExpired()
@@ -434,13 +443,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isHypeAll = hypePass != null && hypePass.coversAll && !hypePass.isExpired()
 
         // Google Play Subscriptions are server-authoritative and immune to local clock tamper
-        val newOic = playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineOic || isHypeDeck))
-        val newGmdss = playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineGmdss || isHypeRadio))
-        val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEw)
-        val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineDm)
-        val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEm)
-        val newHyp = playEnt.allAccessUnlocked || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
-        val newAct = newOic || newGmdss || newEw || newDm || newEm
+        val newOic = playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || accountOic || (!isClockTampered && (offlineOic || isHypeDeck))
+        val newGmdss = playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || accountGmdss || (!isClockTampered && (offlineGmdss || isHypeRadio))
+        val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || accountEw || (!isClockTampered && offlineEw)
+        val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || accountDm || (!isClockTampered && offlineDm)
+        val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || accountEm || (!isClockTampered && offlineEm)
+        val newHyp = playEnt.allAccessUnlocked || accountAllAccess || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)        val newAct = newOic || newGmdss || newEw || newDm || newEm
 
         if (_isOicNwProUnlocked.value != newOic) _isOicNwProUnlocked.value = newOic
         if (_isGmdssProUnlocked.value != newGmdss) _isGmdssProUnlocked.value = newGmdss
@@ -663,13 +671,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
-            combine(
-                billingManager.entitlements,
+            val licenseSignals = combine(
                 LicenseManager.isOicNwProUnlockedFlow,
                 LicenseManager.isGmdssProUnlockedFlow,
+                LicenseManager.isEngineOicEwProUnlockedFlow,
+                LicenseManager.isDeckMgtProUnlockedFlow,
+                LicenseManager.isEngineMgtProUnlockedFlow,
                 LicenseManager.isHyperionProUnlockedFlow,
                 LicenseManager.isProActivatedFlow
-            ) { _, _, _, _, _ ->
+            ) { _: Array<Boolean> -> Unit }
+            combine(billingManager.entitlements, licenseSignals) { _, _ ->
                 refreshUnlockStates()
             }.collect { }
         }
