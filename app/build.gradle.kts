@@ -68,10 +68,6 @@ android {
     targetCompatibility = JavaVersion.VERSION_17
   }
 
-  kotlinOptions {
-    jvmTarget = "17"
-  }
-
 
   buildFeatures {
     compose = true
@@ -83,6 +79,12 @@ android {
       isIncludeAndroidResources = true
       isReturnDefaultValues = true
     }
+  }
+}
+
+kotlin {
+  compilerOptions {
+    jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")
   }
 }
 
