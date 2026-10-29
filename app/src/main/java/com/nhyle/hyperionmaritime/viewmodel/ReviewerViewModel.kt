@@ -1800,7 +1800,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isCrpMode: Boolean = false,
         val prioritizeUnseen: Boolean = false,
         val isOperationalReview: Boolean = false,
-        val requiredPasses: Int = 2
+        val requiredPasses: Int = 2,
+        val isBookmarksMode: Boolean = false,
+        val isMistakesMode: Boolean = false
     )
 
     private var _lastPracticeDrillConfig: PracticeDrillConfig? = null
@@ -2488,6 +2490,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startBookmarksConfiguredPractice(
+        competenceId: String? = null,
         deliveryMode: DrillDeliveryMode = DrillDeliveryMode.STANDARD,
         startItem: Int = 1,
         endItem: Int? = null,
@@ -2503,7 +2506,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _activeDrillDeliveryMode.value = deliveryMode
         _activeQuizMode.value = QuizMode.BOOKMARKS_DRILL
         _activeFunctionId.value = null
-        _activeCompetenceId.value = "BOOKMARKS"
+        _activeCompetenceId.value = competenceId ?: "BOOKMARKS"
         _activePartLabel.value = null
         _currentQuestionIndex.value = 0
         _showSubmitDialog.value = false
@@ -2514,6 +2517,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isPro = isTrackUnlocked(_selectedTrack.value)
         val bookmarked = bookmarkedIds.value
         var questions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked }
+        if (competenceId != null && competenceId != "ALL" && competenceId != "BOOKMARKS") {
+            val currentTrack = _selectedTrack.value
+            questions = questions.filter { q ->
+                q.track == currentTrack && (
+                    q.competenceId.equals(competenceId, ignoreCase = true) ||
+                    q.competenceId.removePrefix("C").toIntOrNull() == competenceId.removePrefix("C").toIntOrNull()
+                )
+            }
+        } else if (competenceId != "ALL") {
+            val currentTrack = _selectedTrack.value
+            questions = questions.filter { it.track == currentTrack }
+        }
         if (!isPro) {
             questions = questions.take(5)
         }
@@ -2542,12 +2557,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         _lastPracticeDrillConfig = PracticeDrillConfig(
             track = _selectedTrack.value,
-            competenceId = "BOOKMARKS",
+            competenceId = competenceId,
             deliveryMode = deliveryMode,
             startItem = startItem,
             endItem = endItem,
             shuffleQuestions = shuffleQuestions,
-            shuffleChoices = shuffleChoices
+            shuffleChoices = shuffleChoices,
+            isBookmarksMode = true
         )
 
         if (deliveryMode == DrillDeliveryMode.INTENSIVE && isPro) {
@@ -2632,13 +2648,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         _lastPracticeDrillConfig = PracticeDrillConfig(
             track = _selectedTrack.value,
-            competenceId = "MISTAKES",
+            competenceId = competenceId,
             deliveryMode = deliveryMode,
             startItem = startItem,
             endItem = endItem,
             shuffleQuestions = shuffleQuestions,
             shuffleChoices = shuffleChoices,
-            requiredPasses = requiredPasses
+            requiredPasses = requiredPasses,
+            isMistakesMode = true
         )
 
         val isPro = isTrackUnlocked(_selectedTrack.value)
@@ -4036,7 +4053,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun getQuestionsForCompetence(competenceId: String): List<Question> {
         // Direct defense: Unactivated mock exam returns empty list immediately
         if (!isTrackUnlocked(_selectedTrack.value)) return emptyList()
-        return _activeQuestions.value.filter { it.competenceId == competenceId }
+        return _activeQuestions.value.filter { q ->
+            q.competenceId.equals(competenceId, ignoreCase = true) ||
+            q.competenceId.removePrefix("C").toIntOrNull() == competenceId.removePrefix("C").toIntOrNull()
+        }
     }
 
     fun syncCurrentQuestionEvaluationState() {
@@ -4775,16 +4795,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun retakePracticeDrill() {
         val config = _lastPracticeDrillConfig
         if (config != null) {
-            if (config.competenceId == "BOOKMARKS") {
+            if (config.isBookmarksMode || config.competenceId == "BOOKMARKS") {
                 startBookmarksConfiguredPractice(
+                    competenceId = if (config.competenceId == "BOOKMARKS") null else config.competenceId,
                     deliveryMode = config.deliveryMode,
                     startItem = config.startItem,
                     endItem = config.endItem,
                     shuffleQuestions = config.shuffleQuestions,
                     shuffleChoices = config.shuffleChoices
                 )
-            } else if (config.competenceId == "MISTAKES") {
+            } else if (config.isMistakesMode || config.competenceId == "MISTAKES") {
                 startMistakesConfiguredPractice(
+                    competenceId = if (config.competenceId == "MISTAKES") null else config.competenceId,
                     deliveryMode = config.deliveryMode,
                     startItem = config.startItem,
                     endItem = config.endItem,

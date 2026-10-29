@@ -1,6 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
 import android.content.Context
+import com.nhyle.hyperionmaritime.data.local.MockExamHistoryManager
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.classifyQuestionDifficulty
@@ -10,6 +11,7 @@ import kotlin.math.roundToInt
 object MaritimeQuestionBank {
 
     var appContext: Context? = null
+    private val inMemoryMockSeen = java.util.concurrent.ConcurrentHashMap<String, MutableSet<String>>()
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -80,7 +82,8 @@ object MaritimeQuestionBank {
     fun getMockExamDataset(
         track: Track,
         isProUnlocked: Boolean,
-        selectedFunctions: Set<String>? = null
+        selectedFunctions: Set<String>? = null,
+        context: Context? = appContext
     ): List<Question> {
         if (!isProUnlocked) return emptyList()
         val allTrackQuestions = getQuestionsByTrack(track, isProUnlocked = true)
@@ -99,9 +102,78 @@ object MaritimeQuestionBank {
         }
 
         val sampled = mutableListOf<Question>()
+        val seenInThisExam = mutableSetOf<String>()
+        val ctx = context ?: appContext
+
         for ((compId, quota) in filteredDistribution) {
-            val compQuestions = allTrackQuestions.filter { it.competenceId == compId }.shuffled()
-            sampled.addAll(compQuestions.take(quota))
+            val compQuestions = allTrackQuestions.filter { q ->
+                q.competenceId.equals(compId, ignoreCase = true) ||
+                q.competenceId.removePrefix("C").toIntOrNull() == compId.removePrefix("C").toIntOrNull()
+            }
+
+            // Deduplicate pool and exclude any questions already chosen in this exam
+            val distinctPool = compQuestions.filter { it.id !in seenInThisExam }.distinctBy { it.id }
+
+            if (distinctPool.size < quota) {
+                android.util.Log.w(
+                    "MaritimeQuestionBank",
+                    "Mock Exam pool for track ${track.name} comp $compId has fewer questions (${distinctPool.size}) than preset quota ($quota). Using all available."
+                )
+            }
+
+            val picked = if (ctx != null) {
+                val history = MockExamHistoryManager.getSeenQuestionIds(ctx, track, compId)
+                // Filter out IDs that no longer exist in current pool (e.g. after question bank update)
+                val poolIdSet = distinctPool.map { it.id }.toSet()
+                val validHistory = history.filter { it in poolIdSet }.toSet()
+                val unseen = distinctPool.filter { it.id !in validHistory }
+
+                if (unseen.size >= quota) {
+                    val chosen = unseen.shuffled(kotlin.random.Random).take(quota)
+                    val newHistory = validHistory + chosen.map { it.id }
+                    MockExamHistoryManager.saveSeenQuestionIds(ctx, track, compId, newHistory)
+                    chosen
+                } else {
+                    // Use all remaining unseen questions
+                    val pickedFromOld = unseen.shuffled(kotlin.random.Random)
+                    val needed = (quota - pickedFromOld.size).coerceAtLeast(0)
+                    // Reset history for this competence and draw remaining slots from full pool excluding pickedFromOld
+                    val pickedFromOldIds = pickedFromOld.map { it.id }.toSet()
+                    val poolForNewCycle = distinctPool.filter { it.id !in pickedFromOldIds }
+                    val pickedFromNew = poolForNewCycle.shuffled(kotlin.random.Random).take(needed)
+                    // New cycle history contains only questions drawn into the new cycle
+                    val newCycleHistory = pickedFromNew.map { it.id }.toSet()
+                    MockExamHistoryManager.saveSeenQuestionIds(ctx, track, compId, newCycleHistory)
+                    pickedFromOld + pickedFromNew
+                }
+            } else {
+                val key = "${track.name}_${compId.uppercase()}"
+                val history = inMemoryMockSeen.getOrPut(key) { mutableSetOf() }
+                val poolIdSet = distinctPool.map { it.id }.toSet()
+                val validHistory = history.filter { it in poolIdSet }.toSet()
+                val unseen = distinctPool.filter { it.id !in validHistory }
+
+                if (unseen.size >= quota) {
+                    val chosen = unseen.shuffled(kotlin.random.Random).take(quota)
+                    history.clear()
+                    history.addAll(validHistory + chosen.map { it.id })
+                    chosen
+                } else {
+                    val pickedFromOld = unseen.shuffled(kotlin.random.Random)
+                    val needed = (quota - pickedFromOld.size).coerceAtLeast(0)
+                    val pickedFromOldIds = pickedFromOld.map { it.id }.toSet()
+                    val poolForNewCycle = distinctPool.filter { it.id !in pickedFromOldIds }
+                    val pickedFromNew = poolForNewCycle.shuffled(kotlin.random.Random).take(needed)
+                    history.clear()
+                    history.addAll(pickedFromNew.map { it.id })
+                    pickedFromOld + pickedFromNew
+                }
+            }
+
+            for (q in picked) {
+                seenInThisExam.add(q.id)
+                sampled.add(q)
+            }
         }
         return sampled
     }

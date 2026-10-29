@@ -196,7 +196,17 @@ fun PracticeConfigScreen(
     // Dynamic max available questions
     val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isCrpMode, context, isTrackLicensed, isOperationalReview, isMTestMDrill, activeImportedSheet, isBookmarksMode, isMistakesMode, bookmarkedIds, mistakeEntries) {
         if (isBookmarksMode) {
-            val list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
+            var list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
+            if (competenceId != null && competenceId != "ALL") {
+                list = list.filter { q ->
+                    q.track == selectedTrack && (
+                        q.competenceId.equals(competenceId, ignoreCase = true) ||
+                        q.competenceId.removePrefix("C").toIntOrNull() == competenceId.removePrefix("C").toIntOrNull()
+                    )
+                }
+            } else if (competenceId != "ALL") {
+                list = list.filter { it.track == selectedTrack }
+            }
             (if (isTrackLicensed) list.size else minOf(list.size, 5)).coerceAtLeast(1)
         } else if (isMistakesMode) {
             var trackMistakes = mistakeEntries.filter { entry ->
@@ -386,7 +396,9 @@ fun PracticeConfigScreen(
     ) {
         MaritimeTopBar(
             title = if (isMTestMDrill) "IMPORTED DRILL CONFIG" else configScreenTitle,
-            subtitle = if (isMTestMDrill) (activeImportedSheet?.title ?: "Imported Sheet") else if (isBookmarksMode) "Bookmarked Questions" else if (isMistakesMode) "Mistakes Notebook" else if (compInfo != null) compInfo.code else "All Competencies",
+            subtitle = if (isMTestMDrill) (activeImportedSheet?.title ?: "Imported Sheet") else if (isBookmarksMode) {
+                if (competenceId == "ALL") "All Bookmarks" else if (competenceId != null) "${selectedTrack.shortName} $competenceId Bookmarks" else "${selectedTrack.title} Bookmarks"
+            } else if (isMistakesMode) "Mistakes Notebook" else if (compInfo != null) compInfo.code else "All Competencies",
             showBackButton = isMTestMDrill || isBookmarksMode || isMistakesMode,
             onBackClick = {
                 if (isMTestMDrill) {
@@ -1720,6 +1732,7 @@ fun PracticeConfigScreen(
 
                         if (isBookmarksMode) {
                             viewModel.startBookmarksConfiguredPractice(
+                                competenceId = competenceId,
                                 deliveryMode = selectedDeliveryFormat,
                                 startItem = launchStart,
                                 endItem = launchEnd,

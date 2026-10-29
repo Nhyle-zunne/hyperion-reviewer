@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuizMode
+import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
@@ -98,6 +102,21 @@ fun BookmarksScreen(
             }
         }
     }
+
+    var expandedTracks by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedCompetencies by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    val groupedByTrack = remember(filteredQuestions) {
+        filteredQuestions.groupBy { it.track }.mapValues { (_, questions) ->
+            questions.groupBy { q ->
+                val comp = q.competenceId.trim()
+                if (comp.isBlank()) "GENERAL" else comp
+            }.toSortedMap(compareBy { comp ->
+                comp.removePrefix("C").removePrefix("c").toIntOrNull() ?: Int.MAX_VALUE
+            })
+        }
+    }
+
     var showClearDialog by remember { mutableStateOf(false) }
 
     BackHandler {
@@ -234,25 +253,21 @@ fun BookmarksScreen(
                                 color = colors.muted
                             )
                             Spacer(modifier = Modifier.height(14.dp))
-                            MianButton(
+                            OutlinedButton(
                                 onClick = {
-                                    viewModel.navigateTo(Screen.PracticeConfig(isBookmarksMode = true))
+                                    if (bookmarkedQuestions.isNotEmpty()) {
+                                        viewModel.navigateTo(Screen.PracticeConfig(isBookmarksMode = true, competenceId = "ALL"))
+                                    }
                                 },
-                                accent = true,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RectangleShape,
+                                border = BorderStroke(1.dp, colors.accent),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "START BOOKMARKS DRILL",
-                                    fontWeight = FontWeight.ExtraBold,
-                                    fontSize = 12.sp,
-                                    letterSpacing = 1.sp
-                                )
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp), tint = colors.accent)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("PRACTICE ALL BOOKMARKS (${bookmarkedQuestions.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -306,7 +321,7 @@ fun BookmarksScreen(
                 }
 
                 item {
-                    MianSectionHeader(title = if (searchQuery.isBlank()) "BOOKMARKED ITEMS" else "SEARCH RESULTS (${filteredQuestions.size})")
+                    MianSectionHeader(title = if (searchQuery.isBlank()) "BOOKMARKS BY TRACK & COMPETENCE" else "SEARCH RESULTS (${filteredQuestions.size})")
                 }
 
                 if (filteredQuestions.isEmpty()) {
@@ -326,11 +341,164 @@ fun BookmarksScreen(
                         }
                     }
                 } else {
-                    items(filteredQuestions) { question ->
-                        BookmarkedQuestionCard(
-                            question = question,
-                            onRemove = { viewModel.removeBookmark(question.id) }
-                        )
+                    groupedByTrack.forEach { (track, compMap) ->
+                        val trackTotalBookmarks = compMap.values.sumOf { it.size }
+                        val trackKey = track.name
+                        val isTrackExpanded = trackKey in expandedTracks || searchQuery.isNotBlank()
+                        item(key = "track_header_${track.name}") {
+                            Card(
+                                onClick = {
+                                    expandedTracks = if (trackKey in expandedTracks) {
+                                        expandedTracks - trackKey
+                                    } else {
+                                        expandedTracks + trackKey
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp, bottom = 2.dp),
+                                shape = RectangleShape,
+                                colors = CardDefaults.cardColors(containerColor = colors.surface),
+                                border = BorderStroke(1.5.dp, colors.accent)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.title.uppercase(),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = colors.foreground,
+                                            letterSpacing = 0.5.sp
+                                        )
+                                        Text(
+                                            text = "$trackTotalBookmarks bookmark${if (trackTotalBookmarks > 1) "s" else ""} in this track",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.muted
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                viewModel.setTrack(track)
+                                                viewModel.navigateTo(Screen.PracticeConfig(isBookmarksMode = true, competenceId = null))
+                                            },
+                                            shape = RectangleShape,
+                                            border = BorderStroke(1.dp, colors.accent),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp), tint = colors.accent)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Practice Track", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                        Icon(
+                                            imageVector = if (isTrackExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = if (isTrackExpanded) "Collapse" else "Expand",
+                                            tint = colors.accent,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isTrackExpanded) {
+                            compMap.forEach { (competenceId, questionsInComp) ->
+                                val compKey = "${track.name}_$competenceId"
+                                val isCompExpanded = compKey in expandedCompetencies || searchQuery.isNotBlank()
+                                item(key = "comp_header_$compKey") {
+                                    Card(
+                                        onClick = {
+                                            expandedCompetencies = if (compKey in expandedCompetencies) {
+                                                expandedCompetencies - compKey
+                                            } else {
+                                                expandedCompetencies + compKey
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 6.dp, bottom = 4.dp),
+                                        shape = RectangleShape,
+                                        colors = CardDefaults.cardColors(containerColor = colors.surface2),
+                                        border = BorderStroke(1.dp, colors.border)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(12.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                val trackPrefix = when (track) {
+                                                    Track.DECK_OIC_NW -> "OIC-NW"
+                                                    Track.GMDSS_GOC -> "GMDSS"
+                                                    Track.ENGINE_OIC_EW -> "OIC-EW"
+                                                    Track.DECK_MGT -> "DECK-MGT"
+                                                    Track.ENGINE_MGT -> "ENGINE-MGT"
+                                                }
+                                                val compCode = if (competenceId.uppercase().startsWith("C")) competenceId.uppercase() else "C$competenceId"
+                                                Text(
+                                                    text = "$trackPrefix $compCode",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = colors.foreground,
+                                                    letterSpacing = 0.5.sp
+                                                )
+                                                Text(
+                                                    text = "${questionsInComp.size} bookmark${if (questionsInComp.size > 1) "s" else ""} saved",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = colors.muted
+                                                )
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        viewModel.setTrack(track)
+                                                        viewModel.navigateTo(Screen.PracticeConfig(isBookmarksMode = true, competenceId = competenceId))
+                                                    },
+                                                    shape = RectangleShape,
+                                                    border = BorderStroke(1.dp, colors.accent),
+                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.foreground),
+                                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                                ) {
+                                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp), tint = colors.accent)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Practice", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                }
+                                                Icon(
+                                                    imageVector = if (isCompExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                                    contentDescription = if (isCompExpanded) "Collapse" else "Expand",
+                                                    tint = colors.foreground,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (isCompExpanded) {
+                                    items(questionsInComp, key = { it.id }) { question ->
+                                        BookmarkedQuestionCard(
+                                            question = question,
+                                            onRemove = { viewModel.removeBookmark(question.id) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

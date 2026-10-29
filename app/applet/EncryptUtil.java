@@ -1,6 +1,7 @@
 import java.io.File;
 import java.nio.file.Files;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
@@ -20,7 +21,13 @@ public class EncryptUtil {
             keyBytes[idx] = (byte) (b[i] ^ m ^ 0x5A);
         }
 
-        File inputFile = new File("app/src/main/assets/questions/deck/oic_nw_c4.csv");
+        String inputPath = (args.length > 0) ? args[0] : "app/src/main/assets/questions/deck/oic_nw_c7.csv";
+        File inputFile = new File(inputPath);
+        if (!inputFile.exists()) {
+            System.err.println("Input file not found: " + inputPath);
+            System.exit(1);
+        }
+
         byte[] plainBytes = Files.readAllBytes(inputFile.toPath());
 
         byte[] nonce = new byte[12];
@@ -34,18 +41,20 @@ public class EncryptUtil {
         System.arraycopy(nonce, 0, output, 0, nonce.length);
         System.arraycopy(ciphertext, 0, output, nonce.length, ciphertext.length);
 
-        File outputFile = new File("app/src/main/assets/questions/deck/oic_nw_c4.csv.enc");
+        String outputPath = inputPath + ".enc";
+        File outputFile = new File(outputPath);
         Files.write(outputFile.toPath(), output);
-        System.out.println("Successfully encrypted " + inputFile.length() + " bytes into " + outputFile.length() + " bytes.");
+        System.out.println("Successfully encrypted " + inputFile.length() + " bytes into " + outputFile.length() + " bytes at " + outputPath);
 
         Cipher decryptCipher = Cipher.getInstance("AES/GCM/NoPadding");
         decryptCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(keyBytes, "AES"), new GCMParameterSpec(128, output, 0, 12));
         byte[] decrypted = decryptCipher.doFinal(output, 12, output.length - 12);
 
-        if (java.util.Arrays.equals(plainBytes, decrypted)) {
+        if (Arrays.equals(plainBytes, decrypted)) {
             System.out.println("Verification SUCCESS: Decrypted bytes match original file exactly!");
         } else {
             System.err.println("Verification FAILED!");
+            System.exit(2);
         }
     }
 }

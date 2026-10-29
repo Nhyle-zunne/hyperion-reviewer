@@ -423,22 +423,11 @@ class ReviewerRepository(private val database: HyperionDatabase) {
             }
             QuizMode.MOCK_EXAM -> {
                 // Official MARINA permit breakdown: filtered to selected functions if specified
-                val mockDataset = MaritimeQuestionBank.getMockExamDataset(
+                MaritimeQuestionBank.getMockExamDataset(
                     track = track,
                     isProUnlocked = isProUnlocked,
                     selectedFunctions = selectedFunctions
                 )
-                if (prioritizeUnseen) {
-                    QuestionSelectionDispatcher.selectQuestions(
-                        eligiblePool = mockDataset,
-                        requestedCount = mockDataset.size,
-                        seenQuestionIds = seenQuestionIds,
-                        prioritizeUnseen = true,
-                        shuffleQuestions = true
-                    )
-                } else {
-                    mockDataset
-                }
             }
             QuizMode.COMPETENCE_DRILL -> {
                 val pool = if (competenceId != null) {
