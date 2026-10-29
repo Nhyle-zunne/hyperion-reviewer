@@ -81,7 +81,23 @@ jobs:
           }
           JSON
 
-      - name: Compile and run unit tests
-        # Real Firebase/OAuth configuration and a real-device sign-in test
-        # are still required before release.
+      - name: Compile and run unit tests and create a test APK
+        # The Web OAuth client ID is optional for a compile-only build. When the
+        # repository secret is configured, the debug APK can exercise Google sign-in.
+        # Production Firebase config and real-device acceptance testing remain separate.
+        env:
+          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
         run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest assembleDebug
+
+      - name: Write APK checksum
+        run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS.txt
+
+      - name: Upload installable debug APK for device testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperion-maritime-account-linking-debug-apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
