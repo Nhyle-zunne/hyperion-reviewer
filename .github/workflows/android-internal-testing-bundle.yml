@@ -75,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${KEYSTORE_BASE64:-}" ]]; then
-            echo "::error::Add KEYSTORE_BASE64 as a base64-encoded copy of the original upload keystore."
+            echo "::error::Add KEYSTORE_BASE64 as a base64-encoded copy of the upload keystore currently accepted by Play Console. Do not use a debug key or a key whose registration is still pending."
             exit 1
           fi
           KEYSTORE_PATH="$RUNNER_TEMP/hyperion-upload-key.jks"
