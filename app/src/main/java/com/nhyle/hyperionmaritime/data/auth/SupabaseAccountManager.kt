@@ -181,6 +181,18 @@ object SupabaseAccountManager {
         }
     }
 
+    /**
+     * After a successful Google Play purchase, link it to the current Hyperion account
+     * when the user has already signed in. Account linking remains optional: when there
+     * is no saved Hyperion session, the local Play purchase is left untouched and the
+     * user can link it later by signing in or tapping Sync Website Licenses.
+     */
+    suspend fun syncAfterPlayPurchaseIfSignedIn(context: Context) {
+        val appContext = context.applicationContext
+        val saved = withContext(Dispatchers.IO) { readSession(appContext) } ?: return
+        syncAndUpdateState(appContext, saved)
+    }
+
     fun signOut(context: Context) {
         try {
             sessionPreferences(context.applicationContext).edit().clear().apply()
