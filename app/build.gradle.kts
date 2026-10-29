@@ -63,6 +63,7 @@ android {
   }
 
   compileOptions {
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
@@ -104,6 +105,9 @@ dependencies {
   implementation("androidx.room:room-runtime:2.6.1")
   implementation("androidx.room:room-ktx:2.6.1")
   ksp("androidx.room:room-compiler:2.6.1")
+
+  // Backport java.time APIs for the app's minSdk 24 (Android 7.x) devices.
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
   // WorkManager & Security
   implementation("androidx.work:work-runtime-ktx:2.9.1")
