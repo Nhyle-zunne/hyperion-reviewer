@@ -21,7 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -224,6 +226,14 @@ object SupabaseAccountManager {
     private suspend fun syncGooglePlayPurchases(context: Context, session: SupabaseSession): PlayLinkSyncResult {
         return try {
             val billing = BillingManager.getInstance(context.applicationContext)
+            // BillingManager connects asynchronously during construction. Do not read
+            // its cached snapshot before Play Billing is ready, or a valid owned
+            // subscription could be missed during a first sign-in/cold start.
+            val connected = withTimeoutOrNull(15_000L) {
+                billing.entitlements.first { it.billingConnected }
+            }
+            if (connected == null) return PlayLinkSyncResult(activeCount = 0, hadFailures = true)
+
             billing.queryPurchasesAsync()
             val purchases = billing.getOwnedPurchasesForAccountLinking()
             var activeCount = 0
