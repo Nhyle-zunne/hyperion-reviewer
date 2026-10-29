@@ -94,15 +94,38 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
+          set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
+          echo "Checking debug APK at: $APK"
+          if [[ ! -s "$APK" ]]; then
+            echo "::error::Debug APK not found at the expected path."
+            find app/build/outputs/apk -maxdepth 5 -type f -name '*.apk' -print || true
+            exit 1
+          fi
+
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -s "$APK"
-          test -x "$APKSIGNER"
-          # apksigner writes certificate details to stderr on some SDK versions.
-          "$APKSIGNER" verify --print-certs "$APK" 2>&1 \
-            | awk -F': ' '/Signer #1 certificate SHA-1 digest:/ { print $NF; found=1; exit } END { if (!found) exit 1 }' \
-            > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
-          test -s app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+          if [[ -z "$APKSIGNER" || ! -x "$APKSIGNER" ]]; then
+            echo "::error::Could not find an executable apksigner under $ANDROID_HOME/build-tools."
+            find "$ANDROID_HOME/build-tools" -type f -name apksigner -print -exec ls -l {} \; || true
+            exit 1
+          fi
+          echo "Using apksigner at: $APKSIGNER"
+
+          if ! CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK" 2>&1)"; then
+            echo "::error::apksigner verification failed; diagnostic output follows."
+            printf '%s\n' "$CERT_OUTPUT"
+            exit 1
+          fi
+          printf '%s\n' "$CERT_OUTPUT"
+
+          SHA1="$(printf '%s\n' "$CERT_OUTPUT" | sed -nE 's/.*certificate SHA-1 digest:[[:space:]]*([[:xdigit:]:]+).*/\1/ip' | head -n 1 | tr -d ':')"
+          if [[ -z "$SHA1" ]]; then
+            echo "::error::Could not parse a SHA-1 fingerprint from apksigner output."
+            exit 1
+          fi
+
+          printf '%s\n' "$SHA1" > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
+          echo "Debug signing-certificate SHA-1 exported successfully."
 
       - name: Write test-build configuration note
         env:
