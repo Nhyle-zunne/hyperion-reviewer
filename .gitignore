@@ -1,7 +1,9 @@
+# Android Studio / Gradle
 *.iml
-.gradle
-.kotlin
-/local.properties
+.gradle/
+.kotlin/
+.local.properties
+local.properties
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -9,10 +11,39 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+/build/
+**/build/
+.captures/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Environment and local configuration
 .env
+.env.*
+!.env.example
+key.properties
+keystore.properties
+**/key.properties
+**/keystore.properties
+
+# Never commit signing material or exported certificates
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.der
+*.jks.base64
+*.keystore.base64
 debug.keystore
+debug.keystore.base64
+*upload-certificate*
+
+# Firebase config must be supplied securely to CI/local builds
+google-services.json
+**/google-services.json
+
+# Generated install and Play upload artifacts
+*.apk
+*.aab
