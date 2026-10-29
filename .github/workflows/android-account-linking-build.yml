@@ -90,9 +90,16 @@ jobs:
         run: gradle --no-daemon --max-workers=2 --stacktrace assembleDebug
 
       - name: Export debug signing-certificate SHA-1
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
-          keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey \
-            | sed -n 's/^[[:space:]]*SHA1: //p' \
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -s "$APK"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --print-certs "$APK" \
+            | sed -n 's/^Signer #1 certificate SHA-1 digest: //p' \
             | head -n 1 > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
           test -s app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
 
