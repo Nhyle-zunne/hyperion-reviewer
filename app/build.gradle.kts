@@ -104,9 +104,9 @@ dependencies {
   implementation("androidx.fragment:fragment-ktx:1.8.9")
 
   // Room Database
-  implementation("androidx.room:room-runtime:2.6.1")
-  implementation("androidx.room:room-ktx:2.6.1")
-  ksp("androidx.room:room-compiler:2.6.1")
+  implementation("androidx.room:room-runtime:2.8.5")
+  implementation("androidx.room:room-ktx:2.8.5")
+  ksp("androidx.room:room-compiler:2.8.5")
 
   // Backport java.time APIs for the app's minSdk 24 (Android 7.x) devices.
   coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")

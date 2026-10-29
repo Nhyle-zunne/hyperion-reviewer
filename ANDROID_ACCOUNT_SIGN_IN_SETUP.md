@@ -21,14 +21,14 @@ For CI, set HYPERION_GOOGLE_WEB_CLIENT_ID as a GitHub Actions secret/environment
 - Account purchases are checked with the authenticated session; the app does not send a client-supplied user ID to decide which entitlements are owned.
 - Website entitlements are stored in Android encrypted preferences and are accepted offline for no more than 72 hours since the last successful sync, and never beyond the server-provided expiry time.
 - Signing out clears only the account session and account-entitlement cache. It does not cancel or clear Google Play purchases or the existing device-key system.
-- This phase does not yet link Android Google Play purchase tokens to website accounts. Server-side Google Play purchase verification and cross-surface purchase sync are a separate follow-up.
+- Google Play purchase linking is implemented in this feature branch, but cross-platform access remains inactive until the matching Supabase migration and Edge Function are deployed and configured. Until then, Google Play access in Android remains separate from website/PWA licenses.
 
 ## Before releasing to Google Play
 
 Review the Play Console Data safety answers and Privacy Policy to disclose account sign-in and processing/storage of account email, authentication session, and account-linked license entitlement data. Never ship a Supabase service-role key or a Google OAuth client secret in the Android app.
 
 
-## Existing Google Play subscription linking
+## Google Play subscription linking (requires backend release)
 
 Once the matching backend branch is deployed and configured, the signed-in Android app re-queries owned Play subscriptions and submits each purchase token to the authenticated `link-google-play-subscription` Edge Function. The function verifies tokens with Google's `purchases.subscriptionsv2.get` endpoint before creating a separate Google Play entitlement; it never overwrites a website checkout or admin-issued entitlement.
 
