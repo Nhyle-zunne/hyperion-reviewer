@@ -182,6 +182,39 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
+    fun accountLinkedLicenseExpiresEvenIfReactiveUnlockStateHasNotRefreshed() = runBlocking {
+        // Reset all other access sources so the account entitlement is the only grant.
+        LicenseManager.clearAccountEntitlements(context)
+        LicenseManager.setActivated(context, false)
+        LicenseManager.setOicNwProUnlocked(context, false)
+        LicenseManager.setGmdssProUnlocked(context, false)
+        LicenseManager.setHyperionProUnlocked(context, false)
+        context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
+            .edit().clear().apply()
+        context.getSharedPreferences("hyperion_play_billing_secure_prefs", Context.MODE_PRIVATE)
+            .edit().clear().apply()
+        billingManager.resetEntitlementsForTesting()
+
+        val expiresAt = System.currentTimeMillis() + 1_500L
+        assertTrue(
+            LicenseManager.saveAccountEntitlements(
+                context,
+                userId = "test-account-expiry",
+                expiryByTrack = mapOf(Track.DECK_OIC_NW to expiresAt)
+            )
+        )
+        assertTrue("A valid account grant should unlock the matching track", viewModel.isTrackUnlocked(Track.DECK_OIC_NW))
+        assertFalse("An account grant must not unlock another track", viewModel.isTrackUnlocked(Track.GMDSS_GOC))
+
+        // No UI refresh is triggered just because wall-clock time passes.
+        Thread.sleep(1_700L)
+        assertFalse(
+            "The gate must re-check the current server expiry instead of trusting a stale reactive unlock flag",
+            viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
+        )
+    }
+
+    @Test
     fun test4_freeTierStrict5QuestionCeiling() = runBlocking {
         // Ensure user is completely unentitled
         LicenseManager.setActivated(context, false)
