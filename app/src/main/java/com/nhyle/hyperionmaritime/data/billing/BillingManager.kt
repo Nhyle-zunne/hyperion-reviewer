@@ -217,6 +217,24 @@ object BillingConstants {
  */
 data class PlayPurchaseForAccountLinking(val productId: String, val purchaseToken: String)
 
+internal fun collectPlayPurchasesForAccountLinking(
+    allAccessToken: String?,
+    oicNwToken: String?,
+    gmdssToken: String?,
+    engineOicEwToken: String?,
+    deckMgtToken: String?,
+    engineMgtToken: String?
+): List<PlayPurchaseForAccountLinking> = listOf(
+    allAccessToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ALL_ACCESS_PASS, it) },
+    oicNwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_OIC_NW_PASS, it) },
+    gmdssToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_GMDSS_PASS, it) },
+    engineOicEwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS, it) },
+    deckMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_DECK_MGT_PASS, it) },
+    engineMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_MGT_PASS, it) }
+).filterNotNull()
+    .filter { it.purchaseToken.isNotBlank() && !it.purchaseToken.startsWith("mock_sandbox_sub_token_") }
+    .distinctBy { it.purchaseToken }
+
 data class TrackEntitlements(
     val oicNwPlan: ActivePlanInfo? = null,
     val gmdssPlan: ActivePlanInfo? = null,
@@ -550,19 +568,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
      */
     fun getOwnedPurchasesForAccountLinking(): List<PlayPurchaseForAccountLinking> {
         val owned = _entitlements.value
-        val allAccessToken = owned.allAccessPlan?.purchaseToken
-        if (!allAccessToken.isNullOrBlank() && !allAccessToken.startsWith("mock_sandbox_sub_token_")) {
-            return listOf(PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ALL_ACCESS_PASS, allAccessToken))
-        }
-        return listOf(
-            owned.oicNwPlan?.purchaseToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_OIC_NW_PASS, it) },
-            owned.gmdssPlan?.purchaseToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_GMDSS_PASS, it) },
-            owned.engineOicEwPlan?.purchaseToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS, it) },
-            owned.deckMgtPlan?.purchaseToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_DECK_MGT_PASS, it) },
-            owned.engineMgtPlan?.purchaseToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_MGT_PASS, it) }
-        ).filterNotNull()
-            .filter { it.purchaseToken.isNotBlank() && !it.purchaseToken.startsWith("mock_sandbox_sub_token_") }
-            .distinctBy { it.purchaseToken }
+        return collectPlayPurchasesForAccountLinking(
+            allAccessToken = owned.allAccessPlan?.purchaseToken,
+            oicNwToken = owned.oicNwPlan?.purchaseToken,
+            gmdssToken = owned.gmdssPlan?.purchaseToken,
+            engineOicEwToken = owned.engineOicEwPlan?.purchaseToken,
+            deckMgtToken = owned.deckMgtPlan?.purchaseToken,
+            engineMgtToken = owned.engineMgtPlan?.purchaseToken
+        )
     }
 
     suspend fun queryPurchasesAsync() = withContext(Dispatchers.IO) {
