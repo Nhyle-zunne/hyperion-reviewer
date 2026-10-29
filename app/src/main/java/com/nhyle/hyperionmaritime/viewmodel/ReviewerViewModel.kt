@@ -448,7 +448,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || accountEw || (!isClockTampered && offlineEw)
         val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || accountDm || (!isClockTampered && offlineDm)
         val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || accountEm || (!isClockTampered && offlineEm)
-        val newHyp = playEnt.allAccessUnlocked || accountAllAccess || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)        val newAct = newOic || newGmdss || newEw || newDm || newEm
+        val newHyp = playEnt.allAccessUnlocked || accountAllAccess || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
+        val newAct = newOic || newGmdss || newEw || newDm || newEm
 
         if (_isOicNwProUnlocked.value != newOic) _isOicNwProUnlocked.value = newOic
         if (_isGmdssProUnlocked.value != newGmdss) _isGmdssProUnlocked.value = newGmdss
