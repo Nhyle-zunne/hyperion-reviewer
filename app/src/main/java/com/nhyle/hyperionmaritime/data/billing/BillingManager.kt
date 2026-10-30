@@ -621,6 +621,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
     private val lastRequestedCycles = java.util.concurrent.ConcurrentHashMap<String, BillingCycle>()
+    @Volatile private var checkoutFlowProductId: String? = null
 
     private var reconnectDelayMs = 1000L
 
@@ -806,6 +807,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun queryPurchasesOnResume() {
         scope.launch {
+            // MainActivity calls this after the Play sheet closes and the app resumes.
+            // A still-pending transaction is preserved by the purchase snapshot itself.
+            checkoutFlowProductId = null
             if (!billingClient.isReady) startConnection()
 
             // A disconnected BillingClient can take a moment to reconnect. Do not skip
@@ -826,6 +830,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     }
 
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: List<Purchase>?) {
+        checkoutFlowProductId = null
         scope.launch {
             when (billingResult.responseCode) {
                 BillingClient.BillingResponseCode.OK -> {
@@ -887,6 +892,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         securePrefs.edit().remove("${cycleKey}_pending").apply()
         lastRequestedCycles.remove(productId)
+        if (checkoutFlowProductId == productId) checkoutFlowProductId = null
     }
 
     private suspend fun syncAccountAfterPlayPurchaseChanged() {
@@ -1222,7 +1228,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
 
         val observedProductIds = purchases.flatMap { it.products }.toSet()
-        val checkoutProductId = _entitlements.value.pendingPurchaseProductId
+        val checkoutProductId = checkoutFlowProductId
         val productCycleKeys = mapOf(
             BillingConstants.PRODUCT_OIC_NW_PASS to "play_plan_cycle_oic",
             BillingConstants.PRODUCT_GMDSS_PASS to "play_plan_cycle_gmdss",
@@ -1552,6 +1558,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             .setProductDetailsParamsList(productDetailsParamsList)
             .build()
 
+        checkoutFlowProductId = productId
         _entitlements.update { it.copy(pendingPurchaseProductId = productId, errorMessage = null) }
         val result = billingClient.launchBillingFlow(activity, flowParams)
         if (result.responseCode != BillingClient.BillingResponseCode.OK) {
