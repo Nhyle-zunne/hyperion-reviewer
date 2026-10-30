@@ -1221,18 +1221,23 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasAnyOwnedPurchase = oicPlan != null || gmdssPlan != null ||
             allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
 
-        if (purchases.isEmpty() && _entitlements.value.pendingPurchaseProductId == null) {
-            listOf(
-                "play_plan_cycle_oic",
-                "play_plan_cycle_gmdss",
-                "play_plan_cycle_all_access",
-                "play_plan_cycle_engine_ew",
-                "play_plan_cycle_deck_mgt",
-                "play_plan_cycle_engine_mgt"
-            ).forEach { key ->
-                editor.remove("${key}_pending")
+        val observedProductIds = purchases.flatMap { it.products }.toSet()
+        val checkoutProductId = _entitlements.value.pendingPurchaseProductId
+        val productCycleKeys = mapOf(
+            BillingConstants.PRODUCT_OIC_NW_PASS to "play_plan_cycle_oic",
+            BillingConstants.PRODUCT_GMDSS_PASS to "play_plan_cycle_gmdss",
+            BillingConstants.PRODUCT_ALL_ACCESS_PASS to "play_plan_cycle_all_access",
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS to "play_plan_cycle_engine_ew",
+            BillingConstants.PRODUCT_DECK_MGT_PASS to "play_plan_cycle_deck_mgt",
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS to "play_plan_cycle_engine_mgt"
+        )
+        productCycleKeys.forEach { (productId, cycleKey) ->
+            // Clear only stale/unowned pending choices. Keep a choice while its checkout
+            // is open or while Play reports that product as pending/purchased.
+            if (productId !in observedProductIds && checkoutProductId != productId) {
+                editor.remove("${cycleKey}_pending")
+                lastRequestedCycles.remove(productId)
             }
-            lastRequestedCycles.clear()
         }
 
         // Persist every observed clock advance, but advance the verification lease only
