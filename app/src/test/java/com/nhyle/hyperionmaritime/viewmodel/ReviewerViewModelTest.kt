@@ -97,6 +97,11 @@ class ReviewerViewModelTest {
                 .apply()
             val legacyInstall = ReviewerViewModel(application)
             assertFalse(legacyInstall.hasAcceptedTerms.value)
+            assertEquals(
+                "Legacy Boolean acceptance must not bypass the updated legal gate",
+                Screen.TermsOnboarding,
+                legacyInstall.currentScreen.value
+            )
 
             // An install that accepted this exact revision can proceed normally.
             prefs.edit()
@@ -104,6 +109,11 @@ class ReviewerViewModelTest {
                 .apply()
             val currentInstall = ReviewerViewModel(application)
             assertTrue(currentInstall.hasAcceptedTerms.value)
+            assertEquals(
+                "Current legal acceptance should allow the normal dashboard entry",
+                Screen.TrackSelection,
+                currentInstall.currentScreen.value
+            )
         } finally {
             val editor = prefs.edit().putBoolean("has_accepted_terms", originalAccepted)
             if (originalVersion == null) editor.remove("accepted_terms_version")
