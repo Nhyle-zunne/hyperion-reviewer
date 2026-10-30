@@ -1015,13 +1015,23 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
                     )
                 }
 
-                val days = Regex("(\\d+)\\s+days?").find(timeLeft ?: "")?.groupValues?.get(1)?.toIntOrNull()
-                val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
+                val countdownText = timeLeft.orEmpty()
+                val days = Regex("(\\d+)\\s+days?").find(countdownText)?.groupValues?.get(1)?.toIntOrNull()
+                val hasSubDayCountdown = days == null && (
+                    Regex("(\\d+)\\s+hrs?").containsMatchIn(countdownText) ||
+                    Regex("(\\d+)\\s+mins?").containsMatchIn(countdownText) ||
+                    countdownText.contains("< 1 min", ignoreCase = true)
+                )
+                val needsOnlineVerification = countdownText.contains("Reconnect to verify", ignoreCase = true)
+                val isExpiredFlag = countdownText.contains("Expired", ignoreCase = true) ||
+                    countdownText.contains("Tampered", ignoreCase = true)
                 val statusLabel = when {
                     !isUnlocked -> "UNVERIFIED"
+                    needsOnlineVerification -> "VERIFY ONLINE"
                     isExpiredFlag -> "EXPIRED"
                     days != null && days <= 7 -> "EXPIRING · ${days}D"
                     days != null -> "VERIFIED · ${days}D"
+                    hasSubDayCountdown -> "EXPIRING · <1D"
                     else -> "VERIFIED TERMINAL"
                 }
                 ProStatusBadge(
