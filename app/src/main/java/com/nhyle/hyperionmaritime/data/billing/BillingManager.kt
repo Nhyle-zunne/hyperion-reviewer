@@ -798,10 +798,19 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         )
     }
 
-    suspend fun queryPurchasesAsync() = withContext(Dispatchers.IO) {
+    /**
+     * Refreshes the Play-owned subscription snapshot. The Boolean is true only when
+     * BillingClient returned an authoritative successful snapshot while the device
+     * had validated internet; callers must not link a stale cached token after failure.
+     */
+    suspend fun queryPurchasesAsync(): Boolean = withContext(Dispatchers.IO) {
         if (!billingClient.isReady) {
             Log.w(TAG, "BillingClient not ready for queryPurchasesAsync")
-            return@withContext
+            return@withContext false
+        }
+        if (!hasValidatedInternet()) {
+            Log.i(TAG, "Skipping Play ownership refresh without validated internet")
+            return@withContext false
         }
 
         val params = QueryPurchasesParams.newBuilder()
@@ -812,11 +821,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val result = billingClient.queryPurchasesAsync(params)
             if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
                 processPurchases(result.purchasesList)
+                true
             } else {
                 Log.w(TAG, "queryPurchasesAsync response not OK: ${result.billingResult.debugMessage}")
+                false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception restoring purchases: ${e.message}")
+            false
         }
     }
 
