@@ -516,8 +516,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         fun localPlanExpiry(plan: ActivePlanInfo?): Long =
             plan?.takeIf { !it.isExpired }?.expiryTimestamp ?: 0L
 
+        val subscriptionDisplayNow = maxOf(
+            System.currentTimeMillis(),
+            LicenseManager.getAccountEntitlementEffectiveNow(app),
+            oicPlan?.effectiveNow ?: 0L,
+            gmdssPlan?.effectiveNow ?: 0L,
+            ewPlan?.effectiveNow ?: 0L,
+            dmPlan?.effectiveNow ?: 0L,
+            emPlan?.effectiveNow ?: 0L,
+            allAccessPlan?.effectiveNow ?: 0L
+        )
         fun expiryCountdown(expiryEpochMs: Long): String =
-            "${formatSubscriptionTimeRemaining(expiryEpochMs)} (${ActivePlanInfo(expiryTimestamp = expiryEpochMs).getFormattedExpiryDate()})"
+            "${formatSubscriptionTimeRemaining(expiryEpochMs, subscriptionDisplayNow)} (${ActivePlanInfo(expiryTimestamp = expiryEpochMs).getFormattedExpiryDate()})"
 
         val oicDisplayExp = subscriptionDisplayExpiry(accountOicExp, localPlanExpiry(oicPlan))
         val gmdssDisplayExp = subscriptionDisplayExpiry(accountGmdssExp, localPlanExpiry(gmdssPlan))
