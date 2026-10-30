@@ -94,6 +94,7 @@ data class DrillConfiguration(
 sealed class Screen {
     object TermsOnboarding : Screen() // First-launch mandatory terms gate
     object TermsAndDisclaimer : Screen() // Permanent legal agreement viewer
+    object PrivacyPolicy : Screen() // Permanent privacy policy viewer
     object TrackSelection : Screen() // Dedicated Track Selection Homepage
     object Home : Screen() // Track Dashboard
     data class PracticeCompetenceSelect(val isCrpMode: Boolean = false, val isOperationalReview: Boolean = false) : Screen() // Step 1: Competence Selection Screen
