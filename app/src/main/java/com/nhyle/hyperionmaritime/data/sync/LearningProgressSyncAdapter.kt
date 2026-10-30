@@ -7,6 +7,9 @@ import com.nhyle.hyperionmaritime.data.local.HyperionDatabase
 import com.nhyle.hyperionmaritime.data.local.MistakeEntity
 import com.nhyle.hyperionmaritime.data.local.MistakeEntry
 import com.nhyle.hyperionmaritime.data.local.MistakesVaultManager
+import com.nhyle.hyperionmaritime.data.local.QuestionAttemptHistoryManager
+import com.nhyle.hyperionmaritime.data.local.QuestionAttemptRecord
+import com.nhyle.hyperionmaritime.data.local.QuestionHistoryEntry
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -30,6 +33,7 @@ object LearningProgressSyncAdapter {
     private const val STUDY_TIME_KEY = "hyperion-study-time"
     private const val VAULT_KEY = "hyperion-vault"
     private const val BOOKMARKS_KEY = "hyperion-bookmarks"
+    private const val QUESTION_ATTEMPTS_KEY = "hyperion-question-attempt-history"
 
     suspend fun mergeNativeIntoSnapshot(context: Context, remote: JSONObject?): JSONObject {
         val appContext = context.applicationContext
@@ -50,6 +54,7 @@ object LearningProgressSyncAdapter {
             nativeStudySegments(database), 400
         )
         mergeNativeHistory(storage, database)
+        mergeNativeQuestionAttemptHistory(storage, appContext)
 
         return (remote?.let { JSONObject(it.toString()) } ?: JSONObject()).apply {
             put("version", 1)
@@ -82,6 +87,7 @@ object LearningProgressSyncAdapter {
         applyCloudMistakes(context, database, storage)
         applyCloudStudySegments(database, storage)
         applyCloudHistory(database, storage)
+        applyCloudQuestionAttemptHistory(context.applicationContext, storage)
     }
 
     private suspend fun loadQuestionIndex(database: HyperionDatabase): Map<String, Question> {
@@ -176,6 +182,103 @@ object LearningProgressSyncAdapter {
                 .put("finishedAt", finishedAt))
         }
         mergeStore(storage, HISTORY_KEY, "entries", "finishedAt", entries, 200)
+    }
+
+
+    /**
+     * Store question-level attempt telemetry as a transport-only progress section.
+     * The PWA preserves this opaque section even though its current UI does not
+     * render Android's per-question attempt bars.
+     */
+    private fun mergeNativeQuestionAttemptHistory(storage: JSONObject, context: Context) {
+        val localEntries = QuestionAttemptHistoryManager.loadAll(context)
+        val localStateEntries = JSONObject()
+        localEntries.forEach { (key, entry) ->
+            val attempts = JSONArray()
+            entry.attempts.forEach { attempt ->
+                attempts.put(JSONObject()
+                    .put("id", attempt.id)
+                    .put("timestamp", attempt.timestamp)
+                    .put("isCorrect", attempt.isCorrect))
+            }
+            localStateEntries.put(key, JSONObject()
+                .put("questionId", entry.questionId)
+                .put("track", entry.track)
+                .put("allTimeCorrect", entry.allTimeCorrect)
+                .put("allTimeIncorrect", entry.allTimeIncorrect)
+                .put("attempts", attempts))
+        }
+
+        val remoteWrapper = runCatching {
+            JSONObject(storage.optString(QUESTION_ATTEMPTS_KEY, "{}"))
+        }.getOrNull() ?: JSONObject()
+        val remoteEntries = remoteWrapper.optJSONObject("state")?.optJSONObject("entries") ?: JSONObject()
+        val mergedEntries = JSONObject()
+        val keys = LinkedHashSet<String>()
+        remoteEntries.keys().forEach { keys.add(it) }
+        localStateEntries.keys().forEach { keys.add(it) }
+
+        for (key in keys) {
+            val remoteEntry = remoteEntries.optJSONObject(key) ?: JSONObject()
+            val localEntry = localStateEntries.optJSONObject(key) ?: JSONObject()
+            val byId = LinkedHashMap<String, JSONObject>()
+            listOf(remoteEntry, localEntry).forEach { entry ->
+                val attempts = entry.optJSONArray("attempts") ?: JSONArray()
+                for (index in 0 until attempts.length()) {
+                    val attempt = attempts.optJSONObject(index) ?: continue
+                    val id = attempt.optString("id").takeIf { it.isNotBlank() }
+                        ?: "${attempt.optLong("timestamp")}:${if (attempt.optBoolean("isCorrect")) "correct" else "incorrect"}"
+                    byId[id] = JSONObject(attempt.toString()).put("id", id)
+                }
+            }
+            val mergedAttempts = JSONArray()
+            byId.values.sortedBy { it.optLong("timestamp") }.forEach { mergedAttempts.put(it) }
+            val correctFromAttempts = byId.values.count { it.optBoolean("isCorrect") }
+            val incorrectFromAttempts = byId.size - correctFromAttempts
+            val base = if (localEntry.length() > 0) localEntry else remoteEntry
+            mergedEntries.put(key, JSONObject()
+                .put("questionId", base.optString("questionId"))
+                .put("track", base.optString("track"))
+                .put("allTimeCorrect", maxOf(remoteEntry.optInt("allTimeCorrect"), localEntry.optInt("allTimeCorrect"), correctFromAttempts))
+                .put("allTimeIncorrect", maxOf(remoteEntry.optInt("allTimeIncorrect"), localEntry.optInt("allTimeIncorrect"), incorrectFromAttempts))
+                .put("attempts", mergedAttempts))
+        }
+
+        storage.put(QUESTION_ATTEMPTS_KEY, JSONObject()
+            .put("version", 1)
+            .put("state", JSONObject().put("entries", mergedEntries))
+            .toString())
+    }
+
+    private fun applyCloudQuestionAttemptHistory(context: Context, storage: JSONObject) {
+        val wrapper = runCatching { JSONObject(storage.optString(QUESTION_ATTEMPTS_KEY, "{}")) }.getOrNull() ?: return
+        val entries = wrapper.optJSONObject("state")?.optJSONObject("entries") ?: return
+        val incoming = LinkedHashMap<String, QuestionHistoryEntry>()
+        val keys = entries.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val item = entries.optJSONObject(key) ?: continue
+            val questionId = item.optString("questionId").takeIf { it.isNotBlank() } ?: continue
+            val track = item.optString("track").takeIf { it.isNotBlank() } ?: continue
+            val attemptsArray = item.optJSONArray("attempts") ?: JSONArray()
+            val attempts = mutableListOf<QuestionAttemptRecord>()
+            for (index in 0 until attemptsArray.length()) {
+                val attempt = attemptsArray.optJSONObject(index) ?: continue
+                val timestamp = attempt.optLong("timestamp", 0L)
+                val isCorrect = attempt.optBoolean("isCorrect", false)
+                val id = attempt.optString("id").takeIf { it.isNotBlank() }
+                    ?: "${timestamp}:${if (isCorrect) "correct" else "incorrect"}"
+                attempts += QuestionAttemptRecord(timestamp, isCorrect, id)
+            }
+            incoming[key] = QuestionHistoryEntry(
+                questionId = questionId,
+                track = track,
+                allTimeCorrect = item.optInt("allTimeCorrect", attempts.count { it.isCorrect }).coerceAtLeast(0),
+                allTimeIncorrect = item.optInt("allTimeIncorrect", attempts.count { !it.isCorrect }).coerceAtLeast(0),
+                attempts = attempts
+            )
+        }
+        QuestionAttemptHistoryManager.mergeSyncedEntries(context, incoming)
     }
 
     private fun mergeStore(
