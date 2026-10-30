@@ -80,6 +80,27 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
 internal fun resolveRequestedBillingCycle(requestedCycle: BillingCycle?): BillingCycle =
     requestedCycle ?: BillingCycle.MONTHLY
 
+/**
+ * A Store selection is only a pending intention until Google Play returns a newer
+ * purchased subscription. Opening checkout and cancelling must not rewrite the
+ * duration metadata of an already-owned subscription.
+ */
+internal fun resolvePurchasedBillingCycle(
+    activeCycle: BillingCycle?,
+    pendingCycle: BillingCycle?,
+    previousPurchaseTimeEpochMs: Long,
+    currentPurchaseTimeEpochMs: Long
+): BillingCycle =
+    if (
+        pendingCycle != null &&
+        currentPurchaseTimeEpochMs > 0L &&
+        currentPurchaseTimeEpochMs > previousPurchaseTimeEpochMs
+    ) {
+        pendingCycle
+    } else {
+        activeCycle ?: BillingCycle.MONTHLY
+    }
+
 internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
     val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
     val recognizedPeriod = recurringPeriod in setOf("P1W", "P7D", "P1M", "P30D", "P1Y", "P365D", "P12M")
@@ -820,16 +841,22 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     }
                 }
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.i(TAG, "Purchase cancelled by user")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                 }
                 BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.i(TAG, "Item already owned. Re-querying purchases to restore entitlement.")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                     queryPurchasesAsync()
                     syncAccountAfterPlayPurchaseChanged()
                 }
                 else -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.e(TAG, "Purchase flow error: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
                     _entitlements.update {
                         it.copy(
@@ -840,6 +867,20 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 }
             }
         }
+    }
+
+    private fun clearPendingBillingCycle(productId: String) {
+        val cycleKey = when (productId) {
+            BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
+            BillingConstants.PRODUCT_GMDSS_PASS -> "play_plan_cycle_gmdss"
+            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_plan_cycle_all_access"
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_plan_cycle_engine_ew"
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_plan_cycle_deck_mgt"
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
+            else -> return
+        }
+        securePrefs.edit().remove("${cycleKey}_pending").apply()
+        lastRequestedCycles.remove(productId)
     }
 
     private suspend fun syncAccountAfterPlayPurchaseChanged() {
@@ -917,24 +958,49 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
                             else -> "play_plan_cycle_default"
                         }
-                        val requestedCycle = lastRequestedCycles[productId]
-                            ?: securePrefs.getString(cycleKey, null)
+                        val purchaseTimeKey = when (productId) {
+                            BillingConstants.PRODUCT_OIC_NW_PASS -> "play_purchase_time_oic"
+                            BillingConstants.PRODUCT_GMDSS_PASS -> "play_purchase_time_gmdss"
+                            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_purchase_time_all_access"
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_purchase_time_engine_ew"
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_purchase_time_deck_mgt"
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_purchase_time_engine_mgt"
+                            else -> "play_purchase_time_default"
+                        }
+                        val pendingCycleKey = "${cycleKey}_pending"
+                        val activeCycle = securePrefs.getString(cycleKey, null)
+                            ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
+                        val pendingCycle = lastRequestedCycles[productId]
+                            ?: securePrefs.getString(pendingCycleKey, null)
                                 ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
+                        val previousPurchaseTime = securePrefs.getLong(purchaseTimeKey, 0L)
+                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
+                        val cycle = resolvePurchasedBillingCycle(
+                            activeCycle = activeCycle,
+                            pendingCycle = pendingCycle,
+                            previousPurchaseTimeEpochMs = previousPurchaseTime,
+                            currentPurchaseTimeEpochMs = purchase.purchaseTime
+                        )
 
-                        // The cycle is persisted before launching Play Billing, so an explicit
-                        // weekly selection remains weekly after process restart. Do not reinterpret
-                        // it as monthly merely because this is a restore/query rather than a new tap.
-                        val effectiveCycle = resolveRequestedBillingCycle(requestedCycle)
+                        // Confirm a pending Store selection only when Google Play reports a
+                        // newer purchase timestamp. A cancelled checkout or restore of the
+                        // same purchase keeps its previously saved active duration.
+                        if (pendingCycle != null) {
+                            val selectedCycleWasPurchased =
+                                purchase.purchaseTime > 0L && purchase.purchaseTime > previousPurchaseTime
+                            val checkoutStillOpen = _entitlements.value.pendingPurchaseProductId == productId
+                            if (selectedCycleWasPurchased || !checkoutStillOpen) {
+                                editor.remove(pendingCycleKey)
+                                lastRequestedCycles.remove(productId)
+                            }
+                        }
 
                         val offer = details?.subscriptionOfferDetails?.firstOrNull { candidate ->
-                            effectiveCycle.matchesPlayOffer(
+                            cycle.matchesPlayOffer(
                                 basePlanId = candidate.basePlanId,
                                 billingPeriods = candidate.pricingPhases.pricingPhaseList.map { it.billingPeriod }
                             )
                         }
-
-                        val cycle = effectiveCycle
-                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
                         val currentWaterMark = maxOf(savedHighWaterMark, purchaseTime, queryTimeEpoch)
                         val effectiveQueryTime = maxOf(queryTimeEpoch, currentWaterMark)
 
@@ -1132,6 +1198,21 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val hasAnyOwnedPurchase = oicPlan != null || gmdssPlan != null ||
             allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
+
+        if (purchases.isEmpty() && _entitlements.value.pendingPurchaseProductId == null) {
+            listOf(
+                "play_plan_cycle_oic",
+                "play_plan_cycle_gmdss",
+                "play_plan_cycle_all_access",
+                "play_plan_cycle_engine_ew",
+                "play_plan_cycle_deck_mgt",
+                "play_plan_cycle_engine_mgt"
+            ).forEach { key ->
+                editor.remove("${key}_pending")
+            }
+            lastRequestedCycles.clear()
+        }
+
         // Persist every observed clock advance, but advance the verification lease only
         // when Android reports a validated internet connection and the clock is monotonic.
         editor.putLong(
@@ -1405,9 +1486,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             else -> "play_plan_cycle_default"
         }
         try {
-            securePrefs.edit().putString(cycleKey, cycle.name).apply()
+            securePrefs.edit().putString("${cycleKey}_pending", cycle.name).apply()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to persist requested cycle: ${e.message}")
+            Log.w(TAG, "Failed to persist pending duration selection: ${e.message}")
         }
 
         val details = _productsDetails.value[productId]
