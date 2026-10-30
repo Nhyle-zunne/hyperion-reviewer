@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +79,9 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.nhyle.hyperionmaritime.R
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -128,7 +132,6 @@ fun TrackSelectionScreen(
     } else 0.0
 
     var selectedDetailsTrack by remember { mutableStateOf<Track?>(null) }
-    var showFacebookConfirmDialog by remember { mutableStateOf(false) }
 
     val currentDensity = LocalDensity.current
     val textScale by viewModel.questionTextScale.collectAsState()
@@ -301,8 +304,12 @@ fun TrackSelectionScreen(
                         viewModel.selectTrack(track)
                         viewModel.navigateTo(Screen.Home)
                     },
-                    onOpenFacebook = {
-                        showFacebookConfirmDialog = true
+                    onOpenWebsite = {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://hyperionmaritime.org")))
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Unable to open website", Toast.LENGTH_SHORT).show()
+                        }
                     },
                     onOpenDetails = { track ->
                         selectedDetailsTrack = track
@@ -344,20 +351,6 @@ fun TrackSelectionScreen(
         )
     }
 
-    if (showFacebookConfirmDialog) {
-        FacebookConfirmationDialog(
-            onConfirm = {
-                showFacebookConfirmDialog = false
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.facebook.com/hyperionbynhyle"))
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-                    Toast.makeText(context, "Unable to open browser", Toast.LENGTH_SHORT).show()
-                }
-            },
-            onDismiss = { showFacebookConfirmDialog = false }
-        )
-    }
     }
 }
 
@@ -493,7 +486,7 @@ private fun DashboardGrid(
     deckProgress: Int,
     gmdssProgress: Int,
     onSelectTrack: (Track) -> Unit,
-    onOpenFacebook: () -> Unit,
+    onOpenWebsite: () -> Unit,
     onOpenDetails: (Track) -> Unit
 ) {
     Column(
@@ -616,7 +609,7 @@ private fun DashboardGrid(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                FacebookTile(onClick = onOpenFacebook)
+                WebsiteTile(onClick = onOpenWebsite)
             }
         }
     }
@@ -931,7 +924,7 @@ private fun LockedEngineTile() {
 }
 
 @Composable
-private fun FacebookTile(
+private fun WebsiteTile(
     onClick: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
@@ -939,11 +932,11 @@ private fun FacebookTile(
     Surface(
         shape = RectangleShape,
         color = colors.surface,
-        border = BorderStroke(1.dp, Color(0xFF1877F2).copy(alpha = 0.7f)),
+        border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.7f)),
         modifier = Modifier
             .fillMaxWidth()
             .height(205.dp)
-            .clickable { onClick() }
+            .clickable(onClick = onClick)
     ) {
         Column(
             modifier = Modifier
@@ -956,25 +949,12 @@ private fun FacebookTile(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .background(Color(0xFF1877F2), RectangleShape)
-                        .border(1.dp, Color(0xFF1877F2), RectangleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "f",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 22.sp
-                        ),
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 2.dp)
-                    )
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.app_logo),
+                    contentDescription = "Hyperion Maritime app logo",
+                    modifier = Modifier.size(42.dp),
+                    contentScale = ContentScale.Fit
+                )
 
                 Surface(
                     shape = RectangleShape,
@@ -982,7 +962,7 @@ private fun FacebookTile(
                     border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.6f))
                 ) {
                     Text(
-                        text = "COMMUNITY",
+                        text = "OFFICIAL",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
@@ -997,47 +977,31 @@ private fun FacebookTile(
 
             Column {
                 Text(
-                    text = "CONNECT WITH US",
+                    text = "HYPERION MARITIME",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.ExtraBold,
                     color = colors.foreground,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     letterSpacing = (-0.2).sp,
                     softWrap = true
                 )
-                Spacer(modifier = Modifier.height(1.dp))
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = "OFFICIAL PAGE & SUPPORT",
+                    text = "OFFICIAL WEBSITE",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.muted,
                     fontSize = 9.sp,
-                    softWrap = true
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(5.dp))
                 Text(
-                    text = "FACEBOOK",
-                    style = MaterialTheme.typography.titleLarge,
+                    text = "hyperionmaritime.org",
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     color = colors.accent,
-                    fontSize = 21.sp,
-                    softWrap = true
-                )
-                Text(
-                    text = "UPDATES & INQUIRIES",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.muted,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp,
-                    softWrap = true
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "@hyperionbynhyle",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.muted,
-                    fontSize = 10.sp,
+                    fontSize = 14.sp,
                     softWrap = true
                 )
             }
@@ -1053,13 +1017,12 @@ private fun FacebookTile(
                         .padding(end = 8.dp)
                 ) {
                     Text(
-                        text = "VISIT PAGE",
+                        text = "VISIT WEBSITE",
                         style = MaterialTheme.typography.labelSmall,
                         fontFamily = FontFamily.Monospace,
                         color = colors.muted,
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        softWrap = true
+                        fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Box(
@@ -1071,7 +1034,7 @@ private fun FacebookTile(
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(1f)
+                                .fillMaxWidth()
                                 .background(colors.accent, RectangleShape)
                         )
                     }
@@ -1080,136 +1043,15 @@ private fun FacebookTile(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(colors.accent, RectangleShape)
-                        .clickable { onClick() },
+                        .background(colors.accent, RectangleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Visit Facebook",
+                        contentDescription = "Open Hyperion Maritime website",
                         tint = colors.accentForeground,
                         modifier = Modifier.size(16.dp)
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FacebookConfirmationDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    val colors = LocalSpaghettiColors.current
-
-    HyperionDialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.7f))
-                .clickable { onDismiss() },
-            contentAlignment = Alignment.Center
-        ) {
-            Surface(
-                shape = RectangleShape,
-                color = colors.surface,
-                border = BorderStroke(1.dp, colors.border),
-                modifier = Modifier
-                    .fillMaxWidth(0.88f)
-                    .clickable(enabled = false) {}
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(colors.accent)
-                    )
-
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
-                    ) {
-                        Text(
-                            text = "EXTERNAL LINK",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.accent,
-                            fontSize = 10.sp,
-                            letterSpacing = 1.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = "Do you want to visit our Facebook page?",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.foreground,
-                            lineHeight = 22.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "You will be redirected to the official Hyperion page on Facebook.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.muted,
-                            lineHeight = 18.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Surface(
-                                onClick = onConfirm,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp),
-                                shape = RectangleShape,
-                                color = colors.accent
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "YES",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.accentForeground,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-                            }
-
-                            Surface(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(42.dp),
-                                shape = RectangleShape,
-                                color = colors.surface2,
-                                border = BorderStroke(1.dp, colors.border)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "NO",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.foreground,
-                                        letterSpacing = 1.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
