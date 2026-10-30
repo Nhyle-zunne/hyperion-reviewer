@@ -435,6 +435,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val accountDm = LicenseManager.isAccountEntitlementUnlocked(app, Track.DECK_MGT)
         val accountEm = LicenseManager.isAccountEntitlementUnlocked(app, Track.ENGINE_MGT)
         val accountAllAccess = accountOic && accountGmdss && accountEw && accountDm && accountEm
+        val isDeveloperAdminAccess = LicenseManager.isDeveloperAdminAccessActive(app)
 
         // Temporary Hype Pass Layer (Device-bound, read-only overlay)
         val hypePass = if (app != null) HypePassManager.getActivePass(app) else null
@@ -443,11 +444,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isHypeAll = hypePass != null && hypePass.coversAll && !hypePass.isExpired()
 
         // Google Play Subscriptions are server-authoritative and immune to local clock tamper
-        val newOic = playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || accountOic || (!isClockTampered && (offlineOic || isHypeDeck))
-        val newGmdss = playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || accountGmdss || (!isClockTampered && (offlineGmdss || isHypeRadio))
-        val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || accountEw || (!isClockTampered && offlineEw)
-        val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || accountDm || (!isClockTampered && offlineDm)
-        val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || accountEm || (!isClockTampered && offlineEm)
+        val newOic = isDeveloperAdminAccess || playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || accountOic || (!isClockTampered && (offlineOic || isHypeDeck))
+        val newGmdss = isDeveloperAdminAccess || playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || accountGmdss || (!isClockTampered && (offlineGmdss || isHypeRadio))
+        val newEw = isDeveloperAdminAccess || playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || accountEw || (!isClockTampered && offlineEw)
+        val newDm = isDeveloperAdminAccess || playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || accountDm || (!isClockTampered && offlineDm)
+        val newEm = isDeveloperAdminAccess || playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || accountEm || (!isClockTampered && offlineEm)
         val newHyp = playEnt.allAccessUnlocked || accountAllAccess || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
         val newAct = newOic || newGmdss || newEw || newDm || newEm
 
@@ -468,6 +469,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         // Strict Priority: Google Play Subscription > Offline Key > Promo Pass > Hype Check-in Pass
         val licenseType = when {
+            isDeveloperAdminAccess -> "DEVELOPER_ADMIN"
             isSub -> "SUBSCRIPTION"
             isOfflineActive -> "OFFLINE_PASS"
             _registrationUiState.value.licenseType == "PROMO_PASS" && newAct -> "PROMO_PASS"
@@ -571,6 +573,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val statusMsg = when {
+            isDeveloperAdminAccess -> "DEVELOPER / ADMIN ACCESS · ALL TRACKS UNLOCKED"
             isClockTampered -> "CLOCK TAMPERED · RESTORE SYSTEM TIME"
             licenseType == "PROMO_PASS" -> "ACTIVE (PROMO PASS · ALL ACCESS)"
             isSub -> when {
@@ -679,7 +682,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 LicenseManager.isDeckMgtProUnlockedFlow,
                 LicenseManager.isEngineMgtProUnlockedFlow,
                 LicenseManager.isHyperionProUnlockedFlow,
-                LicenseManager.isProActivatedFlow
+                LicenseManager.isProActivatedFlow,
+                LicenseManager.isDeveloperAdminAccessFlow
             ) { _: Array<Boolean> -> Unit }
             combine(billingManager.entitlements, licenseSignals) { _, _ ->
                 refreshUnlockStates()
