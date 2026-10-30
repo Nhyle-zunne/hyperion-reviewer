@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   test-and-build:
-    name: Unit tests and debug APK
+    name: Unit tests and lint
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -48,13 +48,3 @@ jobs:
       - name: Run Android static analysis
         run: gradle --no-daemon :app:lintDebug
 
-      - name: Assemble debug APK
-        run: gradle --no-daemon :app:assembleDebug
-
-      - name: Upload debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: hyperion-android-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
