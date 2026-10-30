@@ -702,6 +702,17 @@ fun StoreScreen(
     val scope = rememberCoroutineScope()
     val billingManager = viewModel.billingManager
 
+    // Recompose expiry labels once per minute so the displayed countdown does not
+    // freeze while the Store remains open. This only refreshes presentation; expiry
+    // and authorization still come from verified entitlement timestamps.
+    var expiryRefreshAt by remember { mutableStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            expiryRefreshAt = System.currentTimeMillis()
+        }
+    }
+
     val isDarkModeState by viewModel.isDarkMode.collectAsState()
     val isDark = isDarkModeState
     val colors = rememberStoreColors(isDark = isDark)
@@ -845,7 +856,7 @@ fun StoreScreen(
             }
 
             val offlineInfo = LicenseManager.getOfflineLicenseInfo(context)
-            val now = System.currentTimeMillis()
+            val now = expiryRefreshAt
 
             Surface(
                 modifier = Modifier
