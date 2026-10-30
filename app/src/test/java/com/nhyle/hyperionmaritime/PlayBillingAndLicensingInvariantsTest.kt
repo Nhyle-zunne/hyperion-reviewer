@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
+import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -20,6 +21,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.Calendar
+import java.util.TimeZone
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -31,6 +34,38 @@ class PlayBillingAndLicensingInvariantsTest {
     private lateinit var application: Application
     private lateinit var viewModel: ReviewerViewModel
     private lateinit var billingManager: BillingManager
+
+    private fun utcEpoch(year: Int, monthZeroBased: Int, day: Int): Long =
+        java.util.GregorianCalendar(TimeZone.getTimeZone("UTC"), java.util.Locale.US).apply {
+            clear()
+            set(year, monthZeroBased, day, 12, 0, 0)
+        }.timeInMillis
+
+    @Test
+    fun billingCyclesUseCalendarMonthsAndPreserveMonthEndAnchor() {
+        val jan31 = utcEpoch(2026, Calendar.JANUARY, 31)
+        assertEquals(utcEpoch(2026, Calendar.FEBRUARY, 28), BillingCycle.MONTHLY.expiryAfter(jan31, 1))
+        assertEquals(utcEpoch(2026, Calendar.MARCH, 31), BillingCycle.MONTHLY.expiryAfter(jan31, 2))
+        assertEquals(
+            utcEpoch(2026, Calendar.MARCH, 31),
+            BillingCycle.MONTHLY.nextExpiryAfter(jan31, utcEpoch(2026, Calendar.MARCH, 1))
+        )
+    }
+
+    @Test
+    fun weeklyAndYearlyCyclesUseTheirCorrectCalendarBoundaries() {
+        val anchor = utcEpoch(2026, Calendar.JANUARY, 15)
+        assertEquals(
+            anchor + 7L * 24L * 60L * 60L * 1000L,
+            BillingCycle.WEEKLY.expiryAfter(anchor)
+        )
+
+        val leapDay = utcEpoch(2024, Calendar.FEBRUARY, 29)
+        assertEquals(
+            utcEpoch(2025, Calendar.FEBRUARY, 28),
+            BillingCycle.YEARLY.expiryAfter(leapDay)
+        )
+    }
 
     @Before
     fun setup() {
