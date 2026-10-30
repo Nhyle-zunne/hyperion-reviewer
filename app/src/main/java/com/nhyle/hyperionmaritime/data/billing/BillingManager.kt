@@ -32,9 +32,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
@@ -775,14 +777,21 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun queryPurchasesOnResume() {
         scope.launch {
-            if (billingClient.isReady) {
-                // Refresh local ownership after returning to the foreground, then refresh
-                // server-authoritative expiry for the signed-in account. This is important
-                // for renewals, grace periods, and accelerated Play test subscriptions.
-                queryPurchasesAsync()
+            if (!billingClient.isReady) startConnection()
+
+            // A disconnected BillingClient can take a moment to reconnect. Do not skip
+            // the foreground entitlement refresh just because Play was reconnecting.
+            val connected = withTimeoutOrNull(15_000L) {
+                _entitlements.first { it.billingConnected }
+            } != null
+            if (!connected) return@launch
+
+            // Refresh local ownership first, then ask the authenticated server to read
+            // Google's current SubscriptionsV2 expiryTime. This picks up auto-renewals,
+            // grace-period changes, and accelerated license-tester renewals.
+            queryPurchasesAsync()
+            if (hasValidatedInternet()) {
                 syncAccountAfterPlayPurchaseChanged()
-            } else {
-                startConnection()
             }
         }
     }
