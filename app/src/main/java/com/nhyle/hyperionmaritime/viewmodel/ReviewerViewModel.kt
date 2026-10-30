@@ -41,6 +41,9 @@ import com.nhyle.hyperionmaritime.data.repository.ReviewerRepository
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
+import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
+import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
+import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
 import com.nhyle.hyperionmaritime.data.hype.HypePassManager
 import com.nhyle.hyperionmaritime.data.hype.HypePassRecord
@@ -427,6 +430,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val offlineHyp = if (isClockTampered) false else LicenseManager.isOfflineHyperionUnlocked(app)
         val activatedOffline = offlineOic || offlineGmdss || offlineEw || offlineDm || offlineEm
 
+        // Website subscriptions are separate from Play Billing and device-bound offline keys.
+        // LicenseManager only exposes these when the encrypted cache is fresh and the server expiry has not passed.
+        val accountOic = LicenseManager.isAccountEntitlementUnlocked(app, Track.DECK_OIC_NW)
+        val accountGmdss = LicenseManager.isAccountEntitlementUnlocked(app, Track.GMDSS_GOC)
+        val accountEw = LicenseManager.isAccountEntitlementUnlocked(app, Track.ENGINE_OIC_EW)
+        val accountDm = LicenseManager.isAccountEntitlementUnlocked(app, Track.DECK_MGT)
+        val accountEm = LicenseManager.isAccountEntitlementUnlocked(app, Track.ENGINE_MGT)
+        val accountAllAccess = accountOic && accountGmdss && accountEw && accountDm && accountEm
+        val isDeveloperAdminAccess = LicenseManager.isDeveloperAdminAccessActive(app)
+
         // Temporary Hype Pass Layer (Device-bound, read-only overlay)
         val hypePass = if (app != null) HypePassManager.getActivePass(app) else null
         val isHypeDeck = hypePass != null && (hypePass.coversDeck || hypePass.coversAll) && !hypePass.isExpired()
@@ -434,12 +447,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val isHypeAll = hypePass != null && hypePass.coversAll && !hypePass.isExpired()
 
         // Google Play Subscriptions are server-authoritative and immune to local clock tamper
-        val newOic = playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineOic || isHypeDeck))
-        val newGmdss = playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && (offlineGmdss || isHypeRadio))
-        val newEw = playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEw)
-        val newDm = playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineDm)
-        val newEm = playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || (!isClockTampered && offlineEm)
-        val newHyp = playEnt.allAccessUnlocked || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
+        val newOic = isDeveloperAdminAccess || playEnt.oicNwUnlocked || playEnt.allAccessUnlocked || accountOic || (!isClockTampered && (offlineOic || isHypeDeck))
+        val newGmdss = isDeveloperAdminAccess || playEnt.gmdssUnlocked || playEnt.allAccessUnlocked || accountGmdss || (!isClockTampered && (offlineGmdss || isHypeRadio))
+        val newEw = isDeveloperAdminAccess || playEnt.engineOicEwUnlocked || playEnt.allAccessUnlocked || accountEw || (!isClockTampered && offlineEw)
+        val newDm = isDeveloperAdminAccess || playEnt.deckMgtUnlocked || playEnt.allAccessUnlocked || accountDm || (!isClockTampered && offlineDm)
+        val newEm = isDeveloperAdminAccess || playEnt.engineMgtUnlocked || playEnt.allAccessUnlocked || accountEm || (!isClockTampered && offlineEm)
+        val newHyp = playEnt.allAccessUnlocked || accountAllAccess || (!isClockTampered && (offlineHyp || isHypeAll)) || (newOic && newGmdss && newEw && newDm && newEm)
         val newAct = newOic || newGmdss || newEw || newDm || newEm
 
         if (_isOicNwProUnlocked.value != newOic) _isOicNwProUnlocked.value = newOic
@@ -452,6 +465,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val oicPlan = playEnt.getActivePlanForTrack(Track.DECK_OIC_NW)
         val gmdssPlan = playEnt.getActivePlanForTrack(Track.GMDSS_GOC)
+        val ewPlan = playEnt.getActivePlanForTrack(Track.ENGINE_OIC_EW)
+        val dmPlan = playEnt.getActivePlanForTrack(Track.DECK_MGT)
+        val emPlan = playEnt.getActivePlanForTrack(Track.ENGINE_MGT)
         val allAccessPlan = playEnt.allAccessPlan
 
         val isSub = (playEnt.allAccessUnlocked || playEnt.oicNwUnlocked || playEnt.gmdssUnlocked || playEnt.engineOicEwUnlocked || playEnt.deckMgtUnlocked || playEnt.engineMgtUnlocked)
@@ -459,6 +475,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         // Strict Priority: Google Play Subscription > Offline Key > Promo Pass > Hype Check-in Pass
         val licenseType = when {
+            isDeveloperAdminAccess -> "DEVELOPER_ADMIN"
             isSub -> "SUBSCRIPTION"
             isOfflineActive -> "OFFLINE_PASS"
             _registrationUiState.value.licenseType == "PROMO_PASS" && newAct -> "PROMO_PASS"
@@ -482,8 +499,45 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val emOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineEngineMgtUnlocked(app))
         val allAccessOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineHyperionUnlocked(app))
 
+        // Signed-in accounts receive exact per-track expiry timestamps from the
+        // Google Play SubscriptionsV2 API (via the server entitlement sync). Prefer
+        // those over BillingClient's local estimate, especially for accelerated test
+        // subscriptions. Unsynced purchases retain a calendar-period local fallback.
+        val accountOicExp = LicenseManager.getAccountEntitlementExpiry(app, Track.DECK_OIC_NW)
+        val accountGmdssExp = LicenseManager.getAccountEntitlementExpiry(app, Track.GMDSS_GOC)
+        val accountEwExp = LicenseManager.getAccountEntitlementExpiry(app, Track.ENGINE_OIC_EW)
+        val accountDmExp = LicenseManager.getAccountEntitlementExpiry(app, Track.DECK_MGT)
+        val accountEmExp = LicenseManager.getAccountEntitlementExpiry(app, Track.ENGINE_MGT)
+        val accountAllAccessExp = if (
+            accountOicExp > 0L && accountGmdssExp > 0L && accountEwExp > 0L &&
+            accountDmExp > 0L && accountEmExp > 0L
+        ) minOf(accountOicExp, accountGmdssExp, accountEwExp, accountDmExp, accountEmExp) else 0L
+
+        fun localPlanExpiry(plan: ActivePlanInfo?): Long =
+            plan?.takeIf { !it.isExpired }?.expiryTimestamp ?: 0L
+
+        val subscriptionDisplayNow = maxOf(
+            System.currentTimeMillis(),
+            LicenseManager.getAccountEntitlementEffectiveNow(app),
+            oicPlan?.effectiveNow ?: 0L,
+            gmdssPlan?.effectiveNow ?: 0L,
+            ewPlan?.effectiveNow ?: 0L,
+            dmPlan?.effectiveNow ?: 0L,
+            emPlan?.effectiveNow ?: 0L,
+            allAccessPlan?.effectiveNow ?: 0L
+        )
+        fun expiryCountdown(expiryEpochMs: Long): String =
+            "${formatSubscriptionTimeRemaining(expiryEpochMs, subscriptionDisplayNow)} (${ActivePlanInfo(expiryTimestamp = expiryEpochMs).getFormattedExpiryDate()})"
+
+        val oicDisplayExp = subscriptionDisplayExpiry(accountOicExp, localPlanExpiry(oicPlan))
+        val gmdssDisplayExp = subscriptionDisplayExpiry(accountGmdssExp, localPlanExpiry(gmdssPlan))
+        val ewDisplayExp = subscriptionDisplayExpiry(accountEwExp, localPlanExpiry(ewPlan))
+        val dmDisplayExp = subscriptionDisplayExpiry(accountDmExp, localPlanExpiry(dmPlan))
+        val emDisplayExp = subscriptionDisplayExpiry(accountEmExp, localPlanExpiry(emPlan))
+        val allAccessDisplayExp = subscriptionDisplayExpiry(accountAllAccessExp, localPlanExpiry(allAccessPlan))
+
         val oicTimeLeft = when {
-            oicPlan != null && !oicPlan.isExpired -> "${oicPlan.getFormattedTimeRemaining()} (${oicPlan.getFormattedExpiryDate()})"
+            oicDisplayExp > 0L -> expiryCountdown(oicDisplayExp)
             oicOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_OIC_NW)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_OIC_NW)
@@ -494,7 +548,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val gmdssTimeLeft = when {
-            gmdssPlan != null && !gmdssPlan.isExpired -> "${gmdssPlan.getFormattedTimeRemaining()} (${gmdssPlan.getFormattedExpiryDate()})"
+            gmdssDisplayExp > 0L -> expiryCountdown(gmdssDisplayExp)
             gmdssOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.GMDSS_GOC)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.GMDSS_GOC)
@@ -504,12 +558,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             else -> null
         }
 
-        val ewPlan = playEnt.getActivePlanForTrack(Track.ENGINE_OIC_EW)
-        val dmPlan = playEnt.getActivePlanForTrack(Track.DECK_MGT)
-        val emPlan = playEnt.getActivePlanForTrack(Track.ENGINE_MGT)
-
         val ewTimeLeft = when {
-            ewPlan != null && !ewPlan.isExpired -> "${ewPlan.getFormattedTimeRemaining()} (${ewPlan.getFormattedExpiryDate()})"
+            ewDisplayExp > 0L -> expiryCountdown(ewDisplayExp)
             ewOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_OIC_EW)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_OIC_EW)
@@ -519,7 +569,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val dmTimeLeft = when {
-            dmPlan != null && !dmPlan.isExpired -> "${dmPlan.getFormattedTimeRemaining()} (${dmPlan.getFormattedExpiryDate()})"
+            dmDisplayExp > 0L -> expiryCountdown(dmDisplayExp)
             dmOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_MGT)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_MGT)
@@ -529,7 +579,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val emTimeLeft = when {
-            emPlan != null && !emPlan.isExpired -> "${emPlan.getFormattedTimeRemaining()} (${emPlan.getFormattedExpiryDate()})"
+            emDisplayExp > 0L -> expiryCountdown(emDisplayExp)
             emOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_MGT)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_MGT)
@@ -540,18 +590,18 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val oicExp = maxOf(
             if (oicOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L,
-            if (oicPlan != null && !oicPlan.isExpired) oicPlan.expiryTimestamp else 0L
+            oicDisplayExp
         )
         val gmdssExp = maxOf(
             if (gmdssOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L,
-            if (gmdssPlan != null && !gmdssPlan.isExpired) gmdssPlan.expiryTimestamp else 0L
+            gmdssDisplayExp
         )
-        val allAccessPlanExp = if (allAccessPlan != null && !allAccessPlan.isExpired) allAccessPlan.expiryTimestamp else 0L
+        val allAccessPlanExp = allAccessDisplayExp
         val allAccessOfflineExp = if (allAccessOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L
 
         val allAccessTimeLeft = when {
+            allAccessPlanExp > 0L -> expiryCountdown(maxOf(allAccessOfflineExp, allAccessPlanExp))
             allAccessOfflineExp > 0L && offlineInfo != null -> "${offlineInfo.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
-            allAccessPlanExp > 0L && allAccessPlan != null -> "${allAccessPlan.getFormattedTimeRemaining()} (${allAccessPlan.getFormattedExpiryDate()})"
             isHypeAll && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             oicExp > 0L && gmdssExp > 0L -> {
                 val minExp = minOf(oicExp, gmdssExp)
@@ -562,18 +612,19 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val statusMsg = when {
+            isDeveloperAdminAccess -> "DEVELOPER / ADMIN ACCESS · ALL TRACKS UNLOCKED"
             isClockTampered -> "CLOCK TAMPERED · RESTORE SYSTEM TIME"
             licenseType == "PROMO_PASS" -> "ACTIVE (PROMO PASS · ALL ACCESS)"
             isSub -> when {
-                playEnt.allAccessUnlocked -> "ACTIVE (ALL-ACCESS PASS SUBSCRIPTION • ${allAccessPlan?.getFormattedTimeRemaining() ?: ""})"
+                playEnt.allAccessUnlocked -> "ACTIVE (ALL-ACCESS PASS SUBSCRIPTION • ${allAccessTimeLeft?.substringBefore(" (") ?: ""})"
                 newOic && newGmdss -> {
                     val minExp = if (oicExp > 0L && gmdssExp > 0L) minOf(oicExp, gmdssExp) else maxOf(oicExp, gmdssExp)
                     val tempPlan = if (minExp > 0L) com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo(expiryTimestamp = minExp) else null
                     val timeStr = tempPlan?.getFormattedTimeRemaining()?.uppercase() ?: ""
                     if (timeStr.isNotEmpty()) "ACTIVE: $timeStr" else "ACTIVE (ALL ACCESS)"
                 }
-                playEnt.oicNwUnlocked -> "ACTIVE (OIC-NW DECK SUBSCRIPTION • ${oicPlan?.getFormattedTimeRemaining() ?: ""})"
-                playEnt.gmdssUnlocked -> "ACTIVE (GMDSS GOC SUBSCRIPTION • ${gmdssPlan?.getFormattedTimeRemaining() ?: ""})"
+                playEnt.oicNwUnlocked -> "ACTIVE (OIC-NW DECK SUBSCRIPTION • ${oicTimeLeft?.substringBefore(" (") ?: ""})"
+                playEnt.gmdssUnlocked -> "ACTIVE (GMDSS GOC SUBSCRIPTION • ${gmdssTimeLeft?.substringBefore(" (") ?: ""})"
                 else -> "ACTIVE (GOOGLE PLAY SUBSCRIPTION)"
             }
             allAccessOfflineActive && offlineInfo != null -> "ACTIVE (${offlineInfo.durationLabel.uppercase()} • ${offlineInfo.getFormattedTimeRemaining().uppercase()})"
@@ -663,13 +714,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch {
-            combine(
-                billingManager.entitlements,
+            val licenseSignals = combine(
                 LicenseManager.isOicNwProUnlockedFlow,
                 LicenseManager.isGmdssProUnlockedFlow,
+                LicenseManager.isEngineOicEwProUnlockedFlow,
+                LicenseManager.isDeckMgtProUnlockedFlow,
+                LicenseManager.isEngineMgtProUnlockedFlow,
                 LicenseManager.isHyperionProUnlockedFlow,
-                LicenseManager.isProActivatedFlow
-            ) { _, _, _, _, _ ->
+                LicenseManager.isProActivatedFlow,
+                LicenseManager.isDeveloperAdminAccessFlow
+            ) { _: Array<Boolean> -> Unit }
+            combine(billingManager.entitlements, licenseSignals) { _, _ ->
                 refreshUnlockStates()
             }.collect { }
         }
@@ -706,6 +761,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 promoTick++
                 if (promoTick >= 3) {
                     promoTick = 0
+                    // Periodically recheck bounded account entitlement expiry as well as local promo state.
+                    refreshUnlockStates()
                     if (_registrationUiState.value.licenseType == "PROMO_PASS") {
                         verifyLicenseState(application, isSilent = true)
                     }
@@ -777,16 +834,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
      * regardless of internet failure, billing disconnection, or sea voyage status.
      */
     fun isTrackUnlocked(track: Track = _selectedTrack.value): Boolean {
-        // Fast-path reactive state check
-        val reactiveUnlocked = when (track) {
-            Track.DECK_OIC_NW -> isOicNwProUnlocked.value
-            Track.GMDSS_GOC -> isGmdssProUnlocked.value
-            Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked.value
-            Track.DECK_MGT -> isDeckMgtProUnlocked.value
-            Track.ENGINE_MGT -> isEngineMgtProUnlocked.value
-            else -> false
-        }
-        if (reactiveUnlocked) return true
+        // Reactive flows are UI state, not authorization. Account-linked grants can
+        // expire while the screen remains open, so every gate check must re-read the
+        // authoritative timestamped sources below instead of trusting a cached "unlocked" bit.
 
         try {
             val app = getApplication<Application>()
@@ -814,6 +864,16 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 }
                 if (LicenseManager.isTrackProUnlocked(app, track) ||
                     LicenseManager.isHyperionProUnlocked(app)) {
+                    return true
+                }
+
+                // Hype Pass is a separate, time-limited local overlay. Recheck its
+                // actual expiry here now that reactive UI state is not itself trusted.
+                val hypePass = HypePassManager.getActivePass(app)
+                if (hypePass != null && !hypePass.isExpired() &&
+                    (hypePass.coversAll ||
+                        (track == Track.DECK_OIC_NW && hypePass.coversDeck) ||
+                        (track == Track.GMDSS_GOC && hypePass.coversRadio))) {
                     return true
                 }
             }

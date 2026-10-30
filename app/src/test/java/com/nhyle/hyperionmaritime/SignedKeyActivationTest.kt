@@ -54,7 +54,10 @@ class SignedKeyActivationTest {
     fun expiredSignedKeyIsRejected() {
         val result = LicenseManager.verifyAndUnlockKey(context, expiredKey)
         assertEquals(UnlockResult.KEY_EXPIRED, result)
-        assertFalse(LicenseManager.isOfflineEngineOicEwUnlocked(context))
+        assertFalse(
+            "An expired signed key must never grant offline access",
+            LicenseManager.isOfflineEngineOicEwUnlocked(context)
+        )
     }
 
     @Test
@@ -69,24 +72,42 @@ class SignedKeyActivationTest {
         assertFalse(LicenseManager.isOfflineEngineOicEwUnlocked(context))
     }
 
+    /**
+     * Seeds a valid local EW license without starting the asynchronous internet-time
+     * synchronization thread. These rollback tests exercise the local clock gate;
+     * network-time healing is covered separately by its own production path.
+     */
+    private fun seedOfflineEwLicense(lastVerifiedEpoch: Long) {
+        val prefs = context.getSharedPreferences(LicenseManager.SECURE_PREFS_NAME, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val expiry = now + 90L * 24L * 60L * 60L * 1000L
+        prefs.edit()
+            .putBoolean(LicenseManager.KEY_OFFLINE_LICENSE, true)
+            .putString(LicenseManager.KEY_OFFLINE_TIER, "ENGINE_OIC_EW")
+            .putString(LicenseManager.KEY_OFFLINE_DURATION, "CUSTOM")
+            .putLong(LicenseManager.KEY_OFFLINE_ACTIVATION_EPOCH, now - 10L * 24L * 60L * 60L * 1000L)
+            .putLong(LicenseManager.KEY_OFFLINE_ISSUE_EPOCH, now - 10L * 24L * 60L * 60L * 1000L)
+            .putLong(LicenseManager.KEY_OFFLINE_EXPIRY_EPOCH, expiry)
+            .putLong(LicenseManager.KEY_OFFLINE_LAST_VERIFIED_EPOCH, lastVerifiedEpoch)
+            .putLong("offline_expiry_ew", expiry)
+            .putBoolean("is_engine_ew_unlocked", true)
+            .apply()
+    }
+
     @Test
     fun clockSetBackMoreThanTwoDaysIsLocked() {
-        assertTrue(LicenseManager.verifyAndUnlockKey(context, validKey).isSuccess)
-        val prefs = context.getSharedPreferences(LicenseManager.SECURE_PREFS_NAME, Context.MODE_PRIVATE)
         val tenDaysMs = 10L * 24L * 60L * 60L * 1000L
-        prefs.edit().putLong(LicenseManager.KEY_OFFLINE_LAST_VERIFIED_EPOCH, System.currentTimeMillis() + tenDaysMs).apply()
+        seedOfflineEwLicense(System.currentTimeMillis() + tenDaysMs)
 
         val status = LicenseManager.checkOfflineLicense(context)
-        assertTrue(status is OfflineLicenseStatus.ClockTampered)
+        assertTrue("A clock rollback beyond 48 hours must be rejected", status is OfflineLicenseStatus.ClockTampered)
         assertFalse(LicenseManager.isOfflineEngineOicEwUnlocked(context))
     }
 
     @Test
     fun clockSetBackLessThanTwoDaysIsNotLocked() {
-        assertTrue(LicenseManager.verifyAndUnlockKey(context, validKey).isSuccess)
-        val prefs = context.getSharedPreferences(LicenseManager.SECURE_PREFS_NAME, Context.MODE_PRIVATE)
         val oneDayMs = 24L * 60L * 60L * 1000L
-        prefs.edit().putLong(LicenseManager.KEY_OFFLINE_LAST_VERIFIED_EPOCH, System.currentTimeMillis() + oneDayMs).apply()
+        seedOfflineEwLicense(System.currentTimeMillis() + oneDayMs)
 
         assertTrue(LicenseManager.checkOfflineLicense(context) is OfflineLicenseStatus.Active)
         assertTrue(LicenseManager.isOfflineEngineOicEwUnlocked(context))

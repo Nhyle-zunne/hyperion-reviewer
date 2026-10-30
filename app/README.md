@@ -48,22 +48,33 @@ com.nhyle.hyperionmaritime
 - **Target / Compile SDK:** Android 16 (API Level 36)
 - **Kotlin:** 2.0+ with Jetpack Compose Compiler plugin
 
-### Compilation Commands
+### Run and test directly from Android Studio (recommended)
 
-Bash
+1. Open the repository's root folder (`HYPERION-REVIEWER`) in Android Studio, then allow Gradle sync to finish.
+2. Set **Gradle JDK** to JDK 17 and install **Android SDK Platform 36** in SDK Manager.
+3. Select the `app` run configuration.
+4. Select an Android emulator or connect your Android phone with Developer options and USB debugging enabled.
+5. Press **Run ▶**. Android Studio builds, installs, and launches the debug app on the selected target automatically.
 
-```
-# Clean build workspace
+For normal development, there is no need to download an APK, copy it to your phone, or install it manually. Use **Git → Pull** to receive source updates after they are merged into `main`, then press Run again. Android Studio will rebuild only what is needed.
+
+The debug build uses Gradle's standard local debug signing key. It does not need the Google Play upload keystore.
+
+The current app does not require a Firebase project file to compile or run its local/debug flow. The Google Services Gradle plugin is configured to warn when `app/google-services.json` is absent. That file is intentionally excluded from Git; add a valid project-specific file locally only when a Firebase-backed feature is enabled. Never commit it.
+
+To enable native Google account sign-in in a local build, add the Web OAuth client ID to your user-level `~/.gradle/gradle.properties` as described in [ANDROID_ACCOUNT_SIGN_IN_SETUP.md](../ANDROID_ACCOUNT_SIGN_IN_SETUP.md). Do not put an OAuth client secret there or in the app.
+
+### Optional command-line checks
+
+```bash
+# Run unit and Robolectric tests
+./gradlew :app:testDebugUnitTest
+
+# Optional clean build
 ./gradlew clean
-
-# Compile Debug APK
-./gradlew :app:assembleDebug
-
-# Compile Production Release Bundle (AAB)
-./gradlew :app:bundleRelease --no-daemon --stacktrace
 ```
 
-The compiled release bundle will be generated at: `app/build/outputs/bundle/release/app-release.aab`
+The signed release App Bundle is a separate, manual release task. It is not part of the normal Android Studio Run workflow.
 
 ## Security & Billing Compliance
 

@@ -1,6 +1,9 @@
 package com.nhyle.hyperionmaritime.data.util
 
 import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import android.os.SystemClock
 import android.provider.Settings
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -170,6 +173,22 @@ object LicenseManager {
     const val PREFS_NAME = "hyperion_license_prefs"
     const val SECURE_PREFS_NAME = "secure_license_prefs"
 
+    private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
+    private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
+    // Persist a high-water mark so changing the device clock backwards cannot extend
+    // the 72-hour offline lease after the app has observed a later time.
+    private const val ACCOUNT_LAST_VERIFIED_EPOCH_KEY = "account_entitlements_last_verified_epoch"
+    private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
+    private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
+    private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
+    private const val ACCOUNT_OFFLINE_GRACE_MS = 72L * 60L * 60L * 1000L
+    @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
+
+    // Incremented whenever account grants are refreshed so screens such as Bond Store
+    // can update even when the overall "any license active" Boolean remains unchanged.
+    private val _accountEntitlementRevisionFlow = MutableStateFlow(0L)
+    val accountEntitlementRevisionFlow: StateFlow<Long> = _accountEntitlementRevisionFlow.asStateFlow()
+
     const val KEY_OFFLINE_LICENSE = "is_offline_license"
     const val KEY_OFFLINE_TIER = "offline_license_tier"
     const val KEY_OFFLINE_DURATION = "offline_license_duration"
@@ -213,6 +232,13 @@ object LicenseManager {
 
     private val _isHyperionProUnlockedFlow = MutableStateFlow(false)
     val isHyperionProUnlockedFlow: StateFlow<Boolean> = _isHyperionProUnlockedFlow.asStateFlow()
+
+    // Developer access is granted only after the signed-in user is approved by the
+    // same server-side check-admin endpoint used by the website. Keep this process-local
+    // and bind it to the current Supabase user so it cannot transfer between accounts.
+    private val _isDeveloperAdminAccessFlow = MutableStateFlow(false)
+    val isDeveloperAdminAccessFlow: StateFlow<Boolean> = _isDeveloperAdminAccessFlow.asStateFlow()
+    @Volatile private var verifiedDeveloperAdminUserId: String? = null
 
     private val SALT_PART_A = byteArrayOf(0x12, 0x03, 0x0A, 0x1F, 0x08)
     private val SALT_PART_B = byteArrayOf(0x13, 0x15, 0x14, 0x05)
@@ -267,6 +293,218 @@ object LicenseManager {
         _isProActivatedFlow.value = active
     }
 
+    private fun accountEntitlementPreferences(context: Context): SharedPreferences? {
+        accountEntitlementPrefsCache?.let { return it }
+        return try {
+            synchronized(this) {
+                accountEntitlementPrefsCache ?: run {
+                    val appContext = context.applicationContext
+                    val masterKey = MasterKey.Builder(appContext)
+                        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                        .build()
+                    EncryptedSharedPreferences.create(
+                        appContext,
+                        ACCOUNT_ENTITLEMENTS_PREFS,
+                        masterKey,
+                        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    ).also { accountEntitlementPrefsCache = it }
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Allows Robolectric tests to supply an isolated preferences implementation because
+     * Android Keystore-backed EncryptedSharedPreferences is not available in that runtime.
+     * Production code never calls this; app sessions always use the encrypted store above.
+     */
+    internal fun setAccountEntitlementPreferencesForTesting(prefs: SharedPreferences?) {
+        synchronized(this) {
+            accountEntitlementPrefsCache = prefs
+        }
+    }
+
+    private fun accountExpiryKey(track: Track): String = ACCOUNT_EXPIRY_PREFIX + track.name
+
+    fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
+        isAccountTrackUnlocked(context.applicationContext, track)
+
+    /**
+     * Returns the server-issued website/account expiry only while that grant is still
+     * valid for the current signed-in account and its bounded offline verification lease.
+     * A zero result means the store must not display the website grant as active.
+     */
+    fun getAccountEntitlementExpiry(context: Context, track: Track): Long {
+        val appContext = context.applicationContext
+        if (!isAccountTrackUnlocked(appContext, track)) return 0L
+        val prefs = accountEntitlementPreferences(appContext) ?: return 0L
+        return prefs.getLong(accountExpiryKey(track), 0L)
+    }
+
+    /**
+     * The monotonic display clock for account-backed expiry countdowns. It mirrors
+     * the high-water mark used by account entitlement validation, so a small wall-clock
+     * rollback cannot make the displayed remaining duration increase.
+     */
+    internal fun effectiveAccountEntitlementDisplayNow(
+        nowEpochMs: Long,
+        syncedAtEpochMs: Long,
+        lastVerifiedEpochMs: Long
+    ): Long = maxOf(nowEpochMs, syncedAtEpochMs, lastVerifiedEpochMs)
+
+    fun getAccountEntitlementEffectiveNow(context: Context): Long {
+        val now = System.currentTimeMillis()
+        val prefs = accountEntitlementPreferences(context.applicationContext)
+            ?: return now
+        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
+        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) {
+            return now
+        }
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+        return effectiveAccountEntitlementDisplayNow(now, syncedAt, lastVerified)
+    }
+
+    /** Keep the offline lease's verification timestamp monotonic across device-clock rollback. */
+    internal fun nextAccountEntitlementVerificationTime(
+        nowEpochMs: Long,
+        previousVerifiedEpochMs: Long
+    ): Long = maxOf(nowEpochMs.coerceAtLeast(0L), previousVerifiedEpochMs.coerceAtLeast(0L))
+
+    /** Pure account-grant validation shared by the access gate and deterministic tests. */
+    internal fun isAccountEntitlementValid(
+        ownerUserId: String?,
+        currentUserId: String?,
+        syncedAtEpochMs: Long,
+        lastVerifiedEpochMs: Long,
+        expiryEpochMs: Long,
+        nowEpochMs: Long
+    ): Boolean {
+        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
+        if (syncedAtEpochMs <= 0L) return false
+
+        // Older installs do not have a high-water mark yet. Treat their last verified
+        // time as the original successful sync time, preserving the existing 72-hour lease.
+        val highWaterMark = maxOf(syncedAtEpochMs, lastVerifiedEpochMs)
+        val clockRollbackToleranceMs = 5L * 60L * 1000L
+        if (nowEpochMs < highWaterMark - clockRollbackToleranceMs) return false
+
+        // Within the small clock-skew tolerance, never let a lower wall clock move the
+        // effective time backwards. Both the offline grace and server expiry use it.
+        val effectiveNow = maxOf(nowEpochMs, highWaterMark)
+        if (effectiveNow - syncedAtEpochMs > ACCOUNT_OFFLINE_GRACE_MS) return false
+        return expiryEpochMs > effectiveNow
+    }
+
+    private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
+        val prefs = accountEntitlementPreferences(context) ?: return false
+        val now = System.currentTimeMillis()
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+        val allowed = isAccountEntitlementValid(
+            ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null),
+            currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null),
+            syncedAtEpochMs = syncedAt,
+            lastVerifiedEpochMs = lastVerified,
+            expiryEpochMs = prefs.getLong(accountExpiryKey(track), 0L),
+            nowEpochMs = now
+        )
+
+        // Advance the persisted high-water mark at most once per minute to avoid
+        // writing SharedPreferences on every question/access-gate check.
+        if (allowed && now > lastVerified + 60L * 1000L) {
+            prefs.edit().putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, now).apply()
+        }
+        return allowed
+    }
+
+    /** Stores active, server-read website entitlements with a bounded offline grace period. */
+    fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
+        if (userId.isBlank()) return false
+        val prefs = accountEntitlementPreferences(context) ?: return false
+        val previousVerifiedAt = prefs.getLong(
+            ACCOUNT_LAST_VERIFIED_EPOCH_KEY,
+            prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        )
+        val syncedAt = nextAccountEntitlementVerificationTime(
+            System.currentTimeMillis(),
+            previousVerifiedAt
+        )
+        val editor = prefs.edit()
+            .putString(ACCOUNT_OWNER_USER_ID_KEY, userId)
+            .putString(ACCOUNT_CURRENT_USER_ID_KEY, userId)
+            .putLong(ACCOUNT_SYNCED_AT_KEY, syncedAt)
+            .putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+        Track.values().forEach { track ->
+            editor.putLong(accountExpiryKey(track), expiryByTrack[track] ?: 0L)
+        }
+        editor.apply()
+        refreshAccountEntitlementFlows(context)
+        return true
+    }
+
+    fun setCurrentAccountUserId(context: Context, userId: String?) {
+        val nextUserId = userId.orEmpty()
+        if (verifiedDeveloperAdminUserId != null && verifiedDeveloperAdminUserId != nextUserId) {
+            verifiedDeveloperAdminUserId = null
+            _isDeveloperAdminAccessFlow.value = false
+        }
+        accountEntitlementPreferences(context)?.edit()
+            ?.putString(ACCOUNT_CURRENT_USER_ID_KEY, nextUserId)
+            ?.apply()
+        refreshAccountEntitlementFlows(context)
+    }
+
+    /**
+     * Apply developer access only after the server's ADMIN_EMAILS allowlist check
+     * has returned isAdmin=true for this exact authenticated Supabase user.
+     * The grant is process-local and is discarded on sign-out, account switch, or app restart.
+     */
+    fun setVerifiedDeveloperAdminAccess(context: Context, userId: String, enabled: Boolean) {
+        val currentUserId = accountEntitlementPreferences(context)
+            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        val verifiedUserId = userId.takeIf {
+            enabled && it.isNotBlank() && it == currentUserId
+        }
+        verifiedDeveloperAdminUserId = verifiedUserId
+        _isDeveloperAdminAccessFlow.value = verifiedUserId != null
+        refreshAccountEntitlementFlows(context)
+    }
+
+    fun isDeveloperAdminAccessActive(context: Context): Boolean {
+        val verifiedUserId = verifiedDeveloperAdminUserId ?: return false
+        val currentUserId = accountEntitlementPreferences(context)
+            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        return verifiedUserId == currentUserId
+    }
+
+    fun clearAccountEntitlements(context: Context) {
+        verifiedDeveloperAdminUserId = null
+        _isDeveloperAdminAccessFlow.value = false
+        accountEntitlementPreferences(context)?.edit()?.clear()?.apply()
+        refreshAccountEntitlementFlows(context)
+    }
+
+    fun refreshAccountEntitlementFlows(context: Context) {
+        val oic = isOicNwProUnlocked(context)
+        val gmdss = isGmdssProUnlocked(context)
+        val ew = isEngineOicEwProUnlocked(context)
+        val deckMgt = isDeckMgtProUnlocked(context)
+        val engineMgt = isEngineMgtProUnlocked(context)
+        _isOicNwProUnlockedFlow.value = oic
+        _isGmdssProUnlockedFlow.value = gmdss
+        _isEngineOicEwProUnlockedFlow.value = ew
+        _isDeckMgtProUnlockedFlow.value = deckMgt
+        _isEngineMgtProUnlockedFlow.value = engineMgt
+        _isHyperionProUnlockedFlow.value = isHyperionProUnlocked(context) || (oic && gmdss && ew && deckMgt && engineMgt)
+        _isProActivatedFlow.value = oic || gmdss || ew || deckMgt || engineMgt
+        _isDeveloperAdminAccessFlow.value = isDeveloperAdminAccessActive(context)
+        _accountEntitlementRevisionFlow.value = _accountEntitlementRevisionFlow.value + 1L
+    }
     /**
      * Purges old permanent clearance / lifetime licenses that were issued under previous system.
      */
@@ -986,63 +1224,69 @@ object LicenseManager {
     }
 
     fun isOicNwProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.oicNwUnlocked || billing.entitlements.value.allAccessUnlocked) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineOicNwUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.DECK_OIC_NW) || isOfflineOicNwUnlocked(context)
     }
 
     fun isGmdssProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.gmdssUnlocked || billing.entitlements.value.allAccessUnlocked) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineGmdssUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.GMDSS_GOC) || isOfflineGmdssUnlocked(context)
     }
 
     fun isEngineOicEwProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.engineOicEwUnlocked || billing.entitlements.value.allAccessUnlocked) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineEngineOicEwUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.ENGINE_OIC_EW) || isOfflineEngineOicEwUnlocked(context)
     }
 
     fun isDeckMgtProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.deckMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineDeckMgtUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.DECK_MGT) || isOfflineDeckMgtUnlocked(context)
     }
 
     fun isEngineMgtProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.engineMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineEngineMgtUnlocked(context)
+        return isAccountTrackUnlocked(context, Track.ENGINE_MGT) || isOfflineEngineMgtUnlocked(context)
     }
 
     fun isHyperionProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.allAccessUnlocked || (billing.entitlements.value.oicNwUnlocked && billing.entitlements.value.gmdssUnlocked && billing.entitlements.value.engineOicEwUnlocked && billing.entitlements.value.deckMgtUnlocked && billing.entitlements.value.engineMgtUnlocked)) {
                 return true
             }
         } catch (_: Exception) {}
-        return isOfflineHyperionUnlocked(context)
+        return Track.values().all { isAccountTrackUnlocked(context, it) } || isOfflineHyperionUnlocked(context)
     }
 
     fun isMasterProUnlocked(context: Context): Boolean = isHyperionProUnlocked(context)

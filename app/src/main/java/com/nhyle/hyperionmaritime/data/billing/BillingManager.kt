@@ -3,6 +3,8 @@ package com.nhyle.hyperionmaritime.data.billing
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -21,6 +23,7 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.nhyle.hyperionmaritime.BuildConfig
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,10 +32,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * Subscription billing cycles supported by Hyperion Maritime Exam Reviewer.
@@ -42,7 +49,148 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
     MONTHLY("Monthly", "mo", 30),
     YEARLY("Yearly (Save ~48%)", "yr", 365);
 
+    /**
+     * Adds one real billing period in UTC. Monthly and yearly Play plans are calendar
+     * periods (P1M/P1Y), not fixed 30/365-day durations.
+     */
+    fun nextBillingPeriod(startEpochMs: Long): Long {
+        val start = Instant.ofEpochMilli(startEpochMs).atZone(ZoneOffset.UTC)
+        val next = when (this) {
+            WEEKLY -> start.plusWeeks(1)
+            MONTHLY -> start.plusMonths(1)
+            YEARLY -> start.plusYears(1)
+        }
+        return next.toInstant().toEpochMilli()
+    }
+
+    // Nominal millisecond duration retained only for legacy callers/metadata.
+    // Do not use this for subscription expiry calculations; use nextBillingPeriod().
     val durationMs: Long get() = durationDays.toLong() * 24L * 60L * 60L * 1000L
+}
+
+/**
+ * Matches the recurring billing period of a Play subscription offer. When an offer
+ * contains a trial or introductory phase, the final pricing phase is the base plan's
+ * recurring period, so it takes precedence over the offer's base-plan display name.
+ */
+/**
+ * Preserve a cycle explicitly saved when the checkout was launched. The monthly
+ * fallback exists only for very old purchases with no recorded cycle metadata.
+ */
+internal fun resolveRequestedBillingCycle(requestedCycle: BillingCycle?): BillingCycle =
+    requestedCycle ?: BillingCycle.MONTHLY
+
+/**
+ * A Store selection is only a pending intention until Google Play returns a newer
+ * purchased subscription. Opening checkout and cancelling must not rewrite the
+ * duration metadata of an already-owned subscription.
+ */
+internal fun isNewPlaySubscriptionPurchase(
+    previousPurchaseToken: String?,
+    currentPurchaseToken: String,
+    previousPurchaseTimeEpochMs: Long,
+    currentPurchaseTimeEpochMs: Long
+): Boolean {
+    val tokenWasReplaced = !previousPurchaseToken.isNullOrBlank() &&
+        currentPurchaseToken.isNotBlank() &&
+        previousPurchaseToken != currentPurchaseToken
+    val purchaseTimeAdvanced = currentPurchaseTimeEpochMs > 0L &&
+        currentPurchaseTimeEpochMs > previousPurchaseTimeEpochMs
+    return tokenWasReplaced || purchaseTimeAdvanced
+}
+
+internal fun resolvePurchasedBillingCycle(
+    activeCycle: BillingCycle?,
+    pendingCycle: BillingCycle?,
+    isNewPurchase: Boolean
+): BillingCycle =
+    if (pendingCycle != null && isNewPurchase) pendingCycle
+    else activeCycle ?: BillingCycle.MONTHLY
+
+internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
+    val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
+    val recognizedPeriod = recurringPeriod in setOf("P1W", "P7D", "P1M", "P30D", "P1Y", "P365D", "P12M")
+    if (recognizedPeriod) {
+        return when (this) {
+            BillingCycle.WEEKLY -> recurringPeriod == "P1W" || recurringPeriod == "P7D"
+            BillingCycle.MONTHLY -> recurringPeriod == "P1M" || recurringPeriod == "P30D"
+            BillingCycle.YEARLY -> recurringPeriod == "P1Y" || recurringPeriod == "P365D" || recurringPeriod == "P12M"
+        }
+    }
+
+    val base = basePlanId.lowercase()
+    return when (this) {
+        BillingCycle.WEEKLY -> base.contains("weekly")
+        BillingCycle.MONTHLY -> base.contains("monthly")
+        BillingCycle.YEARLY -> base.contains("yearly") || base.contains("annual")
+    }
+}
+
+/**
+ * Local fallback only: BillingClient exposes subscription signup time, not its live
+ * renewal expiry. The server-verified SubscriptionsV2 expiry must override this estimate
+ * whenever the user has linked the purchase to a Hyperion account.
+ */
+internal fun estimateNextSubscriptionExpiry(
+    purchaseTimeEpochMs: Long,
+    nowEpochMs: Long,
+    cycle: BillingCycle
+): Long {
+    if (purchaseTimeEpochMs <= 0L) return 0L
+    var expiry = cycle.nextBillingPeriod(purchaseTimeEpochMs)
+    var periodsAdvanced = 0
+    while (expiry <= nowEpochMs && periodsAdvanced < 10_000) {
+        // Play permanently adjusts monthly renewal dates after a short-month
+        // rollover (Jan 31 -> Feb 28 -> Mar 28), so advance from the last expiry.
+        val next = cycle.nextBillingPeriod(expiry)
+        if (next <= expiry) return expiry
+        expiry = next
+        periodsAdvanced++
+    }
+    return expiry
+}
+
+/** Select exact Google Play server expiry when available, otherwise a local estimate. */
+internal fun subscriptionDisplayExpiry(
+    serverVerifiedExpiryEpochMs: Long,
+    estimatedLocalExpiryEpochMs: Long
+): Long = serverVerifiedExpiryEpochMs.takeIf { it > 0L } ?: estimatedLocalExpiryEpochMs
+
+/**
+ * Consistent countdown formatter for dashboard and Store. Uses the actual supplied expiry,
+ * not the 72-hour offline ownership-verification lease.
+ */
+fun formatSubscriptionTimeRemaining(
+    expiryEpochMs: Long,
+    nowEpochMs: Long = System.currentTimeMillis()
+): String {
+    if (expiryEpochMs <= 0L) return "Expiry unavailable"
+    val remainingMs = expiryEpochMs - nowEpochMs
+    if (remainingMs <= 0L) return "Subscription Expired"
+    if (remainingMs < 60_000L) return "< 1 min remaining"
+
+    val totalMinutes = remainingMs / 60_000L
+    val totalHours = totalMinutes / 60L
+    val minutes = totalMinutes % 60L
+
+    // Count a positive remainder of a full day as that remaining day. A seven-day
+    // purchase therefore stays at 7 days until it has less than six full days left.
+    // Switch to hours/minutes only during the final 24 hours.
+    if (remainingMs >= 24L * 60L * 60L * 1000L) {
+        val dayMs = 24L * 60L * 60L * 1000L
+        val days = (remainingMs + dayMs - 1L) / dayMs
+        val dayUnit = if (days == 1L) "day" else "days"
+        return "$days $dayUnit remaining"
+    }
+
+    val hourUnit = if (totalHours == 1L) "hr" else "hrs"
+    val minuteUnit = if (minutes == 1L) "min" else "mins"
+    return when {
+        totalHours > 0L && minutes > 0L -> "$totalHours $hourUnit, $minutes $minuteUnit remaining"
+        totalHours > 0L -> "$totalHours $hourUnit remaining"
+        totalMinutes > 0L -> "$totalMinutes ${if (totalMinutes == 1L) "min" else "mins"} remaining"
+        else -> "< 1 min remaining"
+    }
 }
 
 /**
@@ -54,37 +202,62 @@ data class ActivePlanInfo(
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
-    val highWaterMarkEpoch: Long = 0L
+    val highWaterMarkEpoch: Long = 0L,
+    val lastVerifiedAtEpoch: Long = purchaseTimestamp
 ) {
-    // 100% Offline-Safe: Server-authoritative; never expires locally or cuts off at sea without internet
-    val isExpired: Boolean
-        get() = false
-
     val effectiveNow: Long
-        get() = System.currentTimeMillis()
+        get() = maxOf(System.currentTimeMillis(), highWaterMarkEpoch)
 
+    /** A local Play cache must be refreshed online within the bounded at-sea grace period. */
+    val requiresOnlineVerification: Boolean
+        get() {
+            if (isTerminalLicense) return false
+            val now = System.currentTimeMillis()
+            val clockRolledBack = highWaterMarkEpoch > 0L &&
+                now < highWaterMarkEpoch - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+            val verificationMissing = lastVerifiedAtEpoch <= 0L
+            val verificationStale = !verificationMissing &&
+                effectiveNow - lastVerifiedAtEpoch > BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
+            return clockRolledBack || verificationMissing || verificationStale
+        }
+
+    /** Cached access is rejected after either the server period estimate or offline lease ends. */
+    val isExpired: Boolean
+        get() = !isTerminalLicense && (
+            requiresOnlineVerification ||
+                expiryTimestamp <= 0L ||
+                effectiveNow >= expiryTimestamp
+            )
+
+    /**
+     * Actual subscription period remaining, used for user-facing expiry displays.
+     * This is deliberately independent from the shorter offline verification lease.
+     */
+    val subscriptionRemainingTimeMs: Long
+        get() {
+            if (isTerminalLicense) return Long.MAX_VALUE
+            if (expiryTimestamp <= 0L) return 0L
+            return (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
+        }
+
+    /**
+     * Remaining time in the locally cached ownership-verification lease.
+     * This is a security boundary for offline access, not the subscription's expiry.
+     */
     val remainingTimeMs: Long
-        get() = if (isTerminalLicense) Long.MAX_VALUE else (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
+        get() {
+            if (isTerminalLicense) return Long.MAX_VALUE
+            if (requiresOnlineVerification) return 0L
+            val leaseRemaining = (lastVerifiedAtEpoch + BillingConstants.OFFLINE_VERIFICATION_GRACE_MS - effectiveNow)
+                .coerceAtLeast(0L)
+            return minOf(subscriptionRemainingTimeMs, leaseRemaining)
+        }
 
     fun getFormattedTimeRemaining(): String {
         if (isTerminalLicense) return "Active Plan"
+        if (requiresOnlineVerification) return "Reconnect to verify subscription"
         if (isExpired) return "Subscription Expired"
-        val remainingMs = remainingTimeMs
-        val totalSecs = remainingMs / 1000L
-        val totalMins = totalSecs / 60L
-        val totalHours = totalMins / 60L
-        // Ceil rounding for remaining days (e.g. 6 days 23 hours = 7 days remaining)
-        val days = (totalHours + 23L) / 24L
-        val hours = totalHours % 24L
-        val mins = totalMins % 60L
-
-        return when {
-            days > 1 -> "$days days remaining"
-            totalHours > 1 -> "$totalHours hrs, $mins mins remaining"
-            totalHours == 1L -> "1 hr, $mins mins remaining"
-            mins > 0 -> "$mins mins remaining"
-            else -> "< 1 min remaining"
-        }
+        return formatSubscriptionTimeRemaining(expiryTimestamp, effectiveNow)
     }
 
     fun getFormattedExpiryDate(): String {
@@ -97,6 +270,7 @@ data class ActivePlanInfo(
 
     fun getFullExpiryBadge(): String {
         if (isTerminalLicense) return "ACTIVE PLAN"
+        if (requiresOnlineVerification) return "VERIFY ONLINE"
         if (isExpired) return "EXPIRED"
         return "${getFormattedTimeRemaining().uppercase()} • ${getFormattedExpiryDate().uppercase()}"
     }
@@ -106,7 +280,30 @@ data class ActivePlanInfo(
  * Standard Product IDs, Base Plans, and fallback metadata for Hyperion Google Play Subscriptions.
  * Converted to ProductType.SUBS (Auto-Renewing Subscriptions across Weekly, Monthly, Yearly cycles).
  */
+internal fun canRefreshPlayVerification(
+    hasValidatedInternet: Boolean,
+    nowEpochMs: Long,
+    savedHighWaterMarkEpochMs: Long
+): Boolean {
+    if (!hasValidatedInternet) return false
+    return savedHighWaterMarkEpochMs <= 0L ||
+        nowEpochMs >= savedHighWaterMarkEpochMs - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+}
+
+/**
+ * An offline Play Billing snapshot is not authoritative for revocation. It may be empty
+ * because the Play Store cannot refresh ownership while disconnected, so do not replace
+ * or clear the last successfully verified local subscription cache from that snapshot.
+ */
+internal fun shouldApplyPlayPurchaseSnapshot(hasValidatedInternet: Boolean): Boolean =
+    hasValidatedInternet
+
 object BillingConstants {
+    // Match the account-linked license cache: allow up to 72 hours at sea after
+    // the last successful Google Play ownership query, then require online verification.
+    const val OFFLINE_VERIFICATION_GRACE_MS = 72L * 60L * 60L * 1000L
+    const val CLOCK_ROLLBACK_TOLERANCE_MS = 5L * 60L * 1000L
+
     const val PRODUCT_OIC_NW_PASS = "hyperion_oic_nw_pass"
     const val PRODUCT_GMDSS_PASS = "hyperion_gmdss_pass"
     const val PRODUCT_ALL_ACCESS_PASS = "hyperion_all_access_pass"
@@ -215,6 +412,26 @@ object BillingConstants {
 /**
  * State representation of active Google Play entitlements with active plan metadata.
  */
+data class PlayPurchaseForAccountLinking(val productId: String, val purchaseToken: String)
+
+internal fun collectPlayPurchasesForAccountLinking(
+    allAccessToken: String?,
+    oicNwToken: String?,
+    gmdssToken: String?,
+    engineOicEwToken: String?,
+    deckMgtToken: String?,
+    engineMgtToken: String?
+): List<PlayPurchaseForAccountLinking> = listOf(
+    allAccessToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ALL_ACCESS_PASS, it) },
+    oicNwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_OIC_NW_PASS, it) },
+    gmdssToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_GMDSS_PASS, it) },
+    engineOicEwToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS, it) },
+    deckMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_DECK_MGT_PASS, it) },
+    engineMgtToken?.let { PlayPurchaseForAccountLinking(BillingConstants.PRODUCT_ENGINE_MGT_PASS, it) }
+).filterNotNull()
+    .filter { it.purchaseToken.isNotBlank() && !it.purchaseToken.startsWith("mock_sandbox_sub_token_") }
+    .distinctBy { it.purchaseToken }
+
 data class TrackEntitlements(
     val oicNwPlan: ActivePlanInfo? = null,
     val gmdssPlan: ActivePlanInfo? = null,
@@ -356,6 +573,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         private const val KEY_PURCHASE_TIME = "play_purchase_timestamp"
         private const val KEY_BASE_PLAN = "play_base_plan_id"
+        private const val KEY_PLAY_HIGH_WATER_MARK = "play_license_high_water_mark"
+        private const val KEY_PLAY_LAST_VERIFIED_AT = "play_license_last_verified_at"
+        private const val KEY_PLAY_CACHE_MIGRATION_COMPLETE = "play_license_cache_migration_v1"
         private const val KEY_SIGNATURE_HASH = "play_entitlements_hash"
         private const val MAX_RECONNECT_DELAY_MS = 32000L
 
@@ -375,16 +595,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             }
         }
 
-        fun cycleFromBasePlanOrPeriod(basePlanId: String?, period: String?): BillingCycle {
-            val base = basePlanId?.lowercase() ?: ""
-            val per = period?.uppercase() ?: ""
-            return when {
-                base.contains("yearly") || per == "P1Y" || per == "P365D" || per == "P12M" -> BillingCycle.YEARLY
-                base.contains("monthly") || per == "P1M" || per == "P30D" -> BillingCycle.MONTHLY
-                base.contains("weekly") || per == "P1W" || per == "P7D" -> BillingCycle.WEEKLY
-                else -> BillingCycle.MONTHLY
-            }
-        }
+        fun cycleFromBasePlanOrPeriod(basePlanId: String?, period: String?): BillingCycle =
+            BillingCycle.values().firstOrNull {
+                it.matchesPlayOffer(basePlanId.orEmpty(), listOfNotNull(period))
+            } ?: BillingCycle.MONTHLY
     }
 
     fun resetEntitlementsForTesting() {
@@ -407,6 +621,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
     private val lastRequestedCycles = java.util.concurrent.ConcurrentHashMap<String, BillingCycle>()
+    @Volatile private var checkoutFlowProductId: String? = null
 
     private var reconnectDelayMs = 1000L
 
@@ -429,6 +644,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             startConnection()
             SubscriptionSyncWorker.schedule(appContext)
         }
+    }
+
+    private fun hasValidatedInternet(): Boolean {
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     private fun initSecurePreferences(context: Context): SharedPreferences {
@@ -476,6 +700,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             scope.launch {
                 queryProductDetails()
                 queryPurchasesAsync()
+                syncAccountAfterPlayPurchaseChanged()
             }
         } else {
             Log.w(TAG, "Billing setup failed: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -542,6 +767,22 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun isTrackUnlocked(track: Track): Boolean = _entitlements.value.isTrackUnlocked(track)
 
+    /**
+     * Returns Play tokens from the current BillingClient-owned subscription snapshot.
+     * Tokens are only sent to Hyperion's authenticated backend for Google verification.
+     */
+    fun getOwnedPurchasesForAccountLinking(): List<PlayPurchaseForAccountLinking> {
+        val owned = _entitlements.value
+        return collectPlayPurchasesForAccountLinking(
+            allAccessToken = owned.allAccessPlan?.purchaseToken,
+            oicNwToken = owned.oicNwPlan?.purchaseToken,
+            gmdssToken = owned.gmdssPlan?.purchaseToken,
+            engineOicEwToken = owned.engineOicEwPlan?.purchaseToken,
+            deckMgtToken = owned.deckMgtPlan?.purchaseToken,
+            engineMgtToken = owned.engineMgtPlan?.purchaseToken
+        )
+    }
+
     suspend fun queryPurchasesAsync() = withContext(Dispatchers.IO) {
         if (!billingClient.isReady) {
             Log.w(TAG, "BillingClient not ready for queryPurchasesAsync")
@@ -566,19 +807,37 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun queryPurchasesOnResume() {
         scope.launch {
-            if (billingClient.isReady) {
-                queryPurchasesAsync()
-            } else {
-                startConnection()
+            // MainActivity calls this after the Play sheet closes and the app resumes.
+            // A still-pending transaction is preserved by the purchase snapshot itself.
+            checkoutFlowProductId = null
+            if (!billingClient.isReady) startConnection()
+
+            // A disconnected BillingClient can take a moment to reconnect. Do not skip
+            // the foreground entitlement refresh just because Play was reconnecting.
+            val connected = withTimeoutOrNull(15_000L) {
+                _entitlements.first { it.billingConnected }
+            } != null
+            if (!connected) return@launch
+
+            // Refresh local ownership first, then ask the authenticated server to read
+            // Google's current SubscriptionsV2 expiryTime. This picks up auto-renewals,
+            // grace-period changes, and accelerated license-tester renewals.
+            queryPurchasesAsync()
+            if (hasValidatedInternet()) {
+                syncAccountAfterPlayPurchaseChanged()
             }
         }
     }
 
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: List<Purchase>?) {
+        checkoutFlowProductId = null
         scope.launch {
             when (billingResult.responseCode) {
                 BillingClient.BillingResponseCode.OK -> {
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
+                    val hasCompletedPurchase = purchases.orEmpty().any {
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED
+                    }
                     purchases?.forEach { purchase ->
                         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
                             val ackParams = AcknowledgePurchaseParams.newBuilder()
@@ -588,17 +847,27 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         }
                     }
                     queryPurchasesAsync()
+                    if (hasCompletedPurchase) {
+                        syncAccountAfterPlayPurchaseChanged()
+                    }
                 }
                 BillingClient.BillingResponseCode.USER_CANCELED -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.i(TAG, "Purchase cancelled by user")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                 }
                 BillingClient.BillingResponseCode.ITEM_ALREADY_OWNED -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.i(TAG, "Item already owned. Re-querying purchases to restore entitlement.")
                     _entitlements.update { it.copy(pendingPurchaseProductId = null, errorMessage = null) }
                     queryPurchasesAsync()
+                    syncAccountAfterPlayPurchaseChanged()
                 }
                 else -> {
+                    val productId = _entitlements.value.pendingPurchaseProductId
+                    productId?.let { clearPendingBillingCycle(it) }
                     Log.e(TAG, "Purchase flow error: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
                     _entitlements.update {
                         it.copy(
@@ -611,7 +880,42 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
+    private fun clearPendingBillingCycle(productId: String) {
+        val cycleKey = when (productId) {
+            BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
+            BillingConstants.PRODUCT_GMDSS_PASS -> "play_plan_cycle_gmdss"
+            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_plan_cycle_all_access"
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_plan_cycle_engine_ew"
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_plan_cycle_deck_mgt"
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
+            else -> return
+        }
+        securePrefs.edit().remove("${cycleKey}_pending").apply()
+        lastRequestedCycles.remove(productId)
+        if (checkoutFlowProductId == productId) checkoutFlowProductId = null
+    }
+
+    private suspend fun syncAccountAfterPlayPurchaseChanged() {
+        try {
+            SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(appContext)
+        } catch (e: Exception) {
+            Log.w(
+                TAG,
+                "Google Play purchase was processed, but Hyperion account sync could not start. Retry from My Hyperion Account.",
+                e
+            )
+        }
+    }
+
     private suspend fun processPurchases(purchases: List<Purchase>) = withContext(Dispatchers.IO) {
+        // BillingClient may expose a locally cached or empty snapshot while offline.
+        // Without validated internet it cannot be used to revoke the last known-good
+        // subscription cache. Wait for an online ownership query before mutating it.
+        if (!shouldApplyPlayPurchaseSnapshot(hasValidatedInternet())) {
+            Log.i(TAG, "Skipping offline Play ownership snapshot; preserving last verified subscription cache")
+            return@withContext
+        }
+
         var oicPlan: ActivePlanInfo? = null
         var gmdssPlan: ActivePlanInfo? = null
         var allAccessPlan: ActivePlanInfo? = null
@@ -621,6 +925,18 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         var pendingProduct: String? = null
         var lastPurchaseTime = 0L
         var lastBasePlan: String? = null
+
+        val queryTimeEpoch = System.currentTimeMillis()
+        val savedHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
+        val priorVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
+        val mayRefreshVerification = canRefreshPlayVerification(
+            hasValidatedInternet = hasValidatedInternet(),
+            nowEpochMs = queryTimeEpoch,
+            savedHighWaterMarkEpochMs = savedHighWaterMark
+        )
+        // A local Play Store snapshot while offline is not a fresh server verification.
+        // It may preserve the existing lease, but must never renew its 72-hour deadline.
+        val verifiedAtEpoch = if (mayRefreshVerification) queryTimeEpoch else priorVerifiedAt
 
         val editor = securePrefs.edit()
 
@@ -654,42 +970,76 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
                             else -> "play_plan_cycle_default"
                         }
-                        val requestedCycle = lastRequestedCycles[productId]
-                            ?: securePrefs.getString(cycleKey, null)
+                        val purchaseTimeKey = when (productId) {
+                            BillingConstants.PRODUCT_OIC_NW_PASS -> "play_purchase_time_oic"
+                            BillingConstants.PRODUCT_GMDSS_PASS -> "play_purchase_time_gmdss"
+                            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> "play_purchase_time_all_access"
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "play_purchase_time_engine_ew"
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> "play_purchase_time_deck_mgt"
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_purchase_time_engine_mgt"
+                            else -> "play_purchase_time_default"
+                        }
+                        val purchaseTokenKey = when (productId) {
+                            BillingConstants.PRODUCT_OIC_NW_PASS -> KEY_OIC_TOKEN
+                            BillingConstants.PRODUCT_GMDSS_PASS -> KEY_GMDSS_TOKEN
+                            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> KEY_ALL_ACCESS_TOKEN
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> KEY_ENGINE_OIC_EW_TOKEN
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> KEY_DECK_MGT_TOKEN
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> KEY_ENGINE_MGT_TOKEN
+                            else -> "play_purchase_token_default"
+                        }
+                        val pendingCycleKey = "${cycleKey}_pending"
+                        val activeCycle = securePrefs.getString(cycleKey, null)
+                            ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
+                        val pendingCycle = lastRequestedCycles[productId]
+                            ?: securePrefs.getString(pendingCycleKey, null)
                                 ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
+                        val previousPurchaseTime = securePrefs.getLong(
+                            purchaseTimeKey,
+                            if (activeCycle != null) securePrefs.getLong(KEY_PURCHASE_TIME, 0L) else 0L
+                        )
+                        val previousPurchaseToken = securePrefs.getString(purchaseTokenKey, null)
+                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
+                        val selectedCycleWasPurchased = isNewPlaySubscriptionPurchase(
+                            previousPurchaseToken = previousPurchaseToken,
+                            currentPurchaseToken = purchase.purchaseToken,
+                            previousPurchaseTimeEpochMs = previousPurchaseTime,
+                            currentPurchaseTimeEpochMs = purchase.purchaseTime
+                        )
+                        val cycle = resolvePurchasedBillingCycle(
+                            activeCycle = activeCycle,
+                            pendingCycle = pendingCycle,
+                            isNewPurchase = selectedCycleWasPurchased
+                        )
 
-                        // If no cycle explicitly requested or if it was defaulted to WEEKLY from legacy bug, prefer MONTHLY
-                        val effectiveCycle = when {
-                            requestedCycle == BillingCycle.YEARLY -> BillingCycle.YEARLY
-                            requestedCycle == BillingCycle.MONTHLY -> BillingCycle.MONTHLY
-                            requestedCycle == BillingCycle.WEEKLY && lastRequestedCycles.containsKey(productId) -> BillingCycle.WEEKLY
-                            else -> BillingCycle.MONTHLY
-                        }
-
-                        val offer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-                            val basePlan = offer.basePlanId.lowercase()
-                            val phases = offer.pricingPhases.pricingPhaseList
-                            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
-                            when (effectiveCycle) {
-                                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W" || period == "P7D"
-                                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M" || period == "P30D"
-                                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y" || period == "P365D" || period == "P12M"
+                        // Confirm a pending Store selection only when Google Play reports a
+                        // newer purchase or a replacement purchase token. A cancelled checkout
+                        // or restore of the same purchase keeps its previously saved duration.
+                        if (pendingCycle != null) {
+                            val checkoutStillOpen = _entitlements.value.pendingPurchaseProductId == productId
+                            if (selectedCycleWasPurchased || !checkoutStillOpen) {
+                                editor.remove(pendingCycleKey)
+                                lastRequestedCycles.remove(productId)
                             }
-                        } ?: details?.subscriptionOfferDetails?.firstOrNull()
-
-                        val cycle = effectiveCycle
-                        val cycleDurationMs = cycle.durationMs
-                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else System.currentTimeMillis()
-                        val now = System.currentTimeMillis()
-                        val savedWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
-                        val currentWaterMark = maxOf(savedWaterMark, purchaseTime, now)
-
-                        // A subscription returning PurchaseState.PURCHASED from Google Play is actively entitled.
-                        // Advance expiration forward across recurring cycles so users are never locked out while active in Google Play.
-                        var expiryTime = purchaseTime + cycleDurationMs
-                        while (expiryTime <= now && cycleDurationMs > 0L) {
-                            expiryTime += cycleDurationMs
                         }
+
+                        val offer = details?.subscriptionOfferDetails?.firstOrNull { candidate ->
+                            cycle.matchesPlayOffer(
+                                basePlanId = candidate.basePlanId,
+                                billingPeriods = candidate.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+                            )
+                        }
+                        val currentWaterMark = maxOf(savedHighWaterMark, purchaseTime, queryTimeEpoch)
+                        val effectiveQueryTime = maxOf(queryTimeEpoch, currentWaterMark)
+
+                        // BillingClient Purchase.getPurchaseTime() is the original subscription
+                        // signup time. Use calendar-period arithmetic for the offline display
+                        // fallback; linked accounts receive the exact expiry from Play's API.
+                        val expiryTime = estimateNextSubscriptionExpiry(
+                            purchaseTimeEpochMs = purchaseTime,
+                            nowEpochMs = effectiveQueryTime,
+                            cycle = cycle
+                        )
 
                         when (productId) {
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
@@ -698,7 +1048,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_GMDSS_PASS -> {
@@ -707,7 +1058,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
@@ -716,7 +1068,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_DECK_MGT_PASS -> {
@@ -725,7 +1078,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
@@ -734,7 +1088,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
@@ -743,7 +1098,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                                 allAccessPlan = plan
                                 oicPlan = plan
@@ -768,6 +1124,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         // Google Play Subscriptions are verified server-side; device clock changes do not invalidate active purchases
         val isClockTampered = false
 
+        // Keep Google Play's last-successful-query timestamp separate from purchase time.
+        // Purchase.purchaseTime never changes after renewal, so it cannot be used as an offline lease.
         // Synchronize Secure SharedPreferences disk cache strictly with active Google Play purchases
         if (oicPlan != null) {
             editor.putBoolean(KEY_OIC_NW_UNLOCKED, true)
@@ -859,10 +1217,47 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasEw = engineOicEwPlan != null && !engineOicEwPlan.isExpired
         val hasDm = deckMgtPlan != null && !deckMgtPlan.isExpired
         val hasEm = engineMgtPlan != null && !engineMgtPlan.isExpired
+        // Use raw owned-purchase presence for cache lifecycle. An expired offline lease
+        // must retain its old timestamp; clearing it would trigger the one-time legacy migration.
 
         val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
         editor.putLong(KEY_PURCHASE_TIME, lastPurchaseTime)
+
+        val hasAnyOwnedPurchase = oicPlan != null || gmdssPlan != null ||
+            allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
+
+        val observedProductIds = purchases.flatMap { it.products }.toSet()
+        val checkoutProductId = checkoutFlowProductId
+        val productCycleKeys = mapOf(
+            BillingConstants.PRODUCT_OIC_NW_PASS to "play_plan_cycle_oic",
+            BillingConstants.PRODUCT_GMDSS_PASS to "play_plan_cycle_gmdss",
+            BillingConstants.PRODUCT_ALL_ACCESS_PASS to "play_plan_cycle_all_access",
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS to "play_plan_cycle_engine_ew",
+            BillingConstants.PRODUCT_DECK_MGT_PASS to "play_plan_cycle_deck_mgt",
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS to "play_plan_cycle_engine_mgt"
+        )
+        productCycleKeys.forEach { (productId, cycleKey) ->
+            // Clear only stale/unowned pending choices. Keep a choice while its checkout
+            // is open or while Play reports that product as pending/purchased.
+            if (productId !in observedProductIds && checkoutProductId != productId) {
+                editor.remove("${cycleKey}_pending")
+                lastRequestedCycles.remove(productId)
+            }
+        }
+
+        // Persist every observed clock advance, but advance the verification lease only
+        // when Android reports a validated internet connection and the clock is monotonic.
+        editor.putLong(
+            KEY_PLAY_HIGH_WATER_MARK,
+            maxOf(savedHighWaterMark, queryTimeEpoch, lastPurchaseTime)
+        )
+        if (hasAnyOwnedPurchase && mayRefreshVerification) {
+            editor.putLong(KEY_PLAY_LAST_VERIFIED_AT, queryTimeEpoch)
+        } else if (!hasAnyOwnedPurchase) {
+            // A successful empty Play snapshot revokes all local Play plans immediately.
+            editor.remove(KEY_PLAY_LAST_VERIFIED_AT)
+        }
         editor.apply()
 
         _entitlements.update {
@@ -890,11 +1285,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val oicCycle = securePrefs.getString("play_plan_cycle_oic", null)
             val oicToken = securePrefs.getString(KEY_OIC_TOKEN, null)
             val hasOic = securePrefs.getBoolean(KEY_OIC_NW_UNLOCKED, false)
-            if (oicCycle == BillingCycle.WEEKLY.name || (hasOic && !oicToken.isNullOrBlank() && oicCycle == null)) {
+            if (hasOic && !oicToken.isNullOrBlank() && oicCycle == null) {
                 editor.putString("play_plan_cycle_oic", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_oic", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.nextBillingPeriod(purchaseTime)
                     editor.putLong("play_expiry_time_oic", correctedExpiry)
                 }
             }
@@ -902,11 +1297,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val gmdssCycle = securePrefs.getString("play_plan_cycle_gmdss", null)
             val gmdssToken = securePrefs.getString(KEY_GMDSS_TOKEN, null)
             val hasGmdss = securePrefs.getBoolean(KEY_GMDSS_UNLOCKED, false)
-            if (gmdssCycle == BillingCycle.WEEKLY.name || (hasGmdss && !gmdssToken.isNullOrBlank() && gmdssCycle == null)) {
+            if (hasGmdss && !gmdssToken.isNullOrBlank() && gmdssCycle == null) {
                 editor.putString("play_plan_cycle_gmdss", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_gmdss", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.nextBillingPeriod(purchaseTime)
                     editor.putLong("play_expiry_time_gmdss", correctedExpiry)
                 }
             }
@@ -914,11 +1309,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val allAccessCycle = securePrefs.getString("play_plan_cycle_all_access", null)
             val allToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null)
             val hasAll = securePrefs.getBoolean(KEY_ALL_ACCESS_UNLOCKED, false)
-            if (allAccessCycle == BillingCycle.WEEKLY.name || (hasAll && !allToken.isNullOrBlank() && allAccessCycle == null)) {
+            if (hasAll && !allToken.isNullOrBlank() && allAccessCycle == null) {
                 editor.putString("play_plan_cycle_all_access", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_all_access", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.nextBillingPeriod(purchaseTime)
                     editor.putLong("play_expiry_time_all_access", correctedExpiry)
                 }
             }
@@ -952,31 +1347,55 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val now = System.currentTimeMillis()
         val oicPurchase = securePrefs.getLong("play_purchase_time_oic", if (purchaseTime > 0L) purchaseTime else now)
-        var oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicPurchase + oicCycle.durationMs)
-        if (oic && oicExpiry < oicPurchase + oicCycle.durationMs) {
-            oicExpiry = oicPurchase + oicCycle.durationMs
+        var oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicCycle.nextBillingPeriod(oicPurchase))
+        if (oic && oicExpiry < oicCycle.nextBillingPeriod(oicPurchase)) {
+            oicExpiry = oicCycle.nextBillingPeriod(oicPurchase)
         }
 
         val gmdssPurchase = securePrefs.getLong("play_purchase_time_gmdss", if (purchaseTime > 0L) purchaseTime else now)
-        var gmdssExpiry = securePrefs.getLong("play_expiry_time_gmdss", gmdssPurchase + gmdssCycle.durationMs)
-        if (gmdss && gmdssExpiry < gmdssPurchase + gmdssCycle.durationMs) {
-            gmdssExpiry = gmdssPurchase + gmdssCycle.durationMs
+        var gmdssExpiry = securePrefs.getLong("play_expiry_time_gmdss", gmdssCycle.nextBillingPeriod(gmdssPurchase))
+        if (gmdss && gmdssExpiry < gmdssCycle.nextBillingPeriod(gmdssPurchase)) {
+            gmdssExpiry = gmdssCycle.nextBillingPeriod(gmdssPurchase)
         }
 
         val allAccessPurchase = securePrefs.getLong("play_purchase_time_all_access", if (purchaseTime > 0L) purchaseTime else now)
-        var allAccessExpiry = securePrefs.getLong("play_expiry_time_all_access", allAccessPurchase + allAccessCycle.durationMs)
-        if (allAccess && allAccessExpiry < allAccessPurchase + allAccessCycle.durationMs) {
-            allAccessExpiry = allAccessPurchase + allAccessCycle.durationMs
+        var allAccessExpiry = securePrefs.getLong("play_expiry_time_all_access", allAccessCycle.nextBillingPeriod(allAccessPurchase))
+        if (allAccess && allAccessExpiry < allAccessCycle.nextBillingPeriod(allAccessPurchase)) {
+            allAccessExpiry = allAccessCycle.nextBillingPeriod(allAccessPurchase)
         }
 
-        val playHighWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
+        var playHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
+        var playLastVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
+
+        // Older app builds did not persist the last successful Play-query timestamp.
+        // Give an existing encrypted cache one bounded migration grace, then require
+        // a fresh Google Play query. New builds persist the timestamp on every query.
+        val hasLegacyCachedPlayPlan = oic || gmdss || allAccess ||
+            securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false) ||
+            securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false) ||
+            securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
+        val migrationAlreadyComplete = securePrefs.getBoolean(KEY_PLAY_CACHE_MIGRATION_COMPLETE, false)
+        if (!migrationAlreadyComplete && hasLegacyCachedPlayPlan && playLastVerifiedAt <= 0L) {
+            // Existing installations need one bounded transition grace because their old
+            // cache did not record query time. New purchases must never receive this grace.
+            playLastVerifiedAt = now
+            playHighWaterMark = maxOf(playHighWaterMark, now)
+        }
+        if (!migrationAlreadyComplete) {
+            securePrefs.edit()
+                .putBoolean(KEY_PLAY_CACHE_MIGRATION_COMPLETE, true)
+                .putLong(KEY_PLAY_LAST_VERIFIED_AT, playLastVerifiedAt)
+                .putLong(KEY_PLAY_HIGH_WATER_MARK, playHighWaterMark)
+                .apply()
+        }
 
         val oicPlan = if (oic) ActivePlanInfo(
             cycle = oicCycle,
             purchaseToken = securePrefs.getString(KEY_OIC_TOKEN, null),
             purchaseTimestamp = oicPurchase,
             expiryTimestamp = oicExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
@@ -984,7 +1403,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_GMDSS_TOKEN, null),
             purchaseTimestamp = gmdssPurchase,
             expiryTimestamp = gmdssExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
@@ -992,40 +1412,44 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null),
             purchaseTimestamp = allAccessPurchase,
             expiryTimestamp = allAccessExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasEw = securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
         val ewPurchase = securePrefs.getLong("play_purchase_time_engine_ew", if (purchaseTime > 0L) purchaseTime else now)
-        val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", ewPurchase + engineEwCycle.durationMs)
+        val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", engineEwCycle.nextBillingPeriod(ewPurchase))
         val engineEwPlan = if (hasEw) ActivePlanInfo(
             cycle = engineEwCycle,
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
             purchaseTimestamp = ewPurchase,
             expiryTimestamp = ewExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasDm = securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false)
         val dmPurchase = securePrefs.getLong("play_purchase_time_deck_mgt", if (purchaseTime > 0L) purchaseTime else now)
-        val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", dmPurchase + deckMgtCycle.durationMs)
+        val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", deckMgtCycle.nextBillingPeriod(dmPurchase))
         val deckMgtPlan = if (hasDm) ActivePlanInfo(
             cycle = deckMgtCycle,
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
             purchaseTimestamp = dmPurchase,
             expiryTimestamp = dmExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasEm = securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
         val emPurchase = securePrefs.getLong("play_purchase_time_engine_mgt", if (purchaseTime > 0L) purchaseTime else now)
-        val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", emPurchase + engineMgtCycle.durationMs)
+        val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", engineMgtCycle.nextBillingPeriod(emPurchase))
         val engineMgtPlan = if (hasEm) ActivePlanInfo(
             cycle = engineMgtCycle,
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
             purchaseTimestamp = emPurchase,
             expiryTimestamp = emExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasOicActive = oicPlan != null && !oicPlan.isExpired
@@ -1067,18 +1491,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val offers = details.subscriptionOfferDetails ?: return null
 
         val matchedOffer = offers.firstOrNull { offer ->
-            val basePlan = offer.basePlanId.lowercase()
-            val phases = offer.pricingPhases.pricingPhaseList
-            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
-
-            when (cycle) {
-                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W"
-                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M"
-                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y"
-            }
+            cycle.matchesPlayOffer(
+                basePlanId = offer.basePlanId,
+                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            )
         }
 
-        return matchedOffer?.offerToken ?: offers.firstOrNull()?.offerToken
+        // Never silently fall back to a different base plan (e.g. yearly when the
+        // user explicitly selected weekly). The caller will show an unavailable-plan
+        // message instead of charging for a different duration.
+        return matchedOffer?.offerToken
     }
 
     fun launchBillingFlow(
@@ -1097,13 +1519,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             else -> "play_plan_cycle_default"
         }
         try {
-            securePrefs.edit().putString(cycleKey, cycle.name).apply()
+            securePrefs.edit().putString("${cycleKey}_pending", cycle.name).apply()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to persist requested cycle: ${e.message}")
+            Log.w(TAG, "Failed to persist pending duration selection: ${e.message}")
         }
 
         val details = _productsDetails.value[productId]
         if (details == null) {
+            clearPendingBillingCycle(productId)
             Log.w(TAG, "ProductDetails for $productId not loaded yet. Attempting fresh query.")
             scope.launch { queryProductDetails() }
             return BillingResult.newBuilder()
@@ -1113,6 +1536,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
 
         val offerToken = getOfferToken(productId, cycle)
+        if (offerToken.isNullOrBlank()) {
+            clearPendingBillingCycle(productId)
+            Log.e(TAG, "No Google Play offer matched the selected cycle: product=$productId, cycle=$cycle")
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("The selected subscription duration is unavailable. Refresh the store and choose another available plan.")
+                .build()
+        }
 
         val productDetailsParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
@@ -1127,8 +1558,19 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             .setProductDetailsParamsList(productDetailsParamsList)
             .build()
 
+        checkoutFlowProductId = productId
         _entitlements.update { it.copy(pendingPurchaseProductId = productId, errorMessage = null) }
-        return billingClient.launchBillingFlow(activity, flowParams)
+        val result = billingClient.launchBillingFlow(activity, flowParams)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            clearPendingBillingCycle(productId)
+            _entitlements.update {
+                it.copy(
+                    pendingPurchaseProductId = null,
+                    errorMessage = result.debugMessage.ifBlank { "Google Play could not start this purchase." }
+                )
+            }
+        }
+        return result
     }
 
     fun getProductItem(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): PlayProductItem {
@@ -1148,18 +1590,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val isPending = ent.pendingPurchaseProductId == productId
 
         val matchedOffer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-            val basePlan = offer.basePlanId.lowercase()
-            val phases = offer.pricingPhases.pricingPhaseList
-            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
+            cycle.matchesPlayOffer(
+                basePlanId = offer.basePlanId,
+                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            )
+        }
 
-            when (cycle) {
-                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W"
-                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M"
-                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y"
-            }
-        } ?: details?.subscriptionOfferDetails?.firstOrNull()
-
-        val subPrice = matchedOffer?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
+        // The last phase is the ongoing recurring base-plan price. Earlier
+        // phases can be free trials or introductory prices and are not the renewal price.
+        val subPrice = matchedOffer?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
         val fallbackPrice = BillingConstants.getFallbackPrice(productId, cycle)
         val fallbackShort = BillingConstants.getFallbackShortPrice(productId, cycle)
 
@@ -1212,8 +1651,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         lastRequestedCycles[productId] = cycle
         val now = System.currentTimeMillis()
-        val durationMs = cycle.durationMs
-        val expiryTime = now + durationMs
+        val expiryTime = cycle.nextBillingPeriod(now)
         val mockToken = "mock_sandbox_sub_token_${productId}_$now"
         val editor = securePrefs.edit()
 

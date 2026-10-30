@@ -8,6 +8,24 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+googleServices {
+  // This project can be run locally without Firebase features/configuration.
+  // Add a valid app/google-services.json only when a Firebase-backed feature is enabled.
+  missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN
+}
+
+val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID").orNull
+  ?: System.getenv("HYPERION_GOOGLE_WEB_CLIENT_ID")
+  ?: ""
+val escapedGoogleWebClientId = googleWebClientId.replace("\\", "\\\\").replace("\"", "\\\"")
+
+// Release artifacts must be signed only with credentials supplied outside version control.
+// Deliberately do not fall back to the repository's tracked keystore or the default
+// "android" password values when those credentials are missing.
+fun configuredSigningValue(name: String): String? =
+  providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+    ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+
 val releaseKeystorePath = configuredSigningValue("KEYSTORE_PATH")
 val releaseStorePassword = configuredSigningValue("STORE_PASSWORD")
 val releaseKeyAlias = configuredSigningValue("KEY_ALIAS") ?: "upload"
@@ -16,21 +34,19 @@ val releaseSigningConfigured = releaseKeystorePath != null &&
   releaseStorePassword != null &&
   releaseKeyPassword != null
 
-// Signing credentials must come from local user properties or CI secrets, never source control.
-fun configuredSigningValue(name: String): String? =
-  providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
-    ?: System.getenv(name)?.takeIf { it.isNotBlank() }
-
 android {
   namespace = "com.nhyle.hyperionmaritime"
   compileSdk = 36
 
   defaultConfig {
     applicationId = "com.nhyle.hyperionmaritime"
+    buildConfigField("String", "SUPABASE_URL", "\"https://evnjoezffghtrzqacwcj.supabase.co\"")
+    buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_3QAooJa46k2g9PaUNbTOLA_1UXxAIeR\"")
+    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
     minSdk = 24
     targetSdk = 36
-    versionCode = 64
-    versionName = "1.0.7"
+    versionCode = 66
+    versionName = "1.0.9"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -58,17 +74,16 @@ android {
       }
     }
     debug {
+      // Use Gradle's standard debug keystore so CI and developer machines do not
+      // depend on a generated keystore being tracked in the repository.
       signingConfig = signingConfigs.getByName("debug")
     }
   }
 
   compileOptions {
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
-  }
-
-  kotlinOptions {
-    jvmTarget = "17"
   }
 
 
@@ -85,9 +100,10 @@ android {
   }
 }
 
-
-// Refuse release packaging/signing when credentials are missing. Debug builds do not need
-// production signing material and use the Android Gradle plugin's generated debug key.
+// Fail closed before release packaging/signing tasks execute. Debug builds and debug CI
+// remain independent of production signing keys. Avoid task-graph callbacks here because
+// Gradle's task-graph API exposes a Groovy Closure signature that does not compile reliably
+// as a Kotlin DSL lambda across Gradle versions.
 tasks.matching {
   it.name in setOf(
     "assembleRelease",
@@ -108,6 +124,12 @@ tasks.matching {
   }
 }
 
+kotlin {
+  compilerOptions {
+    jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17")
+  }
+}
+
 dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -124,13 +146,21 @@ dependencies {
   implementation("androidx.fragment:fragment-ktx:1.8.9")
 
   // Room Database
-  implementation("androidx.room:room-runtime:2.6.1")
-  implementation("androidx.room:room-ktx:2.6.1")
-  ksp("androidx.room:room-compiler:2.6.1")
+  implementation("androidx.room:room-runtime:2.8.5")
+  implementation("androidx.room:room-ktx:2.8.5")
+  ksp("androidx.room:room-compiler:2.8.5")
+
+  // Backport java.time APIs for the app's minSdk 24 (Android 7.x) devices.
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
   // WorkManager & Security
   implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+  // Native Google sign-in via Android Credential Manager
+  implementation("androidx.credentials:credentials:1.6.0")
+  implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+  implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
 
   // Google Play Billing & In-App Updates & Reviews
   implementation("com.android.billingclient:billing-ktx:8.0.0")

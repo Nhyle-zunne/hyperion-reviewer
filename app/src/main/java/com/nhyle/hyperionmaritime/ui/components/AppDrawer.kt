@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.DarkMode
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.BackHandler
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
@@ -88,6 +90,7 @@ import com.nhyle.hyperionmaritime.viewmodel.Screen
 fun HyperionDrawerContent(
     viewModel: ReviewerViewModel,
     onCloseDrawer: () -> Unit,
+    onAccountClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
@@ -100,6 +103,7 @@ fun HyperionDrawerContent(
     val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsStateWithLifecycle()
     val isUnlocked by viewModel.isUnlocked.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+    val accountState by SupabaseAccountManager.state.collectAsStateWithLifecycle()
 
     val hasAnyActiveLicense = isOicNwProUnlocked || isGmdssProUnlocked || isEwActive || isDmActive || isEmActive || isActivated || isUnlocked
     var lockedFeatureName by remember { mutableStateOf<String?>(null) }
@@ -147,6 +151,32 @@ fun HyperionDrawerContent(
                         fontSize = 10.sp,
                         letterSpacing = 1.4.sp
                     )
+                    Button(
+                        onClick = onAccountClick,
+                        shape = RectangleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = colors.accentForeground
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (accountState.email.isNullOrBlank()) "SIGN IN WITH GOOGLE" else "MY HYPERION ACCOUNT",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 10.sp,
+                            letterSpacing = 0.8.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 

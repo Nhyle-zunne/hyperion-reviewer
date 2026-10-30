@@ -1,0 +1,52 @@
+name: Android account-linking build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-account-linking-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-and-unit-test:
+    name: Compile Android app and run unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android 36 platform
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -x "$SDKMANAGER"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses
+          set -o pipefail
+          "$SDKMANAGER" "platforms;android-36" "platform-tools"
+
+      - name: Install compatible Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.4'
+
+      # Android Studio is the developer's run/install path. CI only executes
+      # the unit/Robolectric suite; it does not package or upload APK artifacts.
+      - name: Run Android unit tests
+        env:
+          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
+        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest
