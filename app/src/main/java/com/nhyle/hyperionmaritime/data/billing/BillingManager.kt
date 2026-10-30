@@ -3,6 +3,8 @@ package com.nhyle.hyperionmaritime.data.billing
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -134,6 +136,16 @@ data class ActivePlanInfo(
  * Standard Product IDs, Base Plans, and fallback metadata for Hyperion Google Play Subscriptions.
  * Converted to ProductType.SUBS (Auto-Renewing Subscriptions across Weekly, Monthly, Yearly cycles).
  */
+internal fun canRefreshPlayVerification(
+    hasValidatedInternet: Boolean,
+    nowEpochMs: Long,
+    savedHighWaterMarkEpochMs: Long
+): Boolean {
+    if (!hasValidatedInternet) return false
+    return savedHighWaterMarkEpochMs <= 0L ||
+        nowEpochMs >= savedHighWaterMarkEpochMs - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+}
+
 object BillingConstants {
     // Match the account-linked license cache: allow up to 72 hours at sea after
     // the last successful Google Play ownership query, then require online verification.
@@ -486,6 +498,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
+    private fun hasValidatedInternet(): Boolean {
+        val connectivity = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = connectivity.activeNetwork ?: return false
+        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
     private fun initSecurePreferences(context: Context): SharedPreferences {
         return try {
             val masterKey = MasterKey.Builder(context)
@@ -715,11 +736,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val queryTimeEpoch = System.currentTimeMillis()
         val savedHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
         val priorVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
-        val clockRollbackDetected = savedHighWaterMark > 0L &&
-            queryTimeEpoch < savedHighWaterMark - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
-        // A failed device-clock check must not renew the offline lease, even if Play
-        // returned a cached purchase snapshot.
-        val verifiedAtEpoch = if (clockRollbackDetected) priorVerifiedAt else queryTimeEpoch
+        val mayRefreshVerification = canRefreshPlayVerification(
+            hasValidatedInternet = hasValidatedInternet(),
+            nowEpochMs = queryTimeEpoch,
+            savedHighWaterMarkEpochMs = savedHighWaterMark
+        )
+        // A local Play Store snapshot while offline is not a fresh server verification.
+        // It may preserve the existing lease, but must never renew its 72-hour deadline.
+        val verifiedAtEpoch = if (mayRefreshVerification) queryTimeEpoch else priorVerifiedAt
 
         val editor = securePrefs.edit()
 
@@ -973,18 +997,17 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         editor.putLong(KEY_PURCHASE_TIME, lastPurchaseTime)
 
         val hasAnyOwnedPurchase = hasOic || hasGmdss || hasAll || hasEw || hasDm || hasEm
-        if (hasAnyOwnedPurchase) {
-            editor.putLong(
-                KEY_PLAY_HIGH_WATER_MARK,
-                maxOf(savedHighWaterMark, queryTimeEpoch, lastPurchaseTime)
-            )
-            if (!clockRollbackDetected) {
-                editor.putLong(KEY_PLAY_LAST_VERIFIED_AT, queryTimeEpoch)
-            }
-        } else {
+        // Persist every observed clock advance, but advance the verification lease only
+        // when Android reports a validated internet connection and the clock is monotonic.
+        editor.putLong(
+            KEY_PLAY_HIGH_WATER_MARK,
+            maxOf(savedHighWaterMark, queryTimeEpoch, lastPurchaseTime)
+        )
+        if (hasAnyOwnedPurchase && mayRefreshVerification) {
+            editor.putLong(KEY_PLAY_LAST_VERIFIED_AT, queryTimeEpoch)
+        } else if (!hasAnyOwnedPurchase) {
             // A successful empty Play snapshot revokes all local Play plans immediately.
             editor.remove(KEY_PLAY_LAST_VERIFIED_AT)
-            editor.putLong(KEY_PLAY_HIGH_WATER_MARK, maxOf(savedHighWaterMark, queryTimeEpoch))
         }
         editor.apply()
 
