@@ -211,18 +211,6 @@ fun AboutScreen(
                 )
             }
 
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface,
-                onClick = { viewModel.navigateTo(Screen.ExamGuidelines) }
-            ) {
-                LegalNavigationRow(
-                    icon = Icons.Default.Description,
-                    title = "EXAM GUIDELINES",
-                    description = "Examination references, item counts, and study guidance."
-                )
-            }
-
             Surface(
                 shape = RoundedCornerShape(2.dp),
                 color = colors.surface2,
