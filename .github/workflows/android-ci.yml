@@ -48,3 +48,6 @@ jobs:
       - name: Run Android static analysis
         run: gradle --no-daemon :app:lintDebug
 
+      - name: Assemble debug app (no artifact upload)
+        run: gradle --no-daemon :app:assembleDebug
+
