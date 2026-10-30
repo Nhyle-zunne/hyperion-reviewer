@@ -1,7 +1,6 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,9 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -44,21 +41,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.model.LegalAgreementText
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
-import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 
-/**
- * Terms and Conditions Screen:
- * Official app policies, non-affiliation disclosures, and mandatory Google Play subscription billing terms.
- */
 @Composable
 fun TermsOnboardingScreen(
     onAcceptTerms: () -> Unit,
@@ -145,14 +136,13 @@ fun TermsAndDisclaimerScreenContent(
 
     val hasReachedBottom by remember {
         derivedStateOf {
-            !scrollState.canScrollForward || (scrollState.maxValue > 0 && scrollState.value >= scrollState.maxValue - 20)
+            !scrollState.canScrollForward ||
+                (scrollState.maxValue > 0 && scrollState.value >= scrollState.maxValue - 20)
         }
     }
 
     LaunchedEffect(hasReachedBottom) {
-        if (hasReachedBottom) {
-            hasFullyScrolled = true
-        }
+        if (hasReachedBottom) hasFullyScrolled = true
     }
 
     BackHandler(enabled = !isMandatoryOnboarding) {
@@ -168,43 +158,36 @@ fun TermsAndDisclaimerScreenContent(
     ) {
         if (!isMandatoryOnboarding) {
             MaritimeTopBar(
-                title = "TERMS AND CONDITIONS",
-                subtitle = "INDEPENDENT EDUCATIONAL SERVICE · ACCOUNT & BILLING TERMS",
+                title = "TERMS OF USE",
+                subtitle = "HYPERION MARITIME · LEGAL AGREEMENT",
                 showBackButton = false,
                 onMenuClick = onOpenDrawer
             )
         } else {
-            // Mandatory Onboarding Top Header
-            Surface(
-                color = colors.surface,
-                shadowElevation = 0.dp
-            ) {
+            Surface(color = colors.surface, shadowElevation = 0.dp) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 20.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "HYPERION",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = colors.foreground,
-                                letterSpacing = (-0.5).sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "TERMS OF USE & SUBSCRIPTION POLICY",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = colors.accent,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.2.sp
-                            )
-                        }
+                        Text(
+                            text = "HYPERION MARITIME",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.foreground,
+                            letterSpacing = (-0.5).sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "TERMS OF USE",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.accent,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.2.sp
+                        )
                     }
-
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -222,7 +205,6 @@ fun TermsAndDisclaimerScreenContent(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Prominent Non-Affiliation Disclaimer
             MianRuleCard(
                 ruleColor = colors.accent,
                 containerColor = colors.surface
@@ -245,100 +227,16 @@ fun TermsAndDisclaimerScreenContent(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "OFFICIAL NON-AFFILIATION NOTICE",
+                            text = "INDEPENDENT EDUCATIONAL RESOURCE",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.ExtraBold,
                             color = colors.accent,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = 0.35.sp
                         )
                     }
-
                     Spacer(modifier = Modifier.height(10.dp))
-
                     Text(
                         text = LegalAgreementText.DISCLAIMER_SUMMARY,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "1. PURPOSE & INDEPENDENT NATURE")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_1_PURPOSE,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "2. INTELLECTUAL PROPERTY & COMPETENCY REFERENCES")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_2_IP,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "3. ACCURACY, SAFETY & LIMITATION OF LIABILITY")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_3_LIABILITY,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
-
-            MianRuleCard(
-                ruleColor = colors.accent,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CreditCard,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "GOOGLE PLAY SUBSCRIPTION DISCLOSURE",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.accent,
-                            fontSize = 11.5.sp,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = LegalAgreementText.SECTION_4_SUBSCRIPTION,
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.foreground,
                         lineHeight = 19.sp
@@ -346,102 +244,17 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                 }
             }
 
-            MianSectionHeader(title = "5. OFFLINE ACCESS & HARDWARE INTEGRITY")
-
             MianRuleCard(
                 ruleColor = colors.border,
                 containerColor = colors.surface
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = null,
-                            tint = colors.accent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "OFFLINE LICENSING & MARITIME PERSISTENCE",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.accent,
-                            fontSize = 11.5.sp,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = LegalAgreementText.SECTION_5_OFFLINE,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "6. ACCOUNTS, SIGN-IN & LICENSE SYNCHRONIZATION")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_6_ACCOUNT_AND_STUDY_DATA,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "7. ACCOUNT DELETION & ACTIVE LICENSES")
-
-            MianRuleCard(
-                ruleColor = colors.accent,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_7_DELETION_AND_TERMINATION,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "8. ACCEPTABLE USE & CONTENT PROTECTION")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_8_ACCEPTABLE_USE,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "9. DEVELOPER & SUPPORT CONTACT")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = LegalAgreementText.SECTION_9_CONTACT,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                }
+                Text(
+                    text = LegalAgreementText.FULL_AGREEMENT_TEXT,
+                    modifier = Modifier.padding(18.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.foreground,
+                    lineHeight = 20.sp
+                )
             }
 
             if (isMandatoryOnboarding && !hasFullyScrolled) {
@@ -473,12 +286,8 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Bottom Acceptance Bar (Mandatory Onboarding Mode)
         if (isMandatoryOnboarding) {
-            Surface(
-                color = colors.surface,
-                shadowElevation = 0.dp
-            ) {
+            Surface(color = colors.surface, shadowElevation = 0.dp) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Box(
                         modifier = Modifier
@@ -486,7 +295,6 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                             .height(3.dp)
                             .background(colors.border)
                     )
-
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -498,33 +306,15 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp)
                         ) {
-                            if (!hasFullyScrolled) {
-                                Surface(
-                                    shape = RoundedCornerShape(2.dp),
-                                    color = colors.surface2
+                            Surface(
+                                shape = RoundedCornerShape(2.dp),
+                                color = colors.surface2
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = "↓ Please scroll to the bottom to accept the terms",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = colors.accent,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            } else {
-                                Surface(
-                                    shape = RoundedCornerShape(2.dp),
-                                    color = colors.surface2
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
+                                    if (hasFullyScrolled) {
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = null,
@@ -539,6 +329,14 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                                             color = colors.success,
                                             fontSize = 11.sp
                                         )
+                                    } else {
+                                        Text(
+                                            text = "↓ Please scroll to the bottom to accept",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = colors.accent,
+                                            fontSize = 11.sp
+                                        )
                                     }
                                 }
                             }
@@ -550,11 +348,7 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                         ) {
                             Checkbox(
                                 checked = isAccepted,
-                                onCheckedChange = {
-                                    if (hasFullyScrolled) {
-                                        isAccepted = it
-                                    }
-                                },
+                                onCheckedChange = { if (hasFullyScrolled) isAccepted = it },
                                 enabled = hasFullyScrolled,
                                 colors = CheckboxDefaults.colors(
                                     checkedColor = colors.accent,
@@ -565,7 +359,7 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "I understand and accept the Terms and Conditions, privacy policy, and subscription billing terms.",
+                                text = "I have read and accept the Terms of Use and acknowledge the Privacy Policy.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (hasFullyScrolled) colors.foreground else colors.muted,
                                 fontSize = 11.sp,
@@ -578,7 +372,6 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
-
                         MianButton(
                             onClick = onAccepted,
                             enabled = hasFullyScrolled && isAccepted,
