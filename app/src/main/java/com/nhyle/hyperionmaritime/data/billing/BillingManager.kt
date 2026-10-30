@@ -973,7 +973,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         val pendingCycle = lastRequestedCycles[productId]
                             ?: securePrefs.getString(pendingCycleKey, null)
                                 ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
-                        val previousPurchaseTime = securePrefs.getLong(purchaseTimeKey, 0L)
+                        val previousPurchaseTime = securePrefs.getLong(
+                            purchaseTimeKey,
+                            if (activeCycle != null) securePrefs.getLong(KEY_PURCHASE_TIME, 0L) else 0L
+                        )
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
                         val cycle = resolvePurchasedBillingCycle(
                             activeCycle = activeCycle,
