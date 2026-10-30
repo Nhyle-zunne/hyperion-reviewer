@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * Subscription billing cycles supported by Hyperion Maritime Exam Reviewer.
@@ -45,7 +47,74 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
     MONTHLY("Monthly", "mo", 30),
     YEARLY("Yearly (Save ~48%)", "yr", 365);
 
-    val durationMs: Long get() = durationDays.toLong() * 24L * 60L * 60L * 1000L
+    /**
+     * Adds one real billing period in UTC. Monthly and yearly Play plans are calendar
+     * periods (P1M/P1Y), not fixed 30/365-day durations.
+     */
+    fun nextBillingPeriod(startEpochMs: Long): Long {
+        val start = Instant.ofEpochMilli(startEpochMs).atZone(ZoneOffset.UTC)
+        val next = when (this) {
+            WEEKLY -> start.plusWeeks(1)
+            MONTHLY -> start.plusMonths(1)
+            YEARLY -> start.plusYears(1)
+        }
+        return next.toInstant().toEpochMilli()
+    }
+}
+
+/**
+ * Local fallback only: BillingClient exposes subscription signup time, not its live
+ * renewal expiry. The server-verified SubscriptionsV2 expiry must override this estimate
+ * whenever the user has linked the purchase to a Hyperion account.
+ */
+internal fun estimateNextSubscriptionExpiry(
+    purchaseTimeEpochMs: Long,
+    nowEpochMs: Long,
+    cycle: BillingCycle
+): Long {
+    if (purchaseTimeEpochMs <= 0L) return 0L
+    var expiry = cycle.nextBillingPeriod(purchaseTimeEpochMs)
+    var periodsAdvanced = 0
+    while (expiry <= nowEpochMs && periodsAdvanced < 10_000) {
+        val next = cycle.nextBillingPeriod(expiry)
+        if (next <= expiry) return expiry
+        expiry = next
+        periodsAdvanced++
+    }
+    return expiry
+}
+
+/** Select exact Google Play server expiry when available, otherwise a local estimate. */
+internal fun subscriptionDisplayExpiry(
+    serverVerifiedExpiryEpochMs: Long,
+    estimatedLocalExpiryEpochMs: Long
+): Long = serverVerifiedExpiryEpochMs.takeIf { it > 0L } ?: estimatedLocalExpiryEpochMs
+
+/**
+ * Consistent countdown formatter for dashboard and Store. Uses the actual supplied expiry,
+ * not the 72-hour offline ownership-verification lease.
+ */
+fun formatSubscriptionTimeRemaining(
+    expiryEpochMs: Long,
+    nowEpochMs: Long = System.currentTimeMillis()
+): String {
+    if (expiryEpochMs <= 0L) return "Expiry unavailable"
+    val remainingMs = expiryEpochMs - nowEpochMs
+    if (remainingMs <= 0L) return "Subscription Expired"
+    if (remainingMs < 60_000L) return "< 1 min remaining"
+
+    val totalMinutes = remainingMs / 60_000L
+    val totalHours = totalMinutes / 60L
+    val days = totalHours / 24L
+    val hours = totalHours % 24L
+    val minutes = totalMinutes % 60L
+
+    return when {
+        days > 0L && hours > 0L -> "$days days, $hours hrs remaining"
+        days > 0L -> "$days days remaining"
+        totalHours > 0L -> "$totalHours hrs, $minutes mins remaining"
+        else -> "$totalMinutes mins remaining"
+    }
 }
 
 /**
@@ -112,22 +181,7 @@ data class ActivePlanInfo(
         if (isTerminalLicense) return "Active Plan"
         if (requiresOnlineVerification) return "Reconnect to verify subscription"
         if (isExpired) return "Subscription Expired"
-        val remainingMs = subscriptionRemainingTimeMs
-        val totalSecs = remainingMs / 1000L
-        val totalMins = totalSecs / 60L
-        val totalHours = totalMins / 60L
-        // Ceil rounding for remaining days (e.g. 6 days 23 hours = 7 days remaining)
-        val days = (totalHours + 23L) / 24L
-        val hours = totalHours % 24L
-        val mins = totalMins % 60L
-
-        return when {
-            days > 1 -> "$days days remaining"
-            totalHours > 1 -> "$totalHours hrs, $mins mins remaining"
-            totalHours == 1L -> "1 hr, $mins mins remaining"
-            mins > 0 -> "$mins mins remaining"
-            else -> "< 1 min remaining"
-        }
+        return formatSubscriptionTimeRemaining(expiryTimestamp, effectiveNow)
     }
 
     fun getFormattedExpiryDate(): String {
@@ -832,19 +886,18 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         } ?: details?.subscriptionOfferDetails?.firstOrNull()
 
                         val cycle = effectiveCycle
-                        val cycleDurationMs = cycle.durationMs
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
                         val currentWaterMark = maxOf(savedHighWaterMark, purchaseTime, queryTimeEpoch)
                         val effectiveQueryTime = maxOf(queryTimeEpoch, currentWaterMark)
 
-                        // BillingClient's PURCHASED result confirms current ownership at query time.
-                        // Purchase.purchaseTime is the original signup time, so this local period
-                        // estimate is display metadata only; the 72-hour verification lease is
-                        // what bounds offline access until the next Google Play query.
-                        var expiryTime = purchaseTime + cycleDurationMs
-                        while (expiryTime <= effectiveQueryTime && cycleDurationMs > 0L) {
-                            expiryTime += cycleDurationMs
-                        }
+                        // BillingClient Purchase.getPurchaseTime() is the original subscription
+                        // signup time. Use calendar-period arithmetic for the offline display
+                        // fallback; linked accounts receive the exact expiry from Play's API.
+                        val expiryTime = estimateNextSubscriptionExpiry(
+                            purchaseTimeEpochMs = purchaseTime,
+                            nowEpochMs = effectiveQueryTime,
+                            cycle = cycle
+                        )
 
                         when (productId) {
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
