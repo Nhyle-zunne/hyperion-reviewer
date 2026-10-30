@@ -84,21 +84,35 @@ data class ActivePlanInfo(
                 effectiveNow >= expiryTimestamp
             )
 
+    /**
+     * Actual subscription period remaining, used for user-facing expiry displays.
+     * This is deliberately independent from the shorter offline verification lease.
+     */
+    val subscriptionRemainingTimeMs: Long
+        get() {
+            if (isTerminalLicense) return Long.MAX_VALUE
+            if (expiryTimestamp <= 0L) return 0L
+            return (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
+        }
+
+    /**
+     * Remaining time in the locally cached ownership-verification lease.
+     * This is a security boundary for offline access, not the subscription's expiry.
+     */
     val remainingTimeMs: Long
         get() {
             if (isTerminalLicense) return Long.MAX_VALUE
             if (requiresOnlineVerification) return 0L
-            val planRemaining = (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
             val leaseRemaining = (lastVerifiedAtEpoch + BillingConstants.OFFLINE_VERIFICATION_GRACE_MS - effectiveNow)
                 .coerceAtLeast(0L)
-            return minOf(planRemaining, leaseRemaining)
+            return minOf(subscriptionRemainingTimeMs, leaseRemaining)
         }
 
     fun getFormattedTimeRemaining(): String {
         if (isTerminalLicense) return "Active Plan"
         if (requiresOnlineVerification) return "Reconnect to verify subscription"
         if (isExpired) return "Subscription Expired"
-        val remainingMs = remainingTimeMs
+        val remainingMs = subscriptionRemainingTimeMs
         val totalSecs = remainingMs / 1000L
         val totalMins = totalSecs / 60L
         val totalHours = totalMins / 60L
