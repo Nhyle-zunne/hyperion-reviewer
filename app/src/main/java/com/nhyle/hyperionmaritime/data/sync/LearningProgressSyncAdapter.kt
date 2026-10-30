@@ -35,21 +35,27 @@ object LearningProgressSyncAdapter {
     private const val VAULT_KEY = "hyperion-vault"
     private const val BOOKMARKS_KEY = "hyperion-bookmarks"
     private const val QUESTION_ATTEMPTS_KEY = "hyperion-question-attempt-history"
+    private const val DELETIONS_KEY = "hyperion-progress-deletions"
 
     suspend fun mergeNativeIntoSnapshot(context: Context, remote: JSONObject?): JSONObject {
         val appContext = context.applicationContext
         val database = HyperionDatabase.getInstance(appContext)
         val questionIndex = loadQuestionIndex(database)
         val storage = remote?.optJSONObject("storage") ?: JSONObject()
+        val remoteDeletionLedger = runCatching { JSONObject(storage.optString(DELETIONS_KEY, "{}")) }.getOrNull()
+        val deletionLedger = LearningProgressDeletionLedger.merge(appContext, remoteDeletionLedger)
+        storage.put(DELETIONS_KEY, deletionLedger.toString())
 
         mergeStore(
             storage, BOOKMARKS_KEY, "items", "savedAt",
-            nativeBookmarks(database, questionIndex), 500
+            filterDeletedItems(nativeBookmarks(database, questionIndex), deletionLedger, "bookmarks", "savedAt"), 500
         )
+        filterDeletedStore(storage, BOOKMARKS_KEY, "items", "savedAt", "bookmarks", deletionLedger)
         mergeStore(
             storage, VAULT_KEY, "items", "lastWrongAt",
-            nativeMistakes(appContext, database), 500
+            filterDeletedItems(nativeMistakes(appContext, database), deletionLedger, "vault", "lastWrongAt"), 500
         )
+        filterDeletedStore(storage, VAULT_KEY, "items", "lastWrongAt", "vault", deletionLedger)
         mergeStore(
             storage, STUDY_TIME_KEY, "segments", "at",
             nativeStudySegments(database), 400
@@ -72,7 +78,14 @@ object LearningProgressSyncAdapter {
     suspend fun applyCloudSnapshot(context: Context, snapshot: JSONObject?) {
         if (snapshot == null) return
         val storage = snapshot.optJSONObject("storage") ?: return
-        val database = HyperionDatabase.getInstance(context.applicationContext)
+        val appContext = context.applicationContext
+        val database = HyperionDatabase.getInstance(appContext)
+        val remoteDeletionLedger = runCatching { JSONObject(storage.optString(DELETIONS_KEY, "{}")) }.getOrNull()
+        val deletionLedger = LearningProgressDeletionLedger.merge(appContext, remoteDeletionLedger)
+        storage.put(DELETIONS_KEY, deletionLedger.toString())
+        applyLocalTombstones(appContext, database, deletionLedger)
+        filterDeletedStore(storage, BOOKMARKS_KEY, "items", "savedAt", "bookmarks", deletionLedger)
+        filterDeletedStore(storage, VAULT_KEY, "items", "lastWrongAt", "vault", deletionLedger)
 
         val questionIndex = loadQuestionIndex(database).toMutableMap()
         val bookmarkQuestions = questionItems(storage, BOOKMARKS_KEY, questionIndex)
@@ -120,15 +133,78 @@ object LearningProgressSyncAdapter {
         MistakesVaultManager.loadEntries(context).forEach { entry ->
             val question = entry.question
             val local = roomMistakes[entry.questionId]
-            val lastWrong = local?.lastFailedTimestamp
-                ?: MistakesVaultManager.getVaultFile(context).lastModified().takeIf { it > 0L }
-                ?: 1L
+            val lastWrong = local?.lastFailedTimestamp ?: 1L
             result.put(question.toQuestionJson()
                 .put("wrongCount", (local?.timesFailed ?: 1).coerceAtLeast(1))
                 .put("lastWrongAt", lastWrong)
                 .put("lastSelectedIndex", JSONObject.NULL))
         }
         return result
+    }
+
+
+    private fun filterDeletedItems(
+        items: JSONArray,
+        ledger: JSONObject,
+        collection: String,
+        timestampKey: String
+    ): JSONArray {
+        val filtered = JSONArray()
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index) ?: continue
+            val id = item.optString("id")
+            if (id.isBlank() || !LearningProgressDeletionLedger.isDeleted(
+                    ledger, collection, id, item.optLong(timestampKey, 0L)
+                )
+            ) {
+                filtered.put(item)
+            }
+        }
+        return filtered
+    }
+
+    private fun filterDeletedStore(
+        storage: JSONObject,
+        key: String,
+        arrayName: String,
+        timestampKey: String,
+        collection: String,
+        ledger: JSONObject
+    ) {
+        val wrapper = runCatching { JSONObject(storage.optString(key, "{}")) }.getOrNull() ?: return
+        val state = wrapper.optJSONObject("state") ?: return
+        val items = state.optJSONArray(arrayName) ?: return
+        val filtered = filterDeletedItems(items, ledger, collection, timestampKey)
+        state.put(arrayName, filtered)
+        wrapper.put("state", state)
+        storage.put(key, wrapper.toString())
+    }
+
+    private suspend fun applyLocalTombstones(
+        context: Context,
+        database: HyperionDatabase,
+        ledger: JSONObject
+    ) {
+        database.bookmarkDao().getAllBookmarksOnce()
+            .filter { bookmark ->
+                LearningProgressDeletionLedger.isDeleted(
+                    ledger, "bookmarks", bookmark.questionId, bookmark.addedTimestamp
+                )
+            }
+            .forEach { database.bookmarkDao().removeBookmark(it.questionId) }
+
+        val roomMistakes = database.mistakeDao().getAllMistakesOnce().associateBy { it.questionId }
+        val localVault = MistakesVaultManager.loadEntries(context)
+        val deletedMistakes = localVault.filter { entry ->
+            LearningProgressDeletionLedger.isDeleted(
+                ledger, "vault", entry.questionId, roomMistakes[entry.questionId]?.lastFailedTimestamp ?: 1L
+            )
+        }
+        deletedMistakes.forEach { database.mistakeDao().removeMistake(it.questionId) }
+        if (deletedMistakes.isNotEmpty()) {
+            val deletedIds = deletedMistakes.map { it.questionId }.toSet()
+            MistakesVaultManager.saveEntries(context, localVault.filterNot { it.questionId in deletedIds })
+        }
     }
 
     private suspend fun nativeStudySegments(database: HyperionDatabase): JSONArray {
