@@ -91,6 +91,16 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                     )
                 }
 
+                if (account.isDeveloperAdminAccess) {
+                    Text(
+                        text = "DEVELOPER ACCESS · ALL FIVE TRACKS UNLOCKED",
+                        color = colors.accent,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.7.sp
+                    )
+                }
+
                 if (account.activePlaySubscriptionsLinked > 0) {
                     Text(
                         text = "GOOGLE PLAY SUBSCRIPTIONS LINKED: ${account.activePlaySubscriptionsLinked}",
