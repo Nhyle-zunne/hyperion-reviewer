@@ -176,7 +176,6 @@ dependencies {
   // Firebase & Google Play Services
   implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
   implementation("com.google.firebase:firebase-config-ktx")
-  implementation("com.google.firebase:firebase-analytics-ktx")
   implementation("com.google.firebase:firebase-common-ktx")
   implementation("com.google.android.gms:play-services-tasks:18.2.0")
 
