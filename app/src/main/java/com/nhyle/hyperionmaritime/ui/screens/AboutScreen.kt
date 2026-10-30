@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,7 @@ fun AboutScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
+    val uriHandler = LocalUriHandler.current
 
     BackHandler {
         viewModel.navigateBack()
@@ -224,7 +226,7 @@ fun AboutScreen(
                 title = "ABOUT HYPERION SUPPORT",
                 description = "Email: hyperionmaritimex@gmail.com\nWebsite: hyperionmaritime.org",
                 icon = Icons.Default.Info,
-                onClick = { viewModel.navigateTo(Screen.HowToAvail) }
+                onClick = { uriHandler.openUri("mailto:hyperionmaritimex@gmail.com") }
             )
 
             Surface(
