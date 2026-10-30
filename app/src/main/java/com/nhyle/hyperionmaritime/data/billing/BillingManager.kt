@@ -73,12 +73,14 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
  */
 internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
     val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
-    val periodMatch = when (this) {
-        BillingCycle.WEEKLY -> recurringPeriod == "P1W" || recurringPeriod == "P7D"
-        BillingCycle.MONTHLY -> recurringPeriod == "P1M" || recurringPeriod == "P30D"
-        BillingCycle.YEARLY -> recurringPeriod == "P1Y" || recurringPeriod == "P365D" || recurringPeriod == "P12M"
+    val recognizedPeriod = recurringPeriod in setOf("P1W", "P7D", "P1M", "P30D", "P1Y", "P365D", "P12M")
+    if (recognizedPeriod) {
+        return when (this) {
+            BillingCycle.WEEKLY -> recurringPeriod == "P1W" || recurringPeriod == "P7D"
+            BillingCycle.MONTHLY -> recurringPeriod == "P1M" || recurringPeriod == "P30D"
+            BillingCycle.YEARLY -> recurringPeriod == "P1Y" || recurringPeriod == "P365D" || recurringPeriod == "P12M"
+        }
     }
-    if (recurringPeriod.isNotBlank()) return periodMatch
 
     val base = basePlanId.lowercase()
     return when (this) {
@@ -549,16 +551,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             }
         }
 
-        fun cycleFromBasePlanOrPeriod(basePlanId: String?, period: String?): BillingCycle {
-            val base = basePlanId?.lowercase() ?: ""
-            val per = period?.uppercase() ?: ""
-            return when {
-                base.contains("yearly") || per == "P1Y" || per == "P365D" || per == "P12M" -> BillingCycle.YEARLY
-                base.contains("monthly") || per == "P1M" || per == "P30D" -> BillingCycle.MONTHLY
-                base.contains("weekly") || per == "P1W" || per == "P7D" -> BillingCycle.WEEKLY
-                else -> BillingCycle.MONTHLY
-            }
-        }
+        fun cycleFromBasePlanOrPeriod(basePlanId: String?, period: String?): BillingCycle =
+            BillingCycle.values().firstOrNull {
+                it.matchesPlayOffer(basePlanId.orEmpty(), listOfNotNull(period))
+            } ?: BillingCycle.MONTHLY
     }
 
     fun resetEntitlementsForTesting() {
