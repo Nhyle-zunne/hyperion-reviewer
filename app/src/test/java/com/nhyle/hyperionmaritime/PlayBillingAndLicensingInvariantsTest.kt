@@ -18,6 +18,7 @@ import java.time.Instant
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
+import com.nhyle.hyperionmaritime.data.billing.obfuscatedHyperionAccountId
 import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
 import java.io.IOException
 import com.nhyle.hyperionmaritime.data.model.QuizMode
@@ -134,6 +135,26 @@ class PlayBillingAndLicensingInvariantsTest {
             it.productId == BillingConstants.PRODUCT_ENGINE_MGT_PASS && it.purchaseToken == "token_engine_management"
         })
         assertFalse(purchases.any { it.purchaseToken.startsWith("mock_sandbox_sub_token_") })
+    }
+
+    @Test
+    fun playPurchaseAccountIdentifierIsHashedAndBoundToTheCurrentHyperionAccount() {
+        val accountA = obfuscatedHyperionAccountId("account-a-user-uuid")
+        val accountARepeat = obfuscatedHyperionAccountId(" account-a-user-uuid ")
+        val accountB = obfuscatedHyperionAccountId("account-b-user-uuid")
+
+        assertNotNull("A signed-in account should produce a Play binding identifier", accountA)
+        assertTrue("The Play binding identifier must be a 64-character SHA-256 hex digest", accountA!!.matches(Regex("[0-9a-f]{64}")))
+        assertEquals("The same Hyperion user must always produce the same Play identifier", accountA, accountARepeat)
+        assertFalse("Different Hyperion accounts must not share the same Play identifier", accountA == accountB)
+        assertFalse("The Play identifier must not expose the original account ID", accountA.contains("account-a-user-uuid"))
+        assertEquals("Anonymous users must not receive a fabricated account binding", null, obfuscatedHyperionAccountId(null))
+        assertEquals("Blank account IDs must remain unbound", null, obfuscatedHyperionAccountId("  "))
+
+        LicenseManager.setCurrentAccountUserId(context, "account-a-user-uuid")
+        assertEquals("Checkout should use the authenticated Hyperion account", "account-a-user-uuid", LicenseManager.getCurrentAccountUserId(context))
+        LicenseManager.setCurrentAccountUserId(context, "account-b-user-uuid")
+        assertEquals("Switching Hyperion accounts must change the identifier source", "account-b-user-uuid", LicenseManager.getCurrentAccountUserId(context))
     }
 
     @Test
