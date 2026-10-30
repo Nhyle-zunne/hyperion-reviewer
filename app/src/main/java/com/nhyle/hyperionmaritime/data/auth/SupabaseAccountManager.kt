@@ -122,6 +122,7 @@ object SupabaseAccountManager {
                 exchangeGoogleIdToken(idToken, rawNonce).also {
                     LicenseManager.setCurrentAccountUserId(appContext, it.userId)
                     storeSession(appContext, it)
+                    recordAccountActivity(it)
                 }
             }
             _state.value = SupabaseAccountState(
@@ -164,7 +165,9 @@ object SupabaseAccountManager {
             isLoading = false
         )
         try {
-            val session = withContext(Dispatchers.IO) { getFreshSession(appContext, saved) }
+            val session = withContext(Dispatchers.IO) {
+                getFreshSession(appContext, saved).also(::recordAccountActivity)
+            }
             syncAndUpdateState(appContext, session)
         } catch (_: Exception) {
             _state.value = _state.value.copy(
@@ -180,7 +183,9 @@ object SupabaseAccountManager {
         try {
             val saved = withContext(Dispatchers.IO) { readSession(appContext) }
                 ?: throw IllegalStateException("Sign in with Google first to sync your website licenses.")
-            val session = withContext(Dispatchers.IO) { getFreshSession(appContext, saved) }
+            val session = withContext(Dispatchers.IO) {
+                getFreshSession(appContext, saved).also(::recordAccountActivity)
+            }
             syncAndUpdateState(appContext, session)
         } catch (e: Exception) {
             _state.value = _state.value.copy(
@@ -259,6 +264,24 @@ object SupabaseAccountManager {
                     ?: "Unable to delete your account. Please try again or contact support.",
                 isAccountDeleted = false
             )
+        }
+    }
+
+    /**
+     * Keep the existing account-retention activity timestamp accurate for signed-in
+     * Android users as well as website users. The server throttles writes to one per
+     * account every 15 minutes. This is best-effort and never blocks sign-in or study.
+     */
+    private fun recordAccountActivity(session: SupabaseSession) {
+        try {
+            requestText(
+                method = "POST",
+                url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/record-user-activity",
+                accessToken = session.accessToken,
+                jsonBody = JSONObject()
+            )
+        } catch (_: Exception) {
+            // Activity reporting is non-critical; keep account and study access available.
         }
     }
 
