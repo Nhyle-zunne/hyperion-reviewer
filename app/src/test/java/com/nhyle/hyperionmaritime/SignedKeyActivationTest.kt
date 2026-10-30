@@ -55,7 +55,7 @@ class SignedKeyActivationTest {
         val result = LicenseManager.verifyAndUnlockKey(context, expiredKey)
         assertEquals(UnlockResult.KEY_EXPIRED, result)
         assertFalse(
-            "A detected rollback must block the signed offline entitlement; status=${status}, offline=${prefs.getBoolean(LicenseManager.KEY_OFFLINE_LICENSE, false)}, tampered=${prefs.getBoolean(LicenseManager.KEY_OFFLINE_CLOCK_TAMPERED, false)}",
+            "An expired signed key must never grant offline access",
             LicenseManager.isOfflineEngineOicEwUnlocked(context)
         )
     }
