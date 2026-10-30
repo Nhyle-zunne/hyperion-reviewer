@@ -262,6 +262,44 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
+    fun websiteEntitlementExpiryIsAvailableToStoreOnlyForCurrentAccount() {
+        val now = System.currentTimeMillis()
+        val expiry = now + 24L * 60L * 60L * 1000L
+        LicenseManager.setCurrentAccountUserId(context, "website-store-user")
+
+        val revisionBeforeSync = LicenseManager.accountEntitlementRevisionFlow.value
+        assertTrue(
+            "A successful website entitlement sync should be securely cached",
+            LicenseManager.saveAccountEntitlements(
+                context = context,
+                userId = "website-store-user",
+                expiryByTrack = mapOf(Track.DECK_OIC_NW to expiry)
+            )
+        )
+
+        assertTrue(
+            "The Bond Store should be able to read the validated website expiry",
+            LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_OIC_NW) > now
+        )
+        assertEquals(
+            "A track without a website entitlement must not show an active expiry",
+            0L,
+            LicenseManager.getAccountEntitlementExpiry(context, Track.GMDSS_GOC)
+        )
+        assertTrue(
+            "Refreshing account entitlements must invalidate Bond Store's cached display state",
+            LicenseManager.accountEntitlementRevisionFlow.value > revisionBeforeSync
+        )
+
+        LicenseManager.setCurrentAccountUserId(context, "different-account")
+        assertEquals(
+            "A website entitlement must disappear from the store after switching accounts",
+            0L,
+            LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_OIC_NW)
+        )
+    }
+
+    @Test
     fun serverVerifiedDeveloperAdminAccessUnlocksAllTracksOnlyForCurrentAccount() {
         LicenseManager.setCurrentAccountUserId(context, "trusted-developer-user")
         assertFalse(Track.values().any { viewModel.isTrackUnlocked(it) })
