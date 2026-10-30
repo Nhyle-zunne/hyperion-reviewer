@@ -262,6 +262,37 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
+    fun serverVerifiedDeveloperAdminAccessUnlocksAllTracksOnlyForCurrentAccount() {
+        LicenseManager.setCurrentAccountUserId(context, "trusted-developer-user")
+        assertFalse(Track.values().any { viewModel.isTrackUnlocked(it) })
+
+        LicenseManager.setVerifiedDeveloperAdminAccess(
+            context = context,
+            userId = "trusted-developer-user",
+            enabled = true
+        )
+        assertTrue(LicenseManager.isDeveloperAdminAccessActive(context))
+        assertTrue("Verified developer account must unlock every paid track", Track.values().all {
+            viewModel.isTrackUnlocked(it)
+        })
+
+        // Switching accounts must immediately discard the in-memory admin grant.
+        LicenseManager.setCurrentAccountUserId(context, "ordinary-user")
+        assertFalse(LicenseManager.isDeveloperAdminAccessActive(context))
+        assertFalse("Developer access must never transfer to another account", Track.values().any {
+            viewModel.isTrackUnlocked(it)
+        })
+
+        // Even a stale positive response for the old user cannot unlock the new account.
+        LicenseManager.setVerifiedDeveloperAdminAccess(
+            context = context,
+            userId = "trusted-developer-user",
+            enabled = true
+        )
+        assertFalse(LicenseManager.isDeveloperAdminAccessActive(context))
+    }
+
+    @Test
     fun accountLinkedLicenseExpiryOfflineGraceAndClockRollbackAreEnforced() {
         val now = 1_800_000_000_000L
         val syncedAt = now - 60_000L
