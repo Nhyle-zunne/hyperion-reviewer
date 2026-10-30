@@ -423,6 +423,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         private const val KEY_BASE_PLAN = "play_base_plan_id"
         private const val KEY_PLAY_HIGH_WATER_MARK = "play_license_high_water_mark"
         private const val KEY_PLAY_LAST_VERIFIED_AT = "play_license_last_verified_at"
+        private const val KEY_PLAY_CACHE_MIGRATION_COMPLETE = "play_license_cache_migration_v1"
         private const val KEY_SIGNATURE_HASH = "play_entitlements_hash"
         private const val MAX_RECONNECT_DELAY_MS = 32000L
 
@@ -1128,10 +1129,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false) ||
             securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false) ||
             securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
-        if (hasLegacyCachedPlayPlan && playLastVerifiedAt <= 0L) {
+        val migrationAlreadyComplete = securePrefs.getBoolean(KEY_PLAY_CACHE_MIGRATION_COMPLETE, false)
+        if (!migrationAlreadyComplete && hasLegacyCachedPlayPlan && playLastVerifiedAt <= 0L) {
+            // Existing installations need one bounded transition grace because their old
+            // cache did not record query time. New purchases must never receive this grace.
             playLastVerifiedAt = now
             playHighWaterMark = maxOf(playHighWaterMark, now)
+        }
+        if (!migrationAlreadyComplete) {
             securePrefs.edit()
+                .putBoolean(KEY_PLAY_CACHE_MIGRATION_COMPLETE, true)
                 .putLong(KEY_PLAY_LAST_VERIFIED_AT, playLastVerifiedAt)
                 .putLong(KEY_PLAY_HIGH_WATER_MARK, playHighWaterMark)
                 .apply()
