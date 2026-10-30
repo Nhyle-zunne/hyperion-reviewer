@@ -265,19 +265,19 @@ class PlayBillingAndLicensingInvariantsTest {
     fun subscriptionCyclesUseCalendarPeriodsInsteadOfFixedThirtyOr365DayEstimates() {
         val jan31 = Instant.parse("2025-01-31T12:00:00Z").toEpochMilli()
         val feb28 = Instant.parse("2025-02-28T12:00:00Z").toEpochMilli()
-        val mar28 = Instant.parse("2025-03-28T12:00:00Z").toEpochMilli()
         val feb7 = Instant.parse("2025-02-07T12:00:00Z").toEpochMilli()
         val leapDay = Instant.parse("2024-02-29T12:00:00Z").toEpochMilli()
         val nextLeapYearExpiry = Instant.parse("2025-02-28T12:00:00Z").toEpochMilli()
 
         assertEquals("Weekly plans last exactly seven calendar days", feb7, BillingCycle.WEEKLY.nextBillingPeriod(jan31))
         assertEquals("P1M monthly plans end on the corresponding calendar date, clamped at month-end", feb28, BillingCycle.MONTHLY.nextBillingPeriod(jan31))
-        assertEquals("A Jan 31 subscription moves to Feb 28 and continues renewing on the 28th", mar28, estimateNextSubscriptionExpiry(jan31, feb28, BillingCycle.MONTHLY))
+        val mar31 = Instant.parse("2025-03-31T12:00:00Z").toEpochMilli()
+        assertEquals("A Jan 31 subscription returns to its original day-of-month anchor after February", mar31, estimateNextSubscriptionExpiry(jan31, feb28, BillingCycle.MONTHLY))
         val mar31 = Instant.parse("2025-03-31T12:00:00Z").toEpochMilli()
         val apr30 = Instant.parse("2025-04-30T12:00:00Z").toEpochMilli()
-        val may30 = Instant.parse("2025-05-30T12:00:00Z").toEpochMilli()
+        val may31 = Instant.parse("2025-05-31T12:00:00Z").toEpochMilli()
         assertEquals("A Mar 31 subscription moves to Apr 30", apr30, BillingCycle.MONTHLY.nextBillingPeriod(mar31))
-        assertEquals("A Mar 31 subscription continues renewing on the 30th after April", may30, estimateNextSubscriptionExpiry(mar31, apr30, BillingCycle.MONTHLY))
+        assertEquals("A Mar 31 subscription returns to its original day-of-month anchor after April", may31, estimateNextSubscriptionExpiry(mar31, apr30, BillingCycle.MONTHLY))
         assertEquals("P1Y yearly plans respect leap-day calendar arithmetic", nextLeapYearExpiry, BillingCycle.YEARLY.nextBillingPeriod(leapDay))
     }
 
