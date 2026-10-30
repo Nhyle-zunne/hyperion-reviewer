@@ -1,5 +1,6 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import android.content.Context
 import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.BookmarkEntity
 import com.nhyle.hyperionmaritime.data.local.ExamRecordEntity
@@ -16,7 +17,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
-class ReviewerRepository(private val database: HyperionDatabase) {
+class ReviewerRepository(
+    private val database: HyperionDatabase,
+    private val appContext: Context? = null
+) {
 
     private val mistakeDao = database.mistakeDao()
     private val bookmarkDao = database.bookmarkDao()
@@ -89,25 +93,33 @@ class ReviewerRepository(private val database: HyperionDatabase) {
 
     suspend fun toggleBookmark(questionId: String, currentBookmarked: Boolean) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         if (currentBookmarked) {
+            appContext?.let { LearningProgressDeletionLedger.record(it, "bookmarks", questionId, deleted = true) }
             bookmarkDao.removeBookmark(questionId)
         } else {
+            appContext?.let { LearningProgressDeletionLedger.record(it, "bookmarks", questionId, deleted = false) }
             bookmarkDao.insertBookmark(BookmarkEntity(questionId = questionId))
         }
     }
 
     suspend fun removeBookmark(questionId: String): Int = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        appContext?.let { LearningProgressDeletionLedger.record(it, "bookmarks", questionId, deleted = true) }
         bookmarkDao.removeBookmark(questionId)
     }
 
     suspend fun clearAllBookmarks(): Int = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val ids = bookmarkDao.getAllBookmarksOnce().map { it.questionId }
+        appContext?.let { context -> ids.forEach { LearningProgressDeletionLedger.record(context, "bookmarks", it, deleted = true) } }
         bookmarkDao.clearAllBookmarks()
     }
 
     suspend fun removeMistake(questionId: String): Int = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        appContext?.let { LearningProgressDeletionLedger.record(it, "vault", questionId, deleted = true) }
         mistakeDao.removeMistake(questionId)
     }
 
     suspend fun clearAllMistakes(): Int = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val ids = mistakeDao.getAllMistakesOnce().map { it.questionId }
+        appContext?.let { context -> ids.forEach { LearningProgressDeletionLedger.record(context, "vault", it, deleted = true) } }
         mistakeDao.clearAllMistakes()
     }
 
@@ -137,6 +149,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
     suspend fun recordQuestionAttempt(questionId: String, isCorrect: Boolean, requiredPasses: Int = 2) {
         val existing = mistakeDao.getMistake(questionId)
         if (!isCorrect) {
+            appContext?.let { LearningProgressDeletionLedger.record(it, "vault", questionId, deleted = false) }
             val newTimes = (existing?.timesFailed ?: 0) + 1
             mistakeDao.insertOrUpdate(
                 MistakeEntity(
@@ -150,6 +163,7 @@ class ReviewerRepository(private val database: HyperionDatabase) {
             if (existing != null) {
                 val newConsecutive = existing.consecutiveCorrect + 1
                 if (newConsecutive >= requiredPasses) {
+                    appContext?.let { LearningProgressDeletionLedger.record(it, "vault", questionId, deleted = true) }
                     mistakeDao.deleteMistake(questionId)
                 } else {
                     mistakeDao.insertOrUpdate(
