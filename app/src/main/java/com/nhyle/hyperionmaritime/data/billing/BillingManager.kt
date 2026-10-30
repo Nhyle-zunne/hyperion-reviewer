@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import java.util.Calendar
+import java.util.TimeZone
 
 /**
  * Subscription billing cycles supported by Hyperion Maritime Exam Reviewer.
@@ -42,7 +44,35 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
     MONTHLY("Monthly", "mo", 30),
     YEARLY("Yearly (Save ~48%)", "yr", 365);
 
-    val durationMs: Long get() = durationDays.toLong() * 24L * 60L * 60L * 1000L
+    /**
+     * Calculates a billing boundary from the ORIGINAL purchase anchor.
+     * Google monthly/yearly periods are calendar periods, not fixed 30/365-day durations.
+     * Anchoring every renewal to the original date avoids Jan 31 -> Feb 28 -> Mar 28 drift.
+     */
+    fun expiryAfter(anchorEpochMillis: Long, periods: Int = 1): Long {
+        require(anchorEpochMillis > 0L) { "Purchase anchor must be a positive epoch timestamp" }
+        require(periods >= 1) { "Billing period count must be at least one" }
+
+        if (this == WEEKLY) {
+            return anchorEpochMillis + periods.toLong() * 7L * 24L * 60L * 60L * 1000L
+        }
+
+        val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC"), java.util.Locale.ROOT)
+        calendar.timeInMillis = anchorEpochMillis
+        calendar.add(if (this == MONTHLY) Calendar.MONTH else Calendar.YEAR, periods)
+        return calendar.timeInMillis
+    }
+
+    /** Returns the first calendar billing boundary strictly after now, using the original anchor. */
+    fun nextExpiryAfter(anchorEpochMillis: Long, nowEpochMillis: Long): Long {
+        var periods = 1
+        while (periods < 1200) {
+            val candidate = expiryAfter(anchorEpochMillis, periods)
+            if (candidate > nowEpochMillis) return candidate
+            periods++
+        }
+        return expiryAfter(anchorEpochMillis, periods)
+    }
 }
 
 /**
@@ -678,18 +708,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         } ?: details?.subscriptionOfferDetails?.firstOrNull()
 
                         val cycle = effectiveCycle
-                        val cycleDurationMs = cycle.durationMs
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else System.currentTimeMillis()
                         val now = System.currentTimeMillis()
                         val savedWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
                         val currentWaterMark = maxOf(savedWaterMark, purchaseTime, now)
 
-                        // A subscription returning PurchaseState.PURCHASED from Google Play is actively entitled.
-                        // Advance expiration forward across recurring cycles so users are never locked out while active in Google Play.
-                        var expiryTime = purchaseTime + cycleDurationMs
-                        while (expiryTime <= now && cycleDurationMs > 0L) {
-                            expiryTime += cycleDurationMs
-                        }
+                        // Local display fallback only. The backend's Google Play Developer API expiryTime
+                        // remains authoritative whenever a verified account entitlement is available.
+                        val expiryTime = cycle.nextExpiryAfter(purchaseTime, now)
 
                         when (productId) {
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
@@ -894,7 +920,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 editor.putString("play_plan_cycle_oic", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_oic", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.expiryAfter(purchaseTime)
                     editor.putLong("play_expiry_time_oic", correctedExpiry)
                 }
             }
