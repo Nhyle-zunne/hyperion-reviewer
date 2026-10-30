@@ -309,11 +309,9 @@ object QuestionAttemptHistoryManager {
             // Create and sync a durable backup before replacing the current history.
             if (targetFile.exists()) {
                 try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        Files.copy(targetFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-                    } else {
-                        copyFileDurably(targetFile, backupFile)
-                    }
+                    // Use the same flushed copy path on every API level. Files.copy()
+                    // does not guarantee that the backup bytes reached durable storage.
+                    copyFileDurably(targetFile, backupFile)
                 } catch (e: Exception) {
                     Log.e(TAG, "Backup creation failed; original history was left untouched: ${e.message}")
                     return false
