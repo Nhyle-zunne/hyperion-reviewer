@@ -57,6 +57,9 @@ private data class SupabaseSession(
  * is released. Treat only a PostgREST "table not found" 404 for that exact table as empty;
  * permission, session, and network errors must still fail closed.
  */
+internal fun isGooglePlayAccountLinkConflict(error: Throwable): Boolean =
+    error is IOException && error.message.orEmpty().contains("Supabase request failed (409):", ignoreCase = true)
+
 internal fun isMissingGooglePlayEntitlementsTable(error: Throwable): Boolean {
     if (error !is IOException) return false
     val message = error.message.orEmpty()
@@ -239,8 +242,11 @@ object SupabaseAccountManager {
             if (playLinks.activeCount > 0) {
                 messageParts += "Verified ${playLinks.activeCount} Google Play subscription${if (playLinks.activeCount == 1) "" else "s"} for this account."
             }
+            if (playLinks.accountMismatch) {
+                messageParts += "A Google Play subscription is linked to a different Hyperion account. Sign in with the original account to sync it. Google Play access on this device is unchanged."
+            }
             if (playLinks.hadFailures) {
-                messageParts += "Some Google Play subscriptions could not be linked yet. Existing app access is unchanged; try Sync again after the server is configured."
+                messageParts += "Some Google Play subscriptions could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
             }
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
@@ -260,7 +266,11 @@ object SupabaseAccountManager {
         }
     }
 
-    private data class PlayLinkSyncResult(val activeCount: Int, val hadFailures: Boolean)
+    private data class PlayLinkSyncResult(
+        val activeCount: Int,
+        val hadFailures: Boolean,
+        val accountMismatch: Boolean = false
+    )
     private data class AccountSyncResult(
         val session: SupabaseSession,
         val licenseCount: Int,
@@ -304,6 +314,7 @@ object SupabaseAccountManager {
             val purchases = billing.getOwnedPurchasesForAccountLinking()
             var activeCount = 0
             var hadFailures = false
+            var accountMismatch = false
             for (purchase in purchases) {
                 try {
                     val body = requestText(
@@ -314,13 +325,14 @@ object SupabaseAccountManager {
                     )
                     val response = JSONObject(body)
                     if (response.optBoolean("active", false)) activeCount++
-                } catch (_: Exception) {
-                    // An unconfigured backend or a token already linked to another user must not
-                    // block website entitlement sync or alter existing Google Play access.
-                    hadFailures = true
+                } catch (error: Exception) {
+                    // A 409 is a permanent account-ownership conflict, not a transient backend
+                    // failure. Explain that the purchase must be synced by its original account.
+                    if (isGooglePlayAccountLinkConflict(error)) accountMismatch = true
+                    else hadFailures = true
                 }
             }
-            PlayLinkSyncResult(activeCount, hadFailures)
+            PlayLinkSyncResult(activeCount, hadFailures, accountMismatch)
         } catch (_: Exception) {
             PlayLinkSyncResult(activeCount = 0, hadFailures = true)
         }
