@@ -319,9 +319,10 @@ class PlayBillingAndLicensingInvariantsTest {
     fun subscriptionCountdownFormatsDaysHoursAndSubDayExpiriesConsistently() {
         val now = Instant.parse("2026-01-01T00:00:00Z").toEpochMilli()
         assertEquals("7 days remaining", formatSubscriptionTimeRemaining(now + 7L * 24L * 60L * 60L * 1000L, now))
-        assertEquals("6 days, 23 hrs remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L + 23L * 60L * 60L * 1000L, now))
-        assertEquals("23 hrs, 59 mins remaining", formatSubscriptionTimeRemaining(now + 23L * 60L * 60L * 1000L + 59L * 60L * 1000L, now))
-        assertEquals("1 day, 1 hr remaining", formatSubscriptionTimeRemaining(now + 25L * 60L * 60L * 1000L, now))
+        assertEquals("A remainder of a day is rounded up while at least one full day remains", "7 days remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L + 23L * 60L * 60L * 1000L, now))
+        assertEquals("The day counter changes at the six-full-day boundary", "6 days remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L, now))
+        assertEquals("The final 24 hours switch to an hour countdown", "23 hrs, 59 mins remaining", formatSubscriptionTimeRemaining(now + 23L * 60L * 60L * 1000L + 59L * 60L * 1000L, now))
+        assertEquals("A day plus one hour rounds to two remaining days", "2 days remaining", formatSubscriptionTimeRemaining(now + 25L * 60L * 60L * 1000L, now))
         assertEquals("1 hr, 1 min remaining", formatSubscriptionTimeRemaining(now + 61L * 60L * 1000L, now))
         assertEquals("1 min remaining", formatSubscriptionTimeRemaining(now + 60L * 1000L, now))
         assertEquals("4 mins remaining", formatSubscriptionTimeRemaining(now + 4L * 60L * 1000L, now))
