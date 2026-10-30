@@ -133,19 +133,22 @@ fun formatSubscriptionTimeRemaining(
 
     val totalMinutes = remainingMs / 60_000L
     val totalHours = totalMinutes / 60L
-    val days = totalHours / 24L
-    val hours = totalHours % 24L
     val minutes = totalMinutes % 60L
 
-    val dayUnit = if (days == 1L) "day" else "days"
-    val hourUnit = if (totalHours == 1L) "hr" else "hrs"
-    val minuteUnit = if (totalMinutes == 1L) "min" else "mins"
+    // Count a positive remainder of a full day as that remaining day. A seven-day
+    // purchase therefore stays at 7 days until it has less than six full days left.
+    // Switch to hours/minutes only during the final 24 hours.
+    if (remainingMs >= 24L * 60L * 60L * 1000L) {
+        val dayMs = 24L * 60L * 60L * 1000L
+        val days = (remainingMs + dayMs - 1L) / dayMs
+        val dayUnit = if (days == 1L) "day" else "days"
+        return "$days $dayUnit remaining"
+    }
 
     return when {
-        days > 0L && hours > 0L -> "$days $dayUnit, $hours ${if (hours == 1L) "hr" else "hrs"} remaining"
-        days > 0L -> "$days $dayUnit remaining"
-        totalHours > 0L -> "$totalHours $hourUnit, $minutes ${if (minutes == 1L) "min" else "mins"} remaining"
-        else -> "$totalMinutes $minuteUnit remaining"
+        totalHours > 0L -> "$totalHours hrs, $minutes ${if (minutes == 1L) "min" else "mins"} remaining"
+        totalMinutes > 0L -> "$totalMinutes ${if (totalMinutes == 1L) "min" else "mins"} remaining"
+        else -> "< 1 min remaining"
     }
 }
 
@@ -897,24 +900,17 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             ?: securePrefs.getString(cycleKey, null)
                                 ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
 
-                        // If no cycle explicitly requested or if it was defaulted to WEEKLY from legacy bug, prefer MONTHLY
-                        val effectiveCycle = when {
-                            requestedCycle == BillingCycle.YEARLY -> BillingCycle.YEARLY
-                            requestedCycle == BillingCycle.MONTHLY -> BillingCycle.MONTHLY
-                            requestedCycle == BillingCycle.WEEKLY && lastRequestedCycles.containsKey(productId) -> BillingCycle.WEEKLY
-                            else -> BillingCycle.MONTHLY
-                        }
+                        // The cycle is persisted before launching Play Billing, so an explicit
+                        // weekly selection remains weekly after process restart. Do not reinterpret
+                        // it as monthly merely because this is a restore/query rather than a new tap.
+                        val effectiveCycle = requestedCycle ?: BillingCycle.MONTHLY
 
-                        val offer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-                            val basePlan = offer.basePlanId.lowercase()
-                            val phases = offer.pricingPhases.pricingPhaseList
-                            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
-                            when (effectiveCycle) {
-                                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W" || period == "P7D"
-                                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M" || period == "P30D"
-                                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y" || period == "P365D" || period == "P12M"
-                            }
-                        } ?: details?.subscriptionOfferDetails?.firstOrNull()
+                        val offer = details?.subscriptionOfferDetails?.firstOrNull { candidate ->
+                            effectiveCycle.matchesPlayOffer(
+                                basePlanId = candidate.basePlanId,
+                                billingPeriods = candidate.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+                            )
+                        }
 
                         val cycle = effectiveCycle
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
@@ -1154,7 +1150,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val oicCycle = securePrefs.getString("play_plan_cycle_oic", null)
             val oicToken = securePrefs.getString(KEY_OIC_TOKEN, null)
             val hasOic = securePrefs.getBoolean(KEY_OIC_NW_UNLOCKED, false)
-            if (oicCycle == BillingCycle.WEEKLY.name || (hasOic && !oicToken.isNullOrBlank() && oicCycle == null)) {
+            if (hasOic && !oicToken.isNullOrBlank() && oicCycle == null) {
                 editor.putString("play_plan_cycle_oic", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_oic", 0L)
                 if (purchaseTime > 0L) {
@@ -1166,7 +1162,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val gmdssCycle = securePrefs.getString("play_plan_cycle_gmdss", null)
             val gmdssToken = securePrefs.getString(KEY_GMDSS_TOKEN, null)
             val hasGmdss = securePrefs.getBoolean(KEY_GMDSS_UNLOCKED, false)
-            if (gmdssCycle == BillingCycle.WEEKLY.name || (hasGmdss && !gmdssToken.isNullOrBlank() && gmdssCycle == null)) {
+            if (hasGmdss && !gmdssToken.isNullOrBlank() && gmdssCycle == null) {
                 editor.putString("play_plan_cycle_gmdss", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_gmdss", 0L)
                 if (purchaseTime > 0L) {
@@ -1178,7 +1174,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             val allAccessCycle = securePrefs.getString("play_plan_cycle_all_access", null)
             val allToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null)
             val hasAll = securePrefs.getBoolean(KEY_ALL_ACCESS_UNLOCKED, false)
-            if (allAccessCycle == BillingCycle.WEEKLY.name || (hasAll && !allToken.isNullOrBlank() && allAccessCycle == null)) {
+            if (hasAll && !allToken.isNullOrBlank() && allAccessCycle == null) {
                 editor.putString("play_plan_cycle_all_access", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_all_access", 0L)
                 if (purchaseTime > 0L) {
