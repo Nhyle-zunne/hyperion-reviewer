@@ -17,6 +17,7 @@ object LearningProgressDeletionLedger {
         val ledger = read(context)
         val items = ledger.optJSONObject(collection) ?: JSONObject().also { ledger.put(collection, it) }
         val previous = items.optJSONObject(id)
+        if (!deleted && previous?.optBoolean("deleted", false) != true) return
         val mutationAt = maxOf(at, (previous?.optLong("at", 0L) ?: 0L) + 1L)
         items.put(id, JSONObject().put("at", mutationAt).put("deleted", deleted))
         save(context, ledger)
