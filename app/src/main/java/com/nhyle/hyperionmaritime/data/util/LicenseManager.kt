@@ -447,6 +447,12 @@ object LicenseManager {
         return true
     }
 
+    /** Returns the currently signed-in Hyperion account ID from encrypted account preferences. */
+    fun getCurrentAccountUserId(context: Context): String? =
+        accountEntitlementPreferences(context.applicationContext)
+            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+            ?.takeIf { it.isNotBlank() }
+
     fun setCurrentAccountUserId(context: Context, userId: String?) {
         val nextUserId = userId.orEmpty()
         if (verifiedDeveloperAdminUserId != null && verifiedDeveloperAdminUserId != nextUserId) {
