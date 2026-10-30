@@ -2026,7 +2026,15 @@ private fun formatRemainingDuration(expiryEpoch: Long): String {
     val playPurchaseTime = playPrefs.getLong("play_purchase_timestamp", 0L)
     val playHighWater = playPrefs.getLong("play_license_high_water_mark", 0L)
 
-    val effectiveNow = maxOf(now, actEpoch, issEpoch, lastVerEpoch, playPurchaseTime, playHighWater)
+    val effectiveNow = maxOf(
+        now,
+        actEpoch,
+        issEpoch,
+        lastVerEpoch,
+        playPurchaseTime,
+        playHighWater,
+        LicenseManager.getAccountEntitlementEffectiveNow(context)
+    )
     return formatSubscriptionTimeRemaining(expiryEpoch, effectiveNow)
 }
 
