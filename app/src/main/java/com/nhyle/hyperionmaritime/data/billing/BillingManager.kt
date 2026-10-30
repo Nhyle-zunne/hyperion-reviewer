@@ -991,12 +991,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasEw = engineOicEwPlan != null && !engineOicEwPlan.isExpired
         val hasDm = deckMgtPlan != null && !deckMgtPlan.isExpired
         val hasEm = engineMgtPlan != null && !engineMgtPlan.isExpired
+        // Use raw owned-purchase presence for cache lifecycle. An expired offline lease
+        // must retain its old timestamp; clearing it would trigger the one-time legacy migration.
 
         val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
         editor.putLong(KEY_PURCHASE_TIME, lastPurchaseTime)
 
-        val hasAnyOwnedPurchase = hasOic || hasGmdss || hasAll || hasEw || hasDm || hasEm
+        val hasAnyOwnedPurchase = oicPlan != null || gmdssPlan != null ||
+            allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
         // Persist every observed clock advance, but advance the verification lease only
         // when Android reports a validated internet connection and the clock is monotonic.
         editor.putLong(
