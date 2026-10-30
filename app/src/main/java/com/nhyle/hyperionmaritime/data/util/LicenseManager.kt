@@ -306,17 +306,33 @@ object LicenseManager {
     fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
         isAccountTrackUnlocked(context.applicationContext, track)
 
+    /** Pure account-grant validation shared by the access gate and deterministic tests. */
+    internal fun isAccountEntitlementValid(
+        ownerUserId: String?,
+        currentUserId: String?,
+        syncedAtEpochMs: Long,
+        expiryEpochMs: Long,
+        nowEpochMs: Long
+    ): Boolean {
+        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
+        if (
+            syncedAtEpochMs <= 0L ||
+            nowEpochMs < syncedAtEpochMs - 5L * 60L * 1000L ||
+            nowEpochMs - syncedAtEpochMs > ACCOUNT_OFFLINE_GRACE_MS
+        ) return false
+        return expiryEpochMs > nowEpochMs
+    }
+
     private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
         val prefs = accountEntitlementPreferences(context) ?: return false
-        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
-        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
-        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
-        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
         val now = System.currentTimeMillis()
-        if (syncedAt <= 0L || now < syncedAt - 5L * 60L * 1000L || now - syncedAt > ACCOUNT_OFFLINE_GRACE_MS) {
-            return false
-        }
-        return prefs.getLong(accountExpiryKey(track), 0L) > now
+        return isAccountEntitlementValid(
+            ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null),
+            currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null),
+            syncedAtEpochMs = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L),
+            expiryEpochMs = prefs.getLong(accountExpiryKey(track), 0L),
+            nowEpochMs = now
+        )
     }
 
     /** Stores active, server-read website entitlements with a bounded offline grace period. */
