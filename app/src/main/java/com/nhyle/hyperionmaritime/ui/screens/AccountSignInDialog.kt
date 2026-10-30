@@ -77,7 +77,14 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                     fontSize = 18.sp,
                     letterSpacing = 0.7.sp
                 )
-                if (!account.isAccountDeleted) {
+                if (account.isAccountDeleted) {
+                    Text(
+                        text = "Your previous Hyperion account was deleted. You can sign in again to create a new account, but deleted website licenses and account data cannot be restored or transferred.",
+                        color = colors.muted,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp
+                    )
+                } else {
                     Text(
                         text = "Sign in with the same Google account you use on hyperionmaritime.org to sync active website licenses with this app. Sign-in is optional, and Google Play purchases continue to work without it.",
                         color = colors.muted,
@@ -133,8 +140,7 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                     )
                 }
 
-                if (!account.isAccountDeleted) {
-                    Button(
+                Button(
                         onClick = {
                             scope.launch {
                                 if (account.email.isNullOrBlank()) {
@@ -174,8 +180,7 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                             letterSpacing = 0.7.sp
                         )
                     }
-                }
-
+                
                 if (!account.email.isNullOrBlank() && !account.isAccountDeleted) {
                     OutlinedButton(
                         onClick = { SupabaseAccountManager.signOut(context.applicationContext) },
