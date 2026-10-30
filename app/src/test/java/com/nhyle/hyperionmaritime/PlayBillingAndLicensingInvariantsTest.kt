@@ -21,6 +21,7 @@ import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLin
 import com.nhyle.hyperionmaritime.data.billing.obfuscatedHyperionAccountId
 import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
 import com.nhyle.hyperionmaritime.data.auth.isGooglePlayAccountLinkConflict
+import com.nhyle.hyperionmaritime.data.auth.claimLearningProgressOwner
 import java.io.IOException
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -91,6 +92,37 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.clearAccountEntitlements(context)
         LicenseManager.init(context)
         LicenseManager.setAccountEntitlementPreferencesForTesting(null)
+    }
+
+    @Test
+    fun localStudyProgressOwnerIsDurablyClaimedBeforeSyncAndCannotTransfer() {
+        val preferences = context.getSharedPreferences("learning_progress_owner_test", Context.MODE_PRIVATE)
+        preferences.edit().clear().commit()
+
+        assertTrue(
+            "The first account should claim an unowned device",
+            claimLearningProgressOwner(preferences, "account-a")
+        )
+        assertEquals(
+            "The owner marker must be persisted immediately, before any cloud request",
+            "account-a",
+            preferences.getString("owner_user_id", null)
+        )
+        assertTrue(
+            "The original account may retry synchronization",
+            claimLearningProgressOwner(preferences, "account-a")
+        )
+        assertFalse(
+            "A different account must not inherit the device's local study history",
+            claimLearningProgressOwner(preferences, "account-b")
+        )
+        assertEquals(
+            "A rejected account switch must not overwrite the original owner",
+            "account-a",
+            preferences.getString("owner_user_id", null)
+        )
+
+        preferences.edit().clear().commit()
     }
 
     @Test
