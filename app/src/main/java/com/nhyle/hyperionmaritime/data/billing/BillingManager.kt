@@ -655,6 +655,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             scope.launch {
                 queryProductDetails()
                 queryPurchasesAsync()
+                syncAccountAfterPlayPurchaseChanged()
             }
         } else {
             Log.w(TAG, "Billing setup failed: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -762,7 +763,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     fun queryPurchasesOnResume() {
         scope.launch {
             if (billingClient.isReady) {
+                // Refresh local ownership after returning to the foreground, then refresh
+                // server-authoritative expiry for the signed-in account. This is important
+                // for renewals, grace periods, and accelerated Play test subscriptions.
                 queryPurchasesAsync()
+                syncAccountAfterPlayPurchaseChanged()
             } else {
                 startConnection()
             }
