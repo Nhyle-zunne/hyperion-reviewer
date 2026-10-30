@@ -496,7 +496,7 @@ fun HyperionDrawerContent(
                             }
                         )
 
-                                            }
+                    }
                 }
 
                 // SECTION 3: LEGAL & COMPLIANCE (Collapsible Dropdown)
