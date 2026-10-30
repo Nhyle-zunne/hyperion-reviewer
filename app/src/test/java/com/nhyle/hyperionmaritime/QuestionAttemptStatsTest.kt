@@ -308,6 +308,30 @@ class QuestionAttemptStatsTest {
     }
 
     @Test
+    @Config(sdk = [24], manifest = Config.NONE)
+    fun testApi24HistoryPersistenceAndBackupRecovery() {
+        val first = QuestionAttemptHistoryManager.recordAttempt(
+            context, "DECK_OIC_NW", "API24_Q1", true
+        )
+        QuestionAttemptHistoryManager.recordAttempt(
+            context, "DECK_OIC_NW", "API24_Q2", false
+        )
+
+        val historyFile = QuestionAttemptHistoryManager.getHistoryFile(context)
+        val backupFile = QuestionAttemptHistoryManager.getBackupFile(context)
+        assertTrue("API 24 must persist the history file", historyFile.exists())
+        assertTrue("A prior valid snapshot must be backed up before replacement", backupFile.exists())
+
+        historyFile.delete()
+        QuestionAttemptHistoryManager.resetCache()
+
+        val recovered = QuestionAttemptHistoryManager.getHistory(context, "DECK_OIC_NW", "API24_Q1")
+        assertNotNull("Missing history file should recover from its durable backup", recovered)
+        assertEquals(first.totalAttempts, recovered?.totalAttempts)
+        assertTrue("Recovered history must be restored to the primary file", historyFile.exists())
+    }
+
+    @Test
     fun test8_formatAttemptSummarySingularAndPlural() {
         val e1 = QuestionHistoryEntry(
             questionId = "Q1",
