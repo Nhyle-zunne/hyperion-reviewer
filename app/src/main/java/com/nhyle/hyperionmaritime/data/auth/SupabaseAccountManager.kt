@@ -237,7 +237,9 @@ object SupabaseAccountManager {
             // Still clear the separately stored account entitlement cache.
         }
         LicenseManager.clearAccountEntitlements(context.applicationContext)
-        _state.value = SupabaseAccountState(message = "Signed out. Google Play purchases remain available.")
+        _state.value = SupabaseAccountState(
+            message = "Signed out. Your study history remains saved on this device and is not transferred to another Hyperion account. Google Play purchases remain available."
+        )
     }
 
     /**
@@ -277,7 +279,7 @@ object SupabaseAccountManager {
                 LicenseManager.clearAccountEntitlements(appContext)
             }
             _state.value = SupabaseAccountState(
-                message = "Your Hyperion account and linked account data have been deleted. Google Play subscriptions are not cancelled and may continue billing until you cancel them in Google Play.",
+                message = "Your Hyperion account and linked server-side account data have been deleted. Study history stored locally on this device remains here and will not be transferred to another Hyperion account. Google Play subscriptions are not cancelled and may continue billing until you cancel them in Google Play.",
                 isAccountDeleted = true
             )
         } catch (error: Exception) {
