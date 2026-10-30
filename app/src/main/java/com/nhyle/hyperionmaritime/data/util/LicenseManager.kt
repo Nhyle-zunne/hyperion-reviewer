@@ -184,6 +184,11 @@ object LicenseManager {
     private const val ACCOUNT_OFFLINE_GRACE_MS = 72L * 60L * 60L * 1000L
     @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
 
+    // Incremented whenever account grants are refreshed so screens such as Bond Store
+    // can update even when the overall "any license active" Boolean remains unchanged.
+    private val _accountEntitlementRevisionFlow = MutableStateFlow(0L)
+    val accountEntitlementRevisionFlow: StateFlow<Long> = _accountEntitlementRevisionFlow.asStateFlow()
+
     const val KEY_OFFLINE_LICENSE = "is_offline_license"
     const val KEY_OFFLINE_TIER = "offline_license_tier"
     const val KEY_OFFLINE_DURATION = "offline_license_duration"
@@ -315,6 +320,18 @@ object LicenseManager {
 
     fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
         isAccountTrackUnlocked(context.applicationContext, track)
+
+    /**
+     * Returns the server-issued website/account expiry only while that grant is still
+     * valid for the current signed-in account and its bounded offline verification lease.
+     * A zero result means the store must not display the website grant as active.
+     */
+    fun getAccountEntitlementExpiry(context: Context, track: Track): Long {
+        val appContext = context.applicationContext
+        if (!isAccountTrackUnlocked(appContext, track)) return 0L
+        val prefs = accountEntitlementPreferences(appContext) ?: return 0L
+        return prefs.getLong(accountExpiryKey(track), 0L)
+    }
 
     /** Keep the offline lease's verification timestamp monotonic across device-clock rollback. */
     internal fun nextAccountEntitlementVerificationTime(
@@ -450,6 +467,7 @@ object LicenseManager {
         _isHyperionProUnlockedFlow.value = isHyperionProUnlocked(context) || (oic && gmdss && ew && deckMgt && engineMgt)
         _isProActivatedFlow.value = oic || gmdss || ew || deckMgt || engineMgt
         _isDeveloperAdminAccessFlow.value = isDeveloperAdminAccessActive(context)
+        _accountEntitlementRevisionFlow.value = _accountEntitlementRevisionFlow.value + 1L
     }
     /**
      * Purges old permanent clearance / lifetime licenses that were issued under previous system.
