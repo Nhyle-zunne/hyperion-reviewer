@@ -76,6 +76,7 @@ import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
+import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.PlayProductItem
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -709,21 +710,21 @@ fun StoreScreen(
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val accountEntitlementRevision by LicenseManager.accountEntitlementRevisionFlow.collectAsStateWithLifecycle()
 
-    // Website grants are stored separately from Play purchases. Read only validated,
-    // current-account grants and re-read whenever the secure account cache is refreshed.
-    val oicWebsiteExp = remember(context, accountEntitlementRevision) {
+    // Server-synced account expiries include website licenses and Google Play
+    // SubscriptionsV2 expiries. Read only the validated current-account cache.
+    val oicAccountExp = remember(context, accountEntitlementRevision) {
         LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_OIC_NW)
     }
-    val gmdssWebsiteExp = remember(context, accountEntitlementRevision) {
+    val gmdssAccountExp = remember(context, accountEntitlementRevision) {
         LicenseManager.getAccountEntitlementExpiry(context, Track.GMDSS_GOC)
     }
-    val ewWebsiteExp = remember(context, accountEntitlementRevision) {
+    val ewAccountExp = remember(context, accountEntitlementRevision) {
         LicenseManager.getAccountEntitlementExpiry(context, Track.ENGINE_OIC_EW)
     }
-    val dmWebsiteExp = remember(context, accountEntitlementRevision) {
+    val dmAccountExp = remember(context, accountEntitlementRevision) {
         LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_MGT)
     }
-    val emWebsiteExp = remember(context, accountEntitlementRevision) {
+    val emAccountExp = remember(context, accountEntitlementRevision) {
         LicenseManager.getAccountEntitlementExpiry(context, Track.ENGINE_MGT)
     }
 
@@ -985,11 +986,15 @@ fun StoreScreen(
             val emPlayExp = if (entitlements.engineMgtPlan?.isExpired == false) entitlements.engineMgtPlan!!.expiryTimestamp else 0L
             val allPlayExp = if (entitlements.allAccessPlan?.isExpired == false) entitlements.allAccessPlan!!.expiryTimestamp else 0L
 
-            val effectiveOicExp = maxOf(oicOfflineExp, oicPlayExp, oicWebsiteExp, allPlayExp, allOfflineExp)
-            val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssPlayExp, gmdssWebsiteExp, allPlayExp, allOfflineExp)
-            val effectiveEwExp = maxOf(ewOfflineExp, ewPlayExp, ewWebsiteExp, allPlayExp, allOfflineExp)
-            val effectiveDmExp = maxOf(dmOfflineExp, dmPlayExp, dmWebsiteExp, allPlayExp, allOfflineExp)
-            val effectiveEmExp = maxOf(emOfflineExp, emPlayExp, emWebsiteExp, allPlayExp, allOfflineExp)
+            // A linked account expiry is server-verified and includes the current Play
+            // subscription expiry from SubscriptionsV2. Never let BillingClient's local
+            // calendar estimate overwrite an accelerated tester expiry. Use the estimate
+            // only when no server-synced account expiry is available.
+            val effectiveOicExp = maxOf(oicOfflineExp, oicAccountExp, if (oicAccountExp > 0L) 0L else maxOf(oicPlayExp, allPlayExp), allOfflineExp)
+            val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssAccountExp, if (gmdssAccountExp > 0L) 0L else maxOf(gmdssPlayExp, allPlayExp), allOfflineExp)
+            val effectiveEwExp = maxOf(ewOfflineExp, ewAccountExp, if (ewAccountExp > 0L) 0L else maxOf(ewPlayExp, allPlayExp), allOfflineExp)
+            val effectiveDmExp = maxOf(dmOfflineExp, dmAccountExp, if (dmAccountExp > 0L) 0L else maxOf(dmPlayExp, allPlayExp), allOfflineExp)
+            val effectiveEmExp = maxOf(emOfflineExp, emAccountExp, if (emAccountExp > 0L) 0L else maxOf(emPlayExp, allPlayExp), allOfflineExp)
 
             val hasDirectAllAccess = (allPlayExp > now) || (allOfflineExp > now)
             val hasActiveOic = (effectiveOicExp > now) || isOicOffline || entitlements.oicNwUnlocked
@@ -1011,7 +1016,7 @@ fun StoreScreen(
 
             val isAnyOffline = isAllAccessOffline || isOicOffline || isGmdssOffline || isEwOffline || isDmOffline || isEmOffline
             val isAnyPlayPlan = entitlements.allAccessUnlocked || entitlements.oicNwUnlocked || entitlements.gmdssUnlocked || entitlements.engineOicEwUnlocked || entitlements.deckMgtUnlocked || entitlements.engineMgtUnlocked
-            val isAnyWebsitePlan = listOf(oicWebsiteExp, gmdssWebsiteExp, ewWebsiteExp, dmWebsiteExp, emWebsiteExp).any { it > now }
+            val isAnyWebsitePlan = listOf(oicAccountExp, gmdssAccountExp, ewAccountExp, dmAccountExp, emAccountExp).any { it > now }
             if (isAnyOffline || isAnyPlayPlan || isAnyWebsitePlan) {
                 ActiveLicenseOverviewCard(
                     selectedTrack = selectedTrack,
@@ -1030,19 +1035,19 @@ fun StoreScreen(
                     effectiveDmExp = effectiveDmExp,
                     effectiveEmExp = effectiveEmExp,
                     oicPlayExp = oicPlayExp,
-                    oicWebsiteExp = oicWebsiteExp,
+                    oicAccountExp = oicAccountExp,
                     oicOfflineExp = oicOfflineExp,
                     gmdssPlayExp = gmdssPlayExp,
-                    gmdssWebsiteExp = gmdssWebsiteExp,
+                    gmdssAccountExp = gmdssAccountExp,
                     gmdssOfflineExp = gmdssOfflineExp,
                     ewPlayExp = ewPlayExp,
-                    ewWebsiteExp = ewWebsiteExp,
+                    ewAccountExp = ewAccountExp,
                     ewOfflineExp = ewOfflineExp,
                     dmPlayExp = dmPlayExp,
-                    dmWebsiteExp = dmWebsiteExp,
+                    dmAccountExp = dmAccountExp,
                     dmOfflineExp = dmOfflineExp,
                     emPlayExp = emPlayExp,
-                    emWebsiteExp = emWebsiteExp,
+                    emAccountExp = emAccountExp,
                     emOfflineExp = emOfflineExp,
                     isOffline = isAnyOffline,
                     isPlay = isAnyPlayPlan,
@@ -2010,20 +2015,7 @@ private fun formatRemainingDuration(expiryEpoch: Long): String {
     val playHighWater = playPrefs.getLong("play_license_high_water_mark", 0L)
 
     val effectiveNow = maxOf(now, actEpoch, issEpoch, lastVerEpoch, playPurchaseTime, playHighWater)
-    val remainingMs = (expiryEpoch - effectiveNow).coerceAtLeast(0L)
-    val totalHours = remainingMs / (1000L * 60L * 60L)
-    val totalMins = remainingMs / (1000L * 60L)
-    val days = (totalHours + 23L) / 24L
-    val hours = totalHours % 24L
-    val mins = totalMins % 60L
-
-    return when {
-        days > 1 -> "$days days remaining"
-        totalHours > 1 -> "$totalHours hrs, $mins mins remaining"
-        totalHours == 1L -> "1 hr, $mins mins remaining"
-        totalMins > 0 -> "$totalMins mins remaining"
-        else -> "< 1 min remaining"
-    }
+    return formatSubscriptionTimeRemaining(expiryEpoch, effectiveNow)
 }
 
 private fun formatExpiryDateString(expiryEpoch: Long): String {
@@ -2059,19 +2051,19 @@ private fun ActiveLicenseOverviewCard(
     effectiveDmExp: Long,
     effectiveEmExp: Long,
     oicPlayExp: Long,
-    oicWebsiteExp: Long,
+    oicAccountExp: Long,
     oicOfflineExp: Long,
     gmdssPlayExp: Long,
-    gmdssWebsiteExp: Long,
+    gmdssAccountExp: Long,
     gmdssOfflineExp: Long,
     ewPlayExp: Long,
-    ewWebsiteExp: Long,
+    ewAccountExp: Long,
     ewOfflineExp: Long,
     dmPlayExp: Long,
-    dmWebsiteExp: Long,
+    dmAccountExp: Long,
     dmOfflineExp: Long,
     emPlayExp: Long,
-    emWebsiteExp: Long,
+    emAccountExp: Long,
     emOfflineExp: Long,
     isOffline: Boolean,
     isPlay: Boolean,
@@ -2088,7 +2080,7 @@ private fun ActiveLicenseOverviewCard(
         effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp,
         oicOfflineExp, gmdssOfflineExp, ewOfflineExp, dmOfflineExp, emOfflineExp,
         oicPlayExp, gmdssPlayExp, ewPlayExp, dmPlayExp, emPlayExp,
-        oicWebsiteExp, gmdssWebsiteExp, ewWebsiteExp, dmWebsiteExp, emWebsiteExp,
+        oicAccountExp, gmdssAccountExp, ewAccountExp, dmAccountExp, emAccountExp,
         entitlements.oicNwUnlocked, entitlements.gmdssUnlocked,
         entitlements.engineOicEwUnlocked, entitlements.deckMgtUnlocked, entitlements.engineMgtUnlocked
     ) {
@@ -2100,7 +2092,7 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveOicExp,
                     isOffline = oicOfflineExp > now,
                     isPlay = (oicPlayExp > now) || entitlements.oicNwUnlocked,
-                    isWebsite = oicWebsiteExp > now
+                    isWebsite = oicAccountExp > now
                 )
             )
         }
@@ -2111,7 +2103,7 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveGmdssExp,
                     isOffline = gmdssOfflineExp > now,
                     isPlay = (gmdssPlayExp > now) || entitlements.gmdssUnlocked,
-                    isWebsite = gmdssWebsiteExp > now
+                    isWebsite = gmdssAccountExp > now
                 )
             )
         }
@@ -2122,7 +2114,7 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveEwExp,
                     isOffline = ewOfflineExp > now,
                     isPlay = (ewPlayExp > now) || entitlements.engineOicEwUnlocked,
-                    isWebsite = ewWebsiteExp > now
+                    isWebsite = ewAccountExp > now
                 )
             )
         }
@@ -2133,7 +2125,7 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveDmExp,
                     isOffline = dmOfflineExp > now,
                     isPlay = (dmPlayExp > now) || entitlements.deckMgtUnlocked,
-                    isWebsite = dmWebsiteExp > now
+                    isWebsite = dmAccountExp > now
                 )
             )
         }
@@ -2144,7 +2136,7 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveEmExp,
                     isOffline = emOfflineExp > now,
                     isPlay = (emPlayExp > now) || entitlements.engineMgtUnlocked,
-                    isWebsite = emWebsiteExp > now
+                    isWebsite = emAccountExp > now
                 )
             )
         }
