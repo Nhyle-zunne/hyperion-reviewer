@@ -85,21 +85,27 @@ internal fun resolveRequestedBillingCycle(requestedCycle: BillingCycle?): Billin
  * purchased subscription. Opening checkout and cancelling must not rewrite the
  * duration metadata of an already-owned subscription.
  */
+internal fun isNewPlaySubscriptionPurchase(
+    previousPurchaseToken: String?,
+    currentPurchaseToken: String,
+    previousPurchaseTimeEpochMs: Long,
+    currentPurchaseTimeEpochMs: Long
+): Boolean {
+    val tokenWasReplaced = !previousPurchaseToken.isNullOrBlank() &&
+        currentPurchaseToken.isNotBlank() &&
+        previousPurchaseToken != currentPurchaseToken
+    val purchaseTimeAdvanced = currentPurchaseTimeEpochMs > 0L &&
+        currentPurchaseTimeEpochMs > previousPurchaseTimeEpochMs
+    return tokenWasReplaced || purchaseTimeAdvanced
+}
+
 internal fun resolvePurchasedBillingCycle(
     activeCycle: BillingCycle?,
     pendingCycle: BillingCycle?,
-    previousPurchaseTimeEpochMs: Long,
-    currentPurchaseTimeEpochMs: Long
+    isNewPurchase: Boolean
 ): BillingCycle =
-    if (
-        pendingCycle != null &&
-        currentPurchaseTimeEpochMs > 0L &&
-        currentPurchaseTimeEpochMs > previousPurchaseTimeEpochMs
-    ) {
-        pendingCycle
-    } else {
-        activeCycle ?: BillingCycle.MONTHLY
-    }
+    if (pendingCycle != null && isNewPurchase) pendingCycle
+    else activeCycle ?: BillingCycle.MONTHLY
 
 internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
     val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
@@ -967,6 +973,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_purchase_time_engine_mgt"
                             else -> "play_purchase_time_default"
                         }
+                        val purchaseTokenKey = when (productId) {
+                            BillingConstants.PRODUCT_OIC_NW_PASS -> KEY_OIC_TOKEN
+                            BillingConstants.PRODUCT_GMDSS_PASS -> KEY_GMDSS_TOKEN
+                            BillingConstants.PRODUCT_ALL_ACCESS_PASS -> KEY_ALL_ACCESS_TOKEN
+                            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> KEY_ENGINE_OIC_EW_TOKEN
+                            BillingConstants.PRODUCT_DECK_MGT_PASS -> KEY_DECK_MGT_TOKEN
+                            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> KEY_ENGINE_MGT_TOKEN
+                            else -> "play_purchase_token_default"
+                        }
                         val pendingCycleKey = "${cycleKey}_pending"
                         val activeCycle = securePrefs.getString(cycleKey, null)
                             ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
@@ -977,20 +992,24 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             purchaseTimeKey,
                             if (activeCycle != null) securePrefs.getLong(KEY_PURCHASE_TIME, 0L) else 0L
                         )
+                        val previousPurchaseToken = securePrefs.getString(purchaseTokenKey, null)
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
-                        val cycle = resolvePurchasedBillingCycle(
-                            activeCycle = activeCycle,
-                            pendingCycle = pendingCycle,
+                        val selectedCycleWasPurchased = isNewPlaySubscriptionPurchase(
+                            previousPurchaseToken = previousPurchaseToken,
+                            currentPurchaseToken = purchase.purchaseToken,
                             previousPurchaseTimeEpochMs = previousPurchaseTime,
                             currentPurchaseTimeEpochMs = purchase.purchaseTime
                         )
+                        val cycle = resolvePurchasedBillingCycle(
+                            activeCycle = activeCycle,
+                            pendingCycle = pendingCycle,
+                            isNewPurchase = selectedCycleWasPurchased
+                        )
 
                         // Confirm a pending Store selection only when Google Play reports a
-                        // newer purchase timestamp. A cancelled checkout or restore of the
-                        // same purchase keeps its previously saved active duration.
+                        // newer purchase or a replacement purchase token. A cancelled checkout
+                        // or restore of the same purchase keeps its previously saved duration.
                         if (pendingCycle != null) {
-                            val selectedCycleWasPurchased =
-                                purchase.purchaseTime > 0L && purchase.purchaseTime > previousPurchaseTime
                             val checkoutStillOpen = _entitlements.value.pendingPurchaseProductId == productId
                             if (selectedCycleWasPurchased || !checkoutStillOpen) {
                                 editor.remove(pendingCycleKey)
