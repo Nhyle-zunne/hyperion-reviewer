@@ -8,6 +8,7 @@ import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
 import com.nhyle.hyperionmaritime.data.billing.estimateNextSubscriptionExpiry
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
+import com.nhyle.hyperionmaritime.data.billing.matchesPlayOffer
 import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import java.time.Instant
@@ -236,6 +237,19 @@ class PlayBillingAndLicensingInvariantsTest {
                 savedHighWaterMarkEpochMs = now
             )
         )
+    }
+
+    @Test
+    fun playOfferCycleMatchingUsesTheRecurringPhaseAndNeverConfusesTrialDuration() {
+        assertTrue(BillingCycle.WEEKLY.matchesPlayOffer("standard_plan", listOf("P1W")))
+        assertTrue(BillingCycle.WEEKLY.matchesPlayOffer("standard_plan", listOf("P7D")))
+        assertTrue(BillingCycle.MONTHLY.matchesPlayOffer("standard_plan", listOf("P7D", "P1M")))
+        assertFalse(BillingCycle.WEEKLY.matchesPlayOffer("standard_plan", listOf("P7D", "P1M")))
+        assertTrue(BillingCycle.YEARLY.matchesPlayOffer("annual", emptyList()))
+        assertTrue(BillingCycle.YEARLY.matchesPlayOffer("standard_plan", listOf("P1Y")))
+        assertTrue(BillingCycle.YEARLY.matchesPlayOffer("standard_plan", listOf("P365D")))
+        assertTrue(BillingCycle.YEARLY.matchesPlayOffer("standard_plan", listOf("P12M")))
+        assertFalse(BillingCycle.MONTHLY.matchesPlayOffer("standard_plan", listOf("P1Y")))
     }
 
     @Test
