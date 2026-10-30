@@ -49,6 +49,13 @@ Website licenses are purchased through the Bond Store/Checkout at hyperionmariti
 
 PayMongo hosted checkout processes website payments using the payment methods available at checkout. A manual QR payment is a submission for review; entering a transaction reference or sending proof does not itself activate a license. Manual access is granted only after Hyperion verifies and approves the payment. Website order, payment, and refund questions should be sent to hyperionmaritimex@gmail.com with the website order reference. Requests are reviewed under applicable law and purchase conditions; a request or account deletion does not automatically guarantee a refund.
 
+REFUNDS AND BILLING DISPUTES
+For an Android purchase made through Google Play, submit refund requests through Google Play using the Google account that made the purchase. Google Play controls the applicable refund process and decision. Hyperion cannot issue a Google Play refund from the app or website.
+
+For a website purchase, contact hyperionmaritimex@gmail.com and include the Hyperion order reference, the account email used at checkout, and a brief description of the issue. Do not send passwords, one-time codes, or full payment-card details. We will review the order and payment status under the displayed purchase terms and applicable consumer-protection law. If a confirmed payment has not activated the purchased license, contact support so the transaction can be checked. Do not make a second payment while the first payment is pending or unresolved.
+
+A refund request is not automatically approved by submitting it, cancelling a checkout, or deleting an account. Nothing in these Terms removes consumer rights or remedies that cannot lawfully be excluded under applicable law.
+
 4.3 Linking eligible licenses across platforms
 Google Play purchases and website licenses remain separate transactions and continue to be billed by their original providers. When you sign in to Android and the website using the same Hyperion account and synchronization succeeds, eligible active entitlements from either source may be recognized on the other platform. This is account-based license recognition; it does not move the original purchase, change its billing provider, or change cancellation and refund processes.
 
