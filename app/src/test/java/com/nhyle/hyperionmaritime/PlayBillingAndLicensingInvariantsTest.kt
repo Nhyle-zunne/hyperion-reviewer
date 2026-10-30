@@ -10,6 +10,7 @@ import com.nhyle.hyperionmaritime.data.billing.estimateNextSubscriptionExpiry
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.matchesPlayOffer
 import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
+import com.nhyle.hyperionmaritime.data.billing.resolveRequestedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import java.time.Instant
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
@@ -237,6 +238,14 @@ class PlayBillingAndLicensingInvariantsTest {
                 savedHighWaterMarkEpochMs = now
             )
         )
+    }
+
+    @Test
+    fun savedWeeklyMonthlyAndYearlySelectionsSurviveProcessRestart() {
+        assertEquals(BillingCycle.WEEKLY, resolveRequestedBillingCycle(BillingCycle.WEEKLY))
+        assertEquals(BillingCycle.MONTHLY, resolveRequestedBillingCycle(BillingCycle.MONTHLY))
+        assertEquals(BillingCycle.YEARLY, resolveRequestedBillingCycle(BillingCycle.YEARLY))
+        assertEquals("Only legacy purchases without saved cycle metadata use the monthly fallback", BillingCycle.MONTHLY, resolveRequestedBillingCycle(null))
     }
 
     @Test
