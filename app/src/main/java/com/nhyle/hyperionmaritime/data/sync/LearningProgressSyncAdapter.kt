@@ -156,7 +156,7 @@ object LearningProgressSyncAdapter {
             val track = runCatching { Track.valueOf(record.track).name }.getOrNull() ?: return@forEach
             val mode = when {
                 record.mode.contains("MOCK", true) -> "MOCK"
-                record.mode.contains("DRILL", true) || record.competence.equals("MISTAKES", true) -> "DRILL"
+                record.mode.contains("DRILL", true) || record.mode.contains("MISTAKE", true) || record.competence.equals("MISTAKES", true) -> "DRILL"
                 else -> "PRACTICE"
             }
             val duration = segments[record.id].orEmpty().sumOf { it.durationMs }.coerceAtLeast(0L)
@@ -316,7 +316,8 @@ object LearningProgressSyncAdapter {
         for (index in 0 until items.length()) {
             val item = items.optJSONObject(index) ?: continue
             val id = item.optString("id")
-            if (id.isBlank() || id in existing) continue
+            val deletedAt = item.optLong("deletedAt", 0L)
+            if (id.isBlank() || id in existing || deletedAt > 0L) continue
             val track = item.optString("track")
             if (runCatching { Track.valueOf(track) }.isFailure) continue
             val mode = when (item.optString("mode")) {
