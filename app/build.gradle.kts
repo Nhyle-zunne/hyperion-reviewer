@@ -154,7 +154,7 @@ dependencies {
   // Native Google sign-in via Android Credential Manager
   implementation("androidx.credentials:credentials:1.6.0")
   implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
-  implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
+  implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
 
   // Google Play Billing & In-App Updates & Reviews
   implementation("com.android.billingclient:billing-ktx:8.0.0")
