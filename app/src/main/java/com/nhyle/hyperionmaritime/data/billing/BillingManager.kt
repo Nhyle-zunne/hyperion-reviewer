@@ -820,8 +820,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         try {
             val result = billingClient.queryPurchasesAsync(params)
             if (result.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                // Return success only if processPurchases actually applied this snapshot.
+                // Connectivity can disappear between the query and the cache update.
                 processPurchases(result.purchasesList)
-                true
             } else {
                 Log.w(TAG, "queryPurchasesAsync response not OK: ${result.billingResult.debugMessage}")
                 false
@@ -934,13 +935,13 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
-    private suspend fun processPurchases(purchases: List<Purchase>) = withContext(Dispatchers.IO) {
+    private suspend fun processPurchases(purchases: List<Purchase>): Boolean = withContext(Dispatchers.IO) {
         // BillingClient may expose a locally cached or empty snapshot while offline.
         // Without validated internet it cannot be used to revoke the last known-good
         // subscription cache. Wait for an online ownership query before mutating it.
         if (!shouldApplyPlayPurchaseSnapshot(hasValidatedInternet())) {
             Log.i(TAG, "Skipping offline Play ownership snapshot; preserving last verified subscription cache")
-            return@withContext
+            return@withContext false
         }
 
         var oicPlan: ActivePlanInfo? = null
@@ -1303,6 +1304,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 isClockTampered = isClockTampered
             )
         }
+        true
     }
 
     private fun migrateLegacyWeeklyFallbacks() {
