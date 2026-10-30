@@ -309,6 +309,12 @@ object LicenseManager {
     fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
         isAccountTrackUnlocked(context.applicationContext, track)
 
+    /** Keep the offline lease's verification timestamp monotonic across device-clock rollback. */
+    internal fun nextAccountEntitlementVerificationTime(
+        nowEpochMs: Long,
+        previousVerifiedEpochMs: Long
+    ): Long = maxOf(nowEpochMs.coerceAtLeast(0L), previousVerifiedEpochMs.coerceAtLeast(0L))
+
     /** Pure account-grant validation shared by the access gate and deterministic tests. */
     internal fun isAccountEntitlementValid(
         ownerUserId: String?,
@@ -360,7 +366,14 @@ object LicenseManager {
     fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
         if (userId.isBlank()) return false
         val prefs = accountEntitlementPreferences(context) ?: return false
-        val syncedAt = System.currentTimeMillis()
+        val previousVerifiedAt = prefs.getLong(
+            ACCOUNT_LAST_VERIFIED_EPOCH_KEY,
+            prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        )
+        val syncedAt = nextAccountEntitlementVerificationTime(
+            System.currentTimeMillis(),
+            previousVerifiedAt
+        )
         val editor = prefs.edit()
             .putString(ACCOUNT_OWNER_USER_ID_KEY, userId)
             .putString(ACCOUNT_CURRENT_USER_ID_KEY, userId)
