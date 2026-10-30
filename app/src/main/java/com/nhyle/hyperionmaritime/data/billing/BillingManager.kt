@@ -1493,6 +1493,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val details = _productsDetails.value[productId]
         if (details == null) {
+            clearPendingBillingCycle(productId)
             Log.w(TAG, "ProductDetails for $productId not loaded yet. Attempting fresh query.")
             scope.launch { queryProductDetails() }
             return BillingResult.newBuilder()
@@ -1503,6 +1504,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val offerToken = getOfferToken(productId, cycle)
         if (offerToken.isNullOrBlank()) {
+            clearPendingBillingCycle(productId)
             Log.e(TAG, "No Google Play offer matched the selected cycle: product=$productId, cycle=$cycle")
             return BillingResult.newBuilder()
                 .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
@@ -1524,7 +1526,17 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             .build()
 
         _entitlements.update { it.copy(pendingPurchaseProductId = productId, errorMessage = null) }
-        return billingClient.launchBillingFlow(activity, flowParams)
+        val result = billingClient.launchBillingFlow(activity, flowParams)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            clearPendingBillingCycle(productId)
+            _entitlements.update {
+                it.copy(
+                    pendingPurchaseProductId = null,
+                    errorMessage = result.debugMessage.ifBlank { "Google Play could not start this purchase." }
+                )
+            }
+        }
+        return result
     }
 
     fun getProductItem(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): PlayProductItem {
