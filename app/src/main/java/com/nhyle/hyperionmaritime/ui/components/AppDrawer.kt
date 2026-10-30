@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LightMode
@@ -497,16 +496,7 @@ fun HyperionDrawerContent(
                             }
                         )
 
-                        DrawerNavRow(
-                            label = "ACTIVATE KEY",
-                            icon = Icons.Default.Key,
-                            isSelected = currentScreen is Screen.Activation,
-                            onClick = {
-                                onCloseDrawer()
-                                viewModel.navigateTo(Screen.Activation)
-                            }
-                        )
-                    }
+                                            }
                 }
 
                 // SECTION 3: LEGAL & COMPLIANCE (Collapsible Dropdown)
