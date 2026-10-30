@@ -25,7 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Radio
@@ -47,7 +46,6 @@ import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.data.util.ProTier
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
-import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
@@ -114,7 +112,7 @@ fun HowToAvailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = "HOW TO ACTIVATE HYPERION ALL ACCESS",
+                            text = "HOW TO GET HYPERION ACCESS",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.ExtraBold,
                             color = colors.foreground,
@@ -124,7 +122,7 @@ fun HowToAvailScreen(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         Text(
-                            text = "Hyperion licenses are cryptographically paired to your physical device terminal. Follow the 3 steps below to register your device and obtain your unique activation key.",
+                            text = "Choose a plan in the Hyperion Store, complete your purchase, and your selected access will activate automatically.",
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.muted,
                             lineHeight = 18.sp
@@ -134,7 +132,7 @@ fun HowToAvailScreen(
             }
 
             item {
-                MianSectionHeader(title = "DEVICE REGISTRATION STEPS")
+                MianSectionHeader(title = "PURCHASE & ACCESS STEPS")
             }
 
             item {
@@ -167,17 +165,6 @@ fun HowToAvailScreen(
             }
 
             item {
-                StepCard(
-                    stepNumber = "04",
-                    title = "ACTIVATE TERMINAL KEY",
-                    description = "Already have a Terminal Key? Enter your 16-character key to activate your hardware-bound offline license.",
-                    extraInfo = "Tap to enter offline key ↗",
-                    onClick = { viewModel.navigateTo(Screen.Activation) },
-                    isClickable = true
-                )
-            }
-
-            item {
                 com.nhyle.hyperionmaritime.ui.components.LuminousDeskSupportButton(
                     title = "HAVING TROUBLES/ISSUES?",
                     subtitle = "Contact us via Facebook Messenger for quick candidate assistance & inquiries"
@@ -186,27 +173,6 @@ fun HowToAvailScreen(
 
 
             item {
-                Spacer(modifier = Modifier.height(10.dp))
-
-                MianButton(
-                    onClick = { viewModel.navigateTo(Screen.Activation) },
-                    accent = true,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Key,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "GO TO REGISTRATION & KEY INPUT",
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 12.sp,
-                        letterSpacing = 1.sp
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
