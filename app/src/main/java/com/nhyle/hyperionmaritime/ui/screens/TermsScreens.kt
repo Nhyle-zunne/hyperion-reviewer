@@ -49,15 +49,18 @@ import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
+import com.nhyle.hyperionmaritime.viewmodel.Screen
 
 @Composable
 fun TermsOnboardingScreen(
     onAcceptTerms: () -> Unit,
+    onOpenPrivacyPolicy: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TermsAndDisclaimerScreenContent(
         isMandatoryOnboarding = true,
         onBackClick = {},
+        onOpenPrivacyPolicy = onOpenPrivacyPolicy,
         onAccepted = onAcceptTerms,
         modifier = modifier
     )
@@ -70,6 +73,7 @@ fun TermsOnboardingScreen(
 ) {
     TermsOnboardingScreen(
         onAcceptTerms = { viewModel.acceptTerms() },
+        onOpenPrivacyPolicy = { viewModel.navigateTo(Screen.PrivacyPolicy) },
         modifier = modifier
     )
 }
@@ -78,12 +82,14 @@ fun TermsOnboardingScreen(
 fun TermsAndDisclaimerScreen(
     viewModel: ReviewerViewModel,
     onOpenDrawer: () -> Unit = { viewModel.openDrawer() },
+    onOpenPrivacyPolicy: () -> Unit = { viewModel.navigateTo(Screen.PrivacyPolicy) },
     modifier: Modifier = Modifier
 ) {
     TermsAndDisclaimerScreenContent(
         isMandatoryOnboarding = false,
         onBackClick = { viewModel.navigateBack() },
         onOpenDrawer = onOpenDrawer,
+        onOpenPrivacyPolicy = onOpenPrivacyPolicy,
         onAccepted = {},
         modifier = modifier
     )
@@ -93,12 +99,14 @@ fun TermsAndDisclaimerScreen(
 fun TermsAndDisclaimerScreen(
     onBackClick: () -> Unit,
     onOpenDrawer: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TermsAndDisclaimerScreenContent(
         isMandatoryOnboarding = false,
         onBackClick = onBackClick,
         onOpenDrawer = onOpenDrawer,
+        onOpenPrivacyPolicy = onOpenPrivacyPolicy,
         onAccepted = {},
         modifier = modifier
     )
@@ -110,12 +118,14 @@ fun TermsAndDisclaimerScreen(
     isMandatoryOnboarding: Boolean = false,
     onAccepted: () -> Unit = {},
     onOpenDrawer: () -> Unit = { viewModel.openDrawer() },
+    onOpenPrivacyPolicy: () -> Unit = { viewModel.navigateTo(Screen.PrivacyPolicy) },
     modifier: Modifier = Modifier
 ) {
     TermsAndDisclaimerScreenContent(
         isMandatoryOnboarding = isMandatoryOnboarding,
         onBackClick = { viewModel.navigateBack() },
         onOpenDrawer = onOpenDrawer,
+        onOpenPrivacyPolicy = onOpenPrivacyPolicy,
         onAccepted = onAccepted,
         modifier = modifier
     )
@@ -126,6 +136,7 @@ fun TermsAndDisclaimerScreenContent(
     isMandatoryOnboarding: Boolean = false,
     onBackClick: () -> Unit = {},
     onOpenDrawer: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     onAccepted: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -255,6 +266,29 @@ fun TermsAndDisclaimerScreenContent(
                     color = colors.foreground,
                     lineHeight = 20.sp
                 )
+            }
+
+            MianRuleCard(
+                ruleColor = colors.accent,
+                containerColor = colors.surface,
+                onClick = onOpenPrivacyPolicy
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "READ THE PRIVACY POLICY",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = colors.accent,
+                        letterSpacing = 0.55.sp
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = "Review what information the Android app and website process, how account and license synchronization works, how long information is retained, and how to request account deletion.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
             }
 
             if (isMandatoryOnboarding && !hasFullyScrolled) {
