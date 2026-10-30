@@ -169,7 +169,7 @@ fun TermsAndDisclaimerScreenContent(
         if (!isMandatoryOnboarding) {
             MaritimeTopBar(
                 title = "TERMS AND CONDITIONS",
-                subtitle = "OFFICIAL APP POLICIES & SUBSCRIPTION TERMS",
+                subtitle = "INDEPENDENT EDUCATIONAL SERVICE · ACCOUNT & BILLING TERMS",
                 showBackButton = false,
                 onMenuClick = onOpenDrawer
             )
@@ -195,7 +195,7 @@ fun TermsAndDisclaimerScreenContent(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "TERMS AND CONDITIONS",
+                                text = "TERMS OF USE & SUBSCRIPTION POLICY",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = colors.accent,
@@ -296,7 +296,7 @@ fun TermsAndDisclaimerScreenContent(
                 }
             }
 
-            MianSectionHeader(title = "3. LIMITATION OF LIABILITY & PRIVACY")
+            MianSectionHeader(title = "3. ACCURACY, SAFETY & LIMITATION OF LIABILITY")
 
             MianRuleCard(
                 ruleColor = colors.border,
@@ -372,7 +372,71 @@ MianSectionHeader(title = "4. SUBSCRIPTION BILLING & AUTO-RENEWAL POLICY")
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "Offline activation passes (1-Week, 1-Month, 1-Year, Custom) are cryptographically bound to the unique hardware token of this terminal and are non-transferable. Google Play subscriptions and offline passes maintain local persistence to guarantee uninterrupted study access during deep-sea voyages without active internet connectivity. System time manipulation or clock tampering triggers security latches requiring system time restoration.",
+                        text = LegalAgreementText.SECTION_5_OFFLINE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "6. ACCOUNTS, SIGN-IN & LICENSE SYNCHRONIZATION")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_6_ACCOUNT_AND_STUDY_DATA,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "7. ACCOUNT DELETION & ACTIVE LICENSES")
+
+            MianRuleCard(
+                ruleColor = colors.accent,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_7_DELETION_AND_TERMINATION,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "8. ACCEPTABLE USE & CONTENT PROTECTION")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_8_ACCEPTABLE_USE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.foreground,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            MianSectionHeader(title = "9. DEVELOPER & SUPPORT CONTACT")
+
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = LegalAgreementText.SECTION_9_CONTACT,
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.foreground,
                         lineHeight = 18.sp
