@@ -27,6 +27,7 @@ import com.nhyle.hyperionmaritime.data.model.CurrentQuestionStats
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.ExamResult
 import com.nhyle.hyperionmaritime.data.model.FunctionScore
+import com.nhyle.hyperionmaritime.data.model.LegalAgreementText
 import com.nhyle.hyperionmaritime.data.model.ProQuestion
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuizMode
@@ -1661,8 +1662,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Terms Acceptance State
-    private val _hasAcceptedTerms = MutableStateFlow(prefs.getBoolean("has_accepted_terms", false))
+    // Re-prompt existing installs whenever the published Terms version changes.
+    // The legacy Boolean is intentionally insufficient on its own: older installs
+    // must review and accept the current Terms/Privacy acknowledgement.
+    private val _hasAcceptedTerms = MutableStateFlow(
+        prefs.getString("accepted_terms_version", null) == LegalAgreementText.TERMS_VERSION
+    )
     val hasAcceptedTerms: StateFlow<Boolean> = _hasAcceptedTerms.asStateFlow()
 
     // Persistent Theme State (defaulting to true)
@@ -1739,7 +1744,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun acceptTerms() {
-        prefs.edit().putBoolean("has_accepted_terms", true).apply()
+        prefs.edit()
+            .putBoolean("has_accepted_terms", true)
+            .putString("accepted_terms_version", LegalAgreementText.TERMS_VERSION)
+            .apply()
         _hasAcceptedTerms.value = true
         backStack.clear()
         _currentScreen.value = Screen.TrackSelection
