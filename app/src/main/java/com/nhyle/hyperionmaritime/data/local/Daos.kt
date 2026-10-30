@@ -14,6 +14,12 @@ interface MistakeDao {
     @Query("SELECT * FROM mistakes WHERE questionId = :questionId LIMIT 1")
     suspend fun getMistake(questionId: String): MistakeEntity?
 
+    @Query("SELECT * FROM mistakes ORDER BY lastFailedTimestamp DESC")
+    suspend fun getAllMistakesOnce(): List<MistakeEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(mistakes: List<MistakeEntity>)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(mistake: MistakeEntity)
 
@@ -34,6 +40,12 @@ interface MistakeDao {
 interface BookmarkDao {
     @Query("SELECT * FROM bookmarks ORDER BY addedTimestamp DESC")
     fun getAllBookmarks(): Flow<List<BookmarkEntity>>
+
+    @Query("SELECT * FROM bookmarks ORDER BY addedTimestamp DESC")
+    suspend fun getAllBookmarksOnce(): List<BookmarkEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBookmarks(bookmarks: List<BookmarkEntity>)
 
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE questionId = :questionId)")
     fun isBookmarked(questionId: String): Flow<Boolean>
@@ -76,6 +88,12 @@ interface ActiveSessionDao {
 interface ExamRecordDao {
     @Query("SELECT * FROM exam_records ORDER BY timestamp DESC")
     fun getAllExamRecords(): Flow<List<ExamRecordEntity>>
+
+    @Query("SELECT * FROM exam_records ORDER BY timestamp DESC")
+    suspend fun getAllExamRecordsOnce(): List<ExamRecordEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecords(records: List<ExamRecordEntity>)
 
     @Query("SELECT * FROM exam_records WHERE track LIKE :track COLLATE NOCASE ORDER BY timestamp DESC")
     fun getSessionsByTrack(track: String): Flow<List<ExamRecordEntity>>
@@ -128,6 +146,9 @@ interface ExamRecordDao {
 
 @Dao
 interface QuestionDao {
+    @Query("SELECT * FROM questions WHERE id = :id LIMIT 1")
+    suspend fun getQuestionById(id: String): QuestionEntity?
+
     @Query("SELECT COUNT(*) FROM questions WHERE track = :track AND competence = :competence")
     suspend fun getQuestionCountForCompetence(track: String, competence: String): Int
 
