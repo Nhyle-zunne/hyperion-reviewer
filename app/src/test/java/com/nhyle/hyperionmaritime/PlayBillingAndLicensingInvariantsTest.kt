@@ -6,7 +6,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
+import com.nhyle.hyperionmaritime.data.billing.estimateNextSubscriptionExpiry
+import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
+import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
+import java.time.Instant
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
@@ -235,13 +239,29 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun displayedSubscriptionDurationUsesThePlanTermNotTheOfflineVerificationLease() {
+    fun subscriptionCyclesUseCalendarPeriodsInsteadOfFixedThirtyOr365DayEstimates() {
+        val jan31 = Instant.parse("2025-01-31T12:00:00Z").toEpochMilli()
+        val feb28 = Instant.parse("2025-02-28T12:00:00Z").toEpochMilli()
+        val mar28 = Instant.parse("2025-03-28T12:00:00Z").toEpochMilli()
+        val feb7 = Instant.parse("2025-02-07T12:00:00Z").toEpochMilli()
+        val leapDay = Instant.parse("2024-02-29T12:00:00Z").toEpochMilli()
+        val nextLeapYearExpiry = Instant.parse("2025-02-28T12:00:00Z").toEpochMilli()
+
+        assertEquals("Weekly plans last exactly seven calendar days", feb7, BillingCycle.WEEKLY.nextBillingPeriod(jan31))
+        assertEquals("P1M monthly plans end on the corresponding calendar date, clamped at month-end", feb28, BillingCycle.MONTHLY.nextBillingPeriod(jan31))
+        assertEquals("A month-end renewal advances from the clamped renewal date", mar28, estimateNextSubscriptionExpiry(jan31, feb28, BillingCycle.MONTHLY))
+        assertEquals("P1Y yearly plans respect leap-day calendar arithmetic", nextLeapYearExpiry, BillingCycle.YEARLY.nextBillingPeriod(leapDay))
+    }
+
+    @Test
+    fun displayedSubscriptionDurationUsesThePlanExpiryNotTheOfflineVerificationLease() {
         BillingCycle.values().forEach { cycle ->
             val now = System.currentTimeMillis()
+            val expiry = estimateNextSubscriptionExpiry(now, now, cycle)
             val plan = ActivePlanInfo(
                 cycle = cycle,
                 purchaseTimestamp = now,
-                expiryTimestamp = now + cycle.durationMs,
+                expiryTimestamp = expiry,
                 highWaterMarkEpoch = now,
                 lastVerifiedAtEpoch = now
             )
@@ -252,11 +272,39 @@ class PlayBillingAndLicensingInvariantsTest {
                 plan.remainingTimeMs in 0L..BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
             )
             assertEquals(
-                "${cycle.label} dashboard display must show its actual subscription term",
-                "${cycle.durationDays} days remaining",
+                "${cycle.label} dashboard display must show the actual computed plan expiry",
+                formatSubscriptionTimeRemaining(expiry, now),
                 plan.getFormattedTimeRemaining()
             )
         }
+    }
+
+    @Test
+    fun serverVerifiedPlayExpiryOverridesTheLocalCalendarEstimateForTestRenewals() {
+        val now = System.currentTimeMillis()
+        val localWeeklyEstimate = now + BillingCycle.WEEKLY.nextBillingPeriod(now) - now
+        val weeklyTestExpiry = now + 5L * 60L * 1000L
+        val yearlyTestExpiry = now + 30L * 60L * 1000L
+
+        assertEquals(
+            "The exact server expiry must override a longer local estimate for accelerated test subscriptions",
+            weeklyTestExpiry,
+            subscriptionDisplayExpiry(weeklyTestExpiry, localWeeklyEstimate)
+        )
+        assertEquals("Weekly/monthly test renewal countdown must display the API's five-minute expiry", "5 mins remaining", formatSubscriptionTimeRemaining(weeklyTestExpiry, now))
+        assertEquals("Yearly test renewal countdown must display the API's thirty-minute expiry", "30 mins remaining", formatSubscriptionTimeRemaining(yearlyTestExpiry, now))
+        assertEquals("An unlinked purchase may use its local estimate", localWeeklyEstimate, subscriptionDisplayExpiry(0L, localWeeklyEstimate))
+    }
+
+    @Test
+    fun subscriptionCountdownFormatsDaysHoursAndSubDayExpiriesConsistently() {
+        val now = Instant.parse("2026-01-01T00:00:00Z").toEpochMilli()
+        assertEquals("7 days remaining", formatSubscriptionTimeRemaining(now + 7L * 24L * 60L * 60L * 1000L, now))
+        assertEquals("6 days, 23 hrs remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L + 23L * 60L * 60L * 1000L, now))
+        assertEquals("23 hrs, 59 mins remaining", formatSubscriptionTimeRemaining(now + 23L * 60L * 60L * 1000L + 59L * 60L * 1000L, now))
+        assertEquals("4 mins remaining", formatSubscriptionTimeRemaining(now + 4L * 60L * 1000L, now))
+        assertEquals("< 1 min remaining", formatSubscriptionTimeRemaining(now + 10_000L, now))
+        assertEquals("Subscription Expired", formatSubscriptionTimeRemaining(now - 1L, now))
     }
 
     @Test
