@@ -139,6 +139,7 @@ sealed class Screen {
     object Streak : Screen() // Dedicated Study Streak & Activity Page
     object StudyTime : Screen() // Dedicated Study Time Statistics Page
     object About : Screen() // About Hyperion
+    object PrivacyPolicy : Screen() // Privacy policy and data handling
     object MTestMImport : Screen() // Dedicated MTestM Import & Review Hub
 }
 
