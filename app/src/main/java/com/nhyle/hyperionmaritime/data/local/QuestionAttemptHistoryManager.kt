@@ -13,7 +13,8 @@ import java.nio.file.StandardCopyOption
 
 data class QuestionAttemptRecord(
     val timestamp: Long,
-    val isCorrect: Boolean
+    val isCorrect: Boolean,
+    val id: String = "${timestamp}:${if (isCorrect) "correct" else "incorrect"}"
 )
 
 data class QuestionHistoryEntry(
@@ -82,7 +83,11 @@ object QuestionAttemptHistoryManager {
         val key = makeKey(track, questionId)
         val existing = currentMap[key]
 
-        val newRecord = QuestionAttemptRecord(timestamp = timestamp, isCorrect = isCorrect)
+        val newRecord = QuestionAttemptRecord(
+            timestamp = timestamp,
+            isCorrect = isCorrect,
+            id = java.util.UUID.randomUUID().toString()
+        )
         val updatedEntry = if (existing != null) {
             existing.copy(
                 allTimeCorrect = if (isCorrect) existing.allTimeCorrect + 1 else existing.allTimeCorrect,
@@ -182,7 +187,9 @@ object QuestionAttemptHistoryManager {
                 val attObj = attemptsArray.getJSONObject(i)
                 val timestamp = attObj.optLong("timestamp", 0L)
                 val isCorrect = attObj.optBoolean("isCorrect", false)
-                attemptsList.add(QuestionAttemptRecord(timestamp, isCorrect))
+                val stableId = attObj.optString("id").takeIf { it.isNotBlank() }
+                    ?: "$timestamp:${if (isCorrect) "correct" else "incorrect"}"
+                attemptsList.add(QuestionAttemptRecord(timestamp, isCorrect, stableId))
             }
 
             result[key] = QuestionHistoryEntry(
@@ -214,6 +221,7 @@ object QuestionAttemptHistoryManager {
             val attemptsArr = JSONArray()
             for (att in entry.attempts) {
                 val attObj = JSONObject()
+                attObj.put("id", att.id)
                 attObj.put("timestamp", att.timestamp)
                 attObj.put("isCorrect", att.isCorrect)
                 attemptsArr.put(attObj)
@@ -286,6 +294,45 @@ object QuestionAttemptHistoryManager {
                     it.delete()
                 }
             }
+        }
+    }
+
+
+    /**
+     * Merge question-attempt telemetry imported from another signed-in device.
+     * Attempt IDs make repeated syncs idempotent; historical totals are retained
+     * even when an older app version did not persist individual attempt IDs.
+     */
+    fun mergeSyncedEntries(context: Context, incoming: Map<String, QuestionHistoryEntry>) = synchronized(lock) {
+        if (incoming.isEmpty()) return@synchronized
+        val merged = loadEntriesInternal(context).toMutableMap()
+        for ((key, remote) in incoming) {
+            val local = merged[key]
+            if (local == null) {
+                merged[key] = remote
+                continue
+            }
+            val byId = LinkedHashMap<String, QuestionAttemptRecord>()
+            (local.attempts + remote.attempts).forEach { attempt ->
+                val stableId = attempt.id.ifBlank {
+                    "${attempt.timestamp}:${if (attempt.isCorrect) "correct" else "incorrect"}"
+                }
+                byId[stableId] = attempt.copy(id = stableId)
+            }
+            val attempts = byId.values.sortedBy { it.timestamp }
+            val correctFromAttempts = attempts.count { it.isCorrect }
+            val incorrectFromAttempts = attempts.size - correctFromAttempts
+            merged[key] = QuestionHistoryEntry(
+                questionId = local.questionId,
+                track = local.track,
+                allTimeCorrect = maxOf(local.allTimeCorrect, remote.allTimeCorrect, correctFromAttempts),
+                allTimeIncorrect = maxOf(local.allTimeIncorrect, remote.allTimeIncorrect, incorrectFromAttempts),
+                attempts = attempts
+            )
+        }
+        cachedEntries = merged
+        if (!saveEntriesInternal(context, merged)) {
+            Log.e(TAG, "Could not persist merged cross-device question-attempt history.")
         }
     }
 
