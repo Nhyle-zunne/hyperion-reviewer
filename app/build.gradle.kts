@@ -8,6 +8,12 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+googleServices {
+  // This project can be run locally without Firebase features/configuration.
+  // Add a valid app/google-services.json only when a Firebase-backed feature is enabled.
+  missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN
+}
+
 val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID").orNull
   ?: System.getenv("HYPERION_GOOGLE_WEB_CLIENT_ID")
   ?: ""
