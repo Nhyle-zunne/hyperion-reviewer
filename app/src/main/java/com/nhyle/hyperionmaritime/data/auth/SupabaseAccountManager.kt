@@ -9,10 +9,8 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.NoCredentialException
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.nhyle.hyperionmaritime.BuildConfig
@@ -91,47 +89,23 @@ object SupabaseAccountManager {
             }
 
             val rawNonce = randomNonce()
-            val option = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(webClientId)
+
+            // This screen exposes a persistent "Continue with Google" button, so use
+            // Google's explicit button flow directly. The dismissible Credential Manager
+            // bottom sheet is a separate optional UI and should not be auto-retried when
+            // users dismiss it.
+            val explicitSignInOption = GetSignInWithGoogleOption.Builder(webClientId)
                 .setNonce(sha256Hex(rawNonce))
                 .build()
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(option)
+            val explicitSignInRequest = GetCredentialRequest.Builder()
+                .addCredentialOption(explicitSignInOption)
                 .build()
 
             val credentialManager = CredentialManager.create(activity)
-
-            // Google recommends a separate explicit button flow when the Credential
-            // Manager bottom sheet is dismissed, no account is available to that flow,
-            // or the device account needs reauthentication. A cancellation from this
-            // first chooser must therefore not end the user's sign-in attempt.
-            suspend fun requestExplicitGoogleSignIn() =
-                credentialManager.getCredential(
-                    context = activity,
-                    request = GetCredentialRequest.Builder()
-                        .addCredentialOption(
-                            GetSignInWithGoogleOption.Builder(webClientId)
-                                .setNonce(sha256Hex(rawNonce))
-                                .build()
-                        )
-                        .build()
-                )
-
-            val credentialResponse = try {
-                credentialManager.getCredential(
-                    context = activity,
-                    request = request
-                )
-            } catch (_: NoCredentialException) {
-                requestExplicitGoogleSignIn()
-            } catch (_: GetCredentialCancellationException) {
-                _state.value = _state.value.copy(
-                    isLoading = true,
-                    message = "Opening Google sign-in…"
-                )
-                requestExplicitGoogleSignIn()
-            }
+            val credentialResponse = credentialManager.getCredential(
+                context = activity,
+                request = explicitSignInRequest
+            )
             val credential = credentialResponse.credential as? CustomCredential
                 ?: throw IllegalStateException("Google sign-in did not return a Google ID token.")
             if (credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
