@@ -41,7 +41,8 @@ data class SupabaseAccountState(
     val message: String? = null,
     val activeWebsiteLicenses: Int = 0,
     val activePlaySubscriptionsLinked: Int = 0,
-    val isDeveloperAdminAccess: Boolean = false
+    val isDeveloperAdminAccess: Boolean = false,
+    val isAccountDeleted: Boolean = false
 )
 
 private data class SupabaseSession(
@@ -209,6 +210,56 @@ object SupabaseAccountManager {
         }
         LicenseManager.clearAccountEntitlements(context.applicationContext)
         _state.value = SupabaseAccountState(message = "Signed out. Google Play purchases remain available.")
+    }
+
+    /**
+     * Permanently deletes the authenticated Hyperion account through the same guarded
+     * Edge Function used by the website. The server checks pending payments and removes
+     * account-owned records before deleting the Auth user. Google Play billing is external
+     * to Hyperion and is intentionally not cancelled or cleared from the device.
+     */
+    suspend fun deleteAccount(context: Context) {
+        val appContext = context.applicationContext
+        _state.value = _state.value.copy(isLoading = true, message = null, isAccountDeleted = false)
+        try {
+            val saved = withContext(Dispatchers.IO) { readSession(appContext) }
+                ?: throw IllegalStateException("Your Hyperion session is missing. Sign in again before deleting your account.")
+            val session = withContext(Dispatchers.IO) { getFreshSession(appContext, saved) }
+            val responseBody = withContext(Dispatchers.IO) {
+                requestText(
+                    method = "POST",
+                    url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/delete-account",
+                    accessToken = session.accessToken,
+                    jsonBody = JSONObject().put("confirmation", "DELETE")
+                )
+            }
+            val response = JSONObject(responseBody)
+            if (!response.optBoolean("success", false)) {
+                throw IOException(
+                    response.optString("error").takeIf { it.isNotBlank() }
+                        ?: "Account deletion could not be confirmed. Please try again or contact support."
+                )
+            }
+
+            withContext(Dispatchers.IO) {
+                sessionPreferences(appContext).edit().clear().commit()
+                // Clear only Hyperion account grants. Preserve Google Play Billing's
+                // locally verified subscription cache because Play subscriptions are
+                // owned and managed separately by the user's Google Play account.
+                LicenseManager.clearAccountEntitlements(appContext)
+            }
+            _state.value = SupabaseAccountState(
+                message = "Your Hyperion account and linked account data have been deleted. Google Play subscriptions are not cancelled and may continue billing until you cancel them in Google Play.",
+                isAccountDeleted = true
+            )
+        } catch (error: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = error.message?.takeIf { it.isNotBlank() }
+                    ?: "Unable to delete your account. Please try again or contact support.",
+                isAccountDeleted = false
+            )
+        }
     }
 
     private suspend fun syncAndUpdateState(context: Context, initialSession: SupabaseSession) {
