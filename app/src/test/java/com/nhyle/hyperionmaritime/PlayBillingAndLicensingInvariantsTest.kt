@@ -20,6 +20,7 @@ import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
 import com.nhyle.hyperionmaritime.data.billing.obfuscatedHyperionAccountId
 import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
+import com.nhyle.hyperionmaritime.data.auth.isGooglePlayAccountLinkConflict
 import java.io.IOException
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
@@ -90,6 +91,24 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.clearAccountEntitlements(context)
         LicenseManager.init(context)
         LicenseManager.setAccountEntitlementPreferencesForTesting(null)
+    }
+
+    @Test
+    fun googlePlayAccountOwnershipConflictIsSeparatedFromTransientSyncErrors() {
+        assertTrue(
+            "A server HTTP 409 must be surfaced as an account ownership conflict",
+            isGooglePlayAccountLinkConflict(
+                IOException("Supabase request failed (409): This Google Play subscription is already linked to another Hyperion account.")
+            )
+        )
+        assertFalse(
+            "A temporary backend failure should remain retryable",
+            isGooglePlayAccountLinkConflict(IOException("Supabase request failed (502): Google Play verification is temporarily unavailable."))
+        )
+        assertFalse(
+            "A network timeout is not a permanent account ownership conflict",
+            isGooglePlayAccountLinkConflict(IOException("Network timeout"))
+        )
     }
 
     @Test
