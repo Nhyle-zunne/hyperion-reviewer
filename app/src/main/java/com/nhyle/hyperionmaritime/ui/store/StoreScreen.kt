@@ -1031,6 +1031,7 @@ fun StoreScreen(
             if (isAnyOffline || isAnyPlayPlan || isAnyWebsitePlan) {
                 ActiveLicenseOverviewCard(
                     selectedTrack = selectedTrack,
+                    countdownRefreshAt = expiryRefreshAt,
                     isAllAccess = hasActiveAllAccess,
                     isOic = hasActiveOic,
                     isGmdss = hasActiveGmdss,
@@ -2047,6 +2048,7 @@ private data class ActivePassSummary(
 @Composable
 private fun ActiveLicenseOverviewCard(
     selectedTrack: Track,
+    countdownRefreshAt: Long,
     isAllAccess: Boolean,
     isOic: Boolean,
     isGmdss: Boolean,
@@ -2087,6 +2089,7 @@ private fun ActiveLicenseOverviewCard(
     val now = System.currentTimeMillis()
 
     val activePasses = remember(
+        countdownRefreshAt,
         isOic, isGmdss, isEw, isDm, isEm,
         effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp,
         oicOfflineExp, gmdssOfflineExp, ewOfflineExp, dmOfflineExp, emOfflineExp,
