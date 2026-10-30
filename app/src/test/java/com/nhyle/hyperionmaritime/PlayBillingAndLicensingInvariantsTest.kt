@@ -249,7 +249,12 @@ class PlayBillingAndLicensingInvariantsTest {
 
         assertEquals("Weekly plans last exactly seven calendar days", feb7, BillingCycle.WEEKLY.nextBillingPeriod(jan31))
         assertEquals("P1M monthly plans end on the corresponding calendar date, clamped at month-end", feb28, BillingCycle.MONTHLY.nextBillingPeriod(jan31))
-        assertEquals("A month-end renewal advances from the clamped renewal date", mar28, estimateNextSubscriptionExpiry(jan31, feb28, BillingCycle.MONTHLY))
+        assertEquals("A Jan 31 subscription moves to Feb 28 and continues renewing on the 28th", mar28, estimateNextSubscriptionExpiry(jan31, feb28, BillingCycle.MONTHLY))
+        val mar31 = Instant.parse("2025-03-31T12:00:00Z").toEpochMilli()
+        val apr30 = Instant.parse("2025-04-30T12:00:00Z").toEpochMilli()
+        val may30 = Instant.parse("2025-05-30T12:00:00Z").toEpochMilli()
+        assertEquals("A Mar 31 subscription moves to Apr 30", apr30, BillingCycle.MONTHLY.nextBillingPeriod(mar31))
+        assertEquals("A Mar 31 subscription continues renewing on the 30th after April", may30, estimateNextSubscriptionExpiry(mar31, apr30, BillingCycle.MONTHLY))
         assertEquals("P1Y yearly plans respect leap-day calendar arithmetic", nextLeapYearExpiry, BillingCycle.YEARLY.nextBillingPeriod(leapDay))
     }
 
@@ -302,6 +307,9 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals("7 days remaining", formatSubscriptionTimeRemaining(now + 7L * 24L * 60L * 60L * 1000L, now))
         assertEquals("6 days, 23 hrs remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L + 23L * 60L * 60L * 1000L, now))
         assertEquals("23 hrs, 59 mins remaining", formatSubscriptionTimeRemaining(now + 23L * 60L * 60L * 1000L + 59L * 60L * 1000L, now))
+        assertEquals("1 day, 1 hr remaining", formatSubscriptionTimeRemaining(now + 25L * 60L * 60L * 1000L, now))
+        assertEquals("1 hr, 1 min remaining", formatSubscriptionTimeRemaining(now + 61L * 60L * 1000L, now))
+        assertEquals("1 min remaining", formatSubscriptionTimeRemaining(now + 60L * 1000L, now))
         assertEquals("4 mins remaining", formatSubscriptionTimeRemaining(now + 4L * 60L * 1000L, now))
         assertEquals("< 1 min remaining", formatSubscriptionTimeRemaining(now + 10_000L, now))
         assertEquals("Subscription Expired", formatSubscriptionTimeRemaining(now - 1L, now))
