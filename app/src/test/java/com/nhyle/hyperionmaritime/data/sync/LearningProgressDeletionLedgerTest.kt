@@ -56,4 +56,15 @@ class LearningProgressDeletionLedgerTest {
         assertFalse(LearningProgressDeletionLedger.isDeleted(firstMerge, "bookmarks", "Q1", 1_000L))
         assertFalse(LearningProgressDeletionLedger.isDeleted(secondMerge, "bookmarks", "Q1", 1_000L))
     }
+    @Test
+    fun conflictingMutationsAtTheSameTimestampPreferDeletion() {
+        LearningProgressDeletionLedger.record(context, "bookmarks", "Q2", deleted = true, at = 5_000L)
+        val sameTimeRestore = JSONObject()
+            .put("bookmarks", JSONObject().put("Q2", JSONObject().put("at", 5_000L).put("deleted", false)))
+
+        val merged = LearningProgressDeletionLedger.merge(context, sameTimeRestore)
+
+        assertTrue(LearningProgressDeletionLedger.isDeleted(merged, "bookmarks", "Q2", 4_000L))
+    }
+
 }
