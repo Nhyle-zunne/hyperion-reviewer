@@ -50,8 +50,10 @@ import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncWorker
 import java.util.concurrent.TimeUnit
@@ -143,6 +145,26 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * Queue a network-constrained upload after the study-time tracker has had
+     * time to persist its asynchronous background writes. This supplements
+     * sign-in synchronization and the 15-minute periodic retry.
+     */
+    private fun scheduleImmediateLearningProgressSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = OneTimeWorkRequestBuilder<LearningProgressSyncWorker>()
+            .setConstraints(constraints)
+            .setInitialDelay(3, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(applicationContext).enqueueUniqueWork(
+            "hyperion-account-learning-progress-sync-after-background",
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
+            request
+        )
+    }
+
     private fun isOnline(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val network = cm.activeNetwork ?: return false
@@ -202,6 +224,7 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         viewModel.studyTimeTracker.onAppBackground()
+        scheduleImmediateLearningProgressSync()
     }
 
     override fun onStart() {
