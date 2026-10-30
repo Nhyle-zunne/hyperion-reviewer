@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
+import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
 import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
@@ -180,6 +181,42 @@ class PlayBillingAndLicensingInvariantsTest {
         val prefs = context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("is_oic_unlocked", true).apply()
         assertTrue(vm2.isTrackUnlocked(Track.DECK_OIC_NW))
+    }
+
+    @Test
+    fun playSubscriptionCacheHasBoundedOfflineGraceAndRejectsClockRollback() {
+        val now = System.currentTimeMillis()
+        val expiry = now + 30L * 24L * 60L * 60L * 1000L
+
+        val recentlyVerified = ActivePlanInfo(
+            purchaseTimestamp = now - 60L * 24L * 60L * 60L * 1000L,
+            expiryTimestamp = expiry,
+            highWaterMarkEpoch = now - 30L * 60L * 1000L,
+            lastVerifiedAtEpoch = now - 71L * 60L * 60L * 1000L
+        )
+        assertFalse("A recent Play query should remain usable during the 72-hour at-sea grace", recentlyVerified.isExpired)
+        assertTrue(recentlyVerified.remainingTimeMs in 0L..(60L * 60L * 1000L + 1L))
+
+        val staleOfflineCache = recentlyVerified.copy(
+            lastVerifiedAtEpoch = now - 73L * 60L * 60L * 1000L,
+            highWaterMarkEpoch = now - 73L * 60L * 60L * 1000L
+        )
+        assertTrue("A Play cache older than the bounded offline grace must require verification", staleOfflineCache.isExpired)
+        assertTrue(staleOfflineCache.requiresOnlineVerification)
+
+        val rolledBackClock = recentlyVerified.copy(
+            highWaterMarkEpoch = now + 10L * 60L * 1000L,
+            lastVerifiedAtEpoch = now
+        )
+        assertTrue("A device clock rollback must not extend a cached Play subscription", rolledBackClock.isExpired)
+        assertTrue(rolledBackClock.requiresOnlineVerification)
+
+        val expiredPlan = recentlyVerified.copy(
+            expiryTimestamp = now - 1L,
+            highWaterMarkEpoch = now,
+            lastVerifiedAtEpoch = now
+        )
+        assertTrue("The cached plan period must also be expired at its recorded expiry", expiredPlan.isExpired)
     }
 
     @Test
