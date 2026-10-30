@@ -14,9 +14,13 @@ googleServices {
   missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN
 }
 
+// This is the public OAuth Web client ID used by Credential Manager to request
+// Google ID tokens for Supabase Auth. Keep it configurable for environments/projects,
+// but include the production default so AI Studio direct builds cannot silently omit it.
 val googleWebClientId = providers.gradleProperty("HYPERION_GOOGLE_WEB_CLIENT_ID").orNull
-  ?: System.getenv("HYPERION_GOOGLE_WEB_CLIENT_ID")
-  ?: ""
+  ?.takeIf { it.isNotBlank() }
+  ?: System.getenv("HYPERION_GOOGLE_WEB_CLIENT_ID")?.takeIf { it.isNotBlank() }
+  ?: "831625838811-nakuna5j6odd0qf4pc6odquvad3n4j3j.apps.googleusercontent.com"
 val escapedGoogleWebClientId = googleWebClientId.replace("\\", "\\\\").replace("\"", "\\\"")
 
 // Release artifacts must be signed only with credentials supplied outside version control.
