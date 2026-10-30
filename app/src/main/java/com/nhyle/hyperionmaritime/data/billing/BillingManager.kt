@@ -53,12 +53,20 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
      * Adds one real billing period in UTC. Monthly and yearly Play plans are calendar
      * periods (P1M/P1Y), not fixed 30/365-day durations.
      */
-    fun nextBillingPeriod(startEpochMs: Long): Long {
+    fun nextBillingPeriod(startEpochMs: Long): Long = billingPeriodAt(startEpochMs, 1)
+
+    /**
+     * Calculates each renewal from the original signup anchor. This prevents Jan 31 ->
+     * Feb 28 -> Mar 28 drift; the second monthly renewal is calculated from Jan 31 and
+     * returns to Mar 31, matching Play's anchored monthly billing cadence.
+     */
+    fun billingPeriodAt(startEpochMs: Long, periodCount: Long): Long {
+        require(periodCount >= 0L) { "periodCount must not be negative" }
         val start = Instant.ofEpochMilli(startEpochMs).atZone(ZoneOffset.UTC)
         val next = when (this) {
-            WEEKLY -> start.plusWeeks(1)
-            MONTHLY -> start.plusMonths(1)
-            YEARLY -> start.plusYears(1)
+            WEEKLY -> start.plusWeeks(periodCount)
+            MONTHLY -> start.plusMonths(periodCount)
+            YEARLY -> start.plusYears(periodCount)
         }
         return next.toInstant().toEpochMilli()
     }
@@ -110,13 +118,13 @@ internal fun estimateNextSubscriptionExpiry(
     cycle: BillingCycle
 ): Long {
     if (purchaseTimeEpochMs <= 0L) return 0L
-    var expiry = cycle.nextBillingPeriod(purchaseTimeEpochMs)
-    var periodsAdvanced = 0
-    while (expiry <= nowEpochMs && periodsAdvanced < 10_000) {
-        val next = cycle.nextBillingPeriod(expiry)
+    var periodsAdvanced = 1L
+    var expiry = cycle.billingPeriodAt(purchaseTimeEpochMs, periodsAdvanced)
+    while (expiry <= nowEpochMs && periodsAdvanced < 10_000L) {
+        periodsAdvanced++
+        val next = cycle.billingPeriodAt(purchaseTimeEpochMs, periodsAdvanced)
         if (next <= expiry) return expiry
         expiry = next
-        periodsAdvanced++
     }
     return expiry
 }
