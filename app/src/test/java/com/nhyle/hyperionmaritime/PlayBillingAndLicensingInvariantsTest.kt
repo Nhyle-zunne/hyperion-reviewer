@@ -332,6 +332,7 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals("The day counter changes at the six-full-day boundary", "6 days remaining", formatSubscriptionTimeRemaining(now + 6L * 24L * 60L * 60L * 1000L, now))
         assertEquals("The final 24 hours switch to an hour countdown", "23 hrs, 59 mins remaining", formatSubscriptionTimeRemaining(now + 23L * 60L * 60L * 1000L + 59L * 60L * 1000L, now))
         assertEquals("A day plus one hour rounds to two remaining days", "2 days remaining", formatSubscriptionTimeRemaining(now + 25L * 60L * 60L * 1000L, now))
+        assertEquals("1 hr remaining", formatSubscriptionTimeRemaining(now + 60L * 60L * 1000L, now))
         assertEquals("1 hr, 1 min remaining", formatSubscriptionTimeRemaining(now + 61L * 60L * 1000L, now))
         assertEquals("1 min remaining", formatSubscriptionTimeRemaining(now + 60L * 1000L, now))
         assertEquals("4 mins remaining", formatSubscriptionTimeRemaining(now + 4L * 60L * 1000L, now))
