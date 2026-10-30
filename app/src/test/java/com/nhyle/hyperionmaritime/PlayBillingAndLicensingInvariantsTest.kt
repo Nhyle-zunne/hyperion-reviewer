@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
+import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.collectPlayPurchasesForAccountLinking
 import com.nhyle.hyperionmaritime.data.auth.isMissingGooglePlayEntitlementsTable
@@ -181,6 +182,37 @@ class PlayBillingAndLicensingInvariantsTest {
         val prefs = context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("is_oic_unlocked", true).apply()
         assertTrue(vm2.isTrackUnlocked(Track.DECK_OIC_NW))
+    }
+
+    @Test
+    fun offlinePlaySnapshotCannotRenewVerificationLease() {
+        val now = System.currentTimeMillis()
+        val highWater = now - 10L * 60L * 1000L
+
+        assertFalse(
+            "An offline Play Store cache must not renew the server-verification lease",
+            canRefreshPlayVerification(
+                hasValidatedInternet = false,
+                nowEpochMs = now,
+                savedHighWaterMarkEpochMs = highWater
+            )
+        )
+        assertTrue(
+            "A validated internet connection and monotonic clock may refresh the lease",
+            canRefreshPlayVerification(
+                hasValidatedInternet = true,
+                nowEpochMs = now,
+                savedHighWaterMarkEpochMs = highWater
+            )
+        )
+        assertFalse(
+            "A validated network must not heal a materially rolled-back device clock",
+            canRefreshPlayVerification(
+                hasValidatedInternet = true,
+                nowEpochMs = now - 10L * 60L * 1000L,
+                savedHighWaterMarkEpochMs = now
+            )
+        )
     }
 
     @Test
