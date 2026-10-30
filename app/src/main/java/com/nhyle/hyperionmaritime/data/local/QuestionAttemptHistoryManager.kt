@@ -1,6 +1,7 @@
 package com.nhyle.hyperionmaritime.data.local
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONException
@@ -123,6 +124,23 @@ object QuestionAttemptHistoryManager {
 
         val file = getHistoryFile(context)
         if (!file.exists()) {
+            // A process can stop between moving the old file aside and promoting the
+            // newly written temp file on API 24/25. Recover the last durable backup.
+            val backup = getBackupFile(context)
+            if (backup.exists()) {
+                try {
+                    val backupContent = backup.readText()
+                    if (backupContent.isNotBlank()) {
+                        val recovered = parseJson(backupContent)
+                        backup.copyTo(file, overwrite = true)
+                        cachedEntries = recovered.toMutableMap()
+                        Log.i(TAG, "Recovered missing history file from backup.")
+                        return recovered
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to recover missing history file from backup: ${e.message}")
+                }
+            }
             val empty = mutableMapOf<String, QuestionHistoryEntry>()
             cachedEntries = empty
             return empty
@@ -203,6 +221,46 @@ object QuestionAttemptHistoryManager {
         return result
     }
 
+    private fun copyFileDurably(source: File, destination: File) {
+        source.inputStream().use { input ->
+            destination.outputStream().use { output ->
+                input.copyTo(output)
+                output.fd.sync()
+            }
+        }
+    }
+
+    /**
+     * API 24/25 replacement path. Both files live in the same app-private directory,
+     * so rename is on the same filesystem. Keep a rollback copy until the new file lands.
+     */
+    private fun replaceFileWithLegacyRename(tempFile: File, targetFile: File): Boolean {
+        val parent = targetFile.parentFile ?: return false
+        val previousFile = if (targetFile.exists()) {
+            File.createTempFile("qstats_previous_", ".json", parent).also {
+                if (!it.delete()) throw IOException("Could not prepare history rollback file")
+            }
+        } else null
+
+        if (previousFile != null && !targetFile.renameTo(previousFile)) {
+            previousFile.delete()
+            Log.e(TAG, "Could not move existing history aside; original file was preserved.")
+            return false
+        }
+
+        if (tempFile.renameTo(targetFile)) {
+            previousFile?.delete()
+            return true
+        }
+
+        val restored = previousFile?.let { !it.exists() || it.renameTo(targetFile) } ?: !targetFile.exists()
+        if (!restored) {
+            Log.e(TAG, "New history replacement failed and rollback needs recovery from the durable backup.")
+        }
+        previousFile?.takeIf { it.exists() }?.delete()
+        return false
+    }
+
     private fun saveEntriesInternal(context: Context, map: Map<String, QuestionHistoryEntry>): Boolean {
         val targetFile = getHistoryFile(context)
         val backupFile = getBackupFile(context)
@@ -242,40 +300,50 @@ object QuestionAttemptHistoryManager {
                 return false
             }
 
-            // Create backup copy of existing target file before replacing
+            // Create and sync a durable backup before replacing the current history.
             if (targetFile.exists()) {
                 try {
-                    Files.copy(targetFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        Files.copy(targetFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    } else {
+                        copyFileDurably(targetFile, backupFile)
+                    }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed creating backup file: ${e.message}")
+                    Log.e(TAG, "Backup creation failed; original history was left untouched: ${e.message}")
+                    return false
                 }
             }
 
-            // Safe atomic move
-            var replaced = false
-            try {
-                Files.move(
-                    tempFile.toPath(),
-                    targetFile.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.ATOMIC_MOVE
-                )
-                replaced = true
-            } catch (_: AtomicMoveNotSupportedException) {
+            // Use NIO atomic replacement where available. Android 7.x (API 24/25)
+            // uses same-directory renames with rollback, avoiding File.toPath() which
+            // is unavailable below API 26.
+            val replaced = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
                     Files.move(
                         tempFile.toPath(),
                         targetFile.toPath(),
-                        StandardCopyOption.REPLACE_EXISTING
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
                     )
-                    replaced = true
+                    true
+                } catch (_: AtomicMoveNotSupportedException) {
+                    try {
+                        Files.move(
+                            tempFile.toPath(),
+                            targetFile.toPath(),
+                            StandardCopyOption.REPLACE_EXISTING
+                        )
+                        true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Standard replacement failed: ${e.message}")
+                        false
+                    }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Standard replacement failed: ${e.message}")
-                    replaced = false
+                    Log.e(TAG, "Atomic replacement exception: ${e.message}")
+                    false
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Atomic replacement exception: ${e.message}")
-                replaced = false
+            } else {
+                replaceFileWithLegacyRename(tempFile, targetFile)
             }
 
             if (!replaced) {
