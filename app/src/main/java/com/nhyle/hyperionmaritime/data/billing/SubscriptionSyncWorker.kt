@@ -2,6 +2,7 @@ package com.nhyle.hyperionmaritime.data.billing
 
 import android.content.Context
 import android.util.Log
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -13,9 +14,10 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Enterprise WorkManager task that periodically checks Google Play billing status.
- * Executes queryPurchasesAsync() to enforce Strict Reset-Before-Reconcile logic,
- * ensuring any canceled, refunded, or revoked Google Play subscriptions immediately
- * revoke local entitlement state without leaving 'sticky' access.
+ * Reconciles the local Google Play Billing snapshot and, when the user has signed in,
+ * refreshes the server-authoritative Hyperion account entitlements as well. The network
+ * constraint keeps the 12-hour job from treating an offline BillingClient cache as a
+ * fresh server verification.
  */
 class SubscriptionSyncWorker(
     appContext: Context,
@@ -59,7 +61,13 @@ class SubscriptionSyncWorker(
         return try {
             val billingManager = BillingManager.getInstance(applicationContext)
             billingManager.queryPurchasesAsync()
-            Log.i(TAG, "Completed periodic Google Play subscription status sync successfully.")
+
+            // Keep account-linked website and Google Play entitlements current too.
+            // This is a no-op for users who have not opted into Hyperion sign-in.
+            // The server re-verifies every owned purchase token before issuing any grant.
+            SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(applicationContext)
+
+            Log.i(TAG, "Completed periodic Google Play and signed-in account entitlement sync.")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Error executing subscription sync worker: ${e.message}", e)
