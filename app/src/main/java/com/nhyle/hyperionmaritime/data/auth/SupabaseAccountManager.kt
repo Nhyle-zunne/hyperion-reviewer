@@ -311,23 +311,58 @@ object SupabaseAccountManager {
         }
 
         val endpoint = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/learning-progress"
-        val readResponse = JSONObject(requestText(
+        var readResponse = JSONObject(requestText(
             method = "POST",
             url = endpoint,
             accessToken = session.accessToken,
             jsonBody = JSONObject().put("action", "read")
         ))
-        val remoteSnapshot = readResponse.optJSONObject("data")
-        val mergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
+        var remoteSnapshot = readResponse.optJSONObject("data")
+        var expectedUpdatedAt: Any? = readResponse.opt("updated_at")
+            ?.takeUnless { it == JSONObject.NULL }
+        var saved = false
 
-        val writeResponse = JSONObject(requestText(
-            method = "POST",
-            url = endpoint,
-            accessToken = session.accessToken,
-            jsonBody = JSONObject().put("action", "write").put("data", mergedSnapshot)
-        ))
-        if (!writeResponse.optBoolean("ok", false)) {
-            throw IOException("The study progress service did not confirm the synchronization.")
+        // A version conflict means another signed-in device changed the snapshot
+        // since our read. Re-read and merge again rather than replacing that work.
+        for (attempt in 0 until 3) {
+            val mergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
+            val writeBody = JSONObject()
+                .put("action", "write")
+                .put("data", mergedSnapshot)
+                .put("expected_updated_at", expectedUpdatedAt ?: JSONObject.NULL)
+
+            try {
+                val writeResponse = JSONObject(requestText(
+                    method = "POST",
+                    url = endpoint,
+                    accessToken = session.accessToken,
+                    jsonBody = writeBody
+                ))
+                if (!writeResponse.optBoolean("ok", false)) {
+                    throw IOException("The study progress service did not confirm the synchronization.")
+                }
+                saved = true
+                break
+            } catch (error: IOException) {
+                val isVersionConflict = error.message.orEmpty().contains(
+                    "Supabase request failed (409):",
+                    ignoreCase = true
+                )
+                if (!isVersionConflict || attempt == 2) throw error
+
+                readResponse = JSONObject(requestText(
+                    method = "POST",
+                    url = endpoint,
+                    accessToken = session.accessToken,
+                    jsonBody = JSONObject().put("action", "read")
+                ))
+                remoteSnapshot = readResponse.optJSONObject("data")
+                expectedUpdatedAt = readResponse.opt("updated_at")
+                    ?.takeUnless { it == JSONObject.NULL }
+            }
+        }
+        if (!saved) {
+            throw IOException("Study progress changed repeatedly on another device. Your local study data is safe and will retry.")
         }
 
         // Re-read the server-sanitized snapshot before importing question-bearing records
