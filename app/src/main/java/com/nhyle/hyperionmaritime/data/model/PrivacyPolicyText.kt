@@ -5,11 +5,11 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object PrivacyPolicyText {
     const val TITLE = "PRIVACY POLICY"
-    const val LAST_UPDATED = "Effective Date: October 30, 2026 · Last Updated: October 30, 2026"
+    const val LAST_UPDATED = "Effective Date: October 31, 2026 · Last Updated: October 31, 2026"
 
     const val CONTENT = """HYPERION MARITIME REVIEWER
 PRIVACY POLICY
-Effective Date: October 30, 2026 · Last Updated: October 30, 2026
+Effective Date: October 31, 2026 · Last Updated: October 31, 2026
 
 PERSONAL INFORMATION CONTROLLER / DEVELOPER
 Hyperion Maritime
@@ -20,8 +20,8 @@ Android Application ID: com.nhyle.hyperionmaritime
 Hyperion Maritime ("Hyperion", "we", "our", or "us") provides Hyperion Maritime Reviewer through an Android application and the hyperionmaritime.org website and Progressive Web Application ("PWA"). This policy explains the personal information and device or account data processed by each platform, why it is used, the service providers involved, retention, and how you can exercise your privacy rights.
 
 1. AT A GLANCE
-• Android study records, including practice and mock-exam history, bookmarks, mistakes, study time, preferences, and saved sessions, are stored locally on the device. Android study progress is not uploaded to the website account.
-• Google sign-in on Android is optional. When you sign in, Hyperion uses your Supabase account to securely synchronize eligible license entitlements between the Android app and website/PWA. This license synchronization does not synchronize Android study history.
+• Android study records are saved locally first. When you sign in to a Hyperion account and an internet connection is available, bookmarks, mistakes/review records, study-time segments, and completed session history are automatically synchronized with the same account used by the website/PWA. Android sign-in remains optional; records that have not synchronized remain on the device.
+• Google sign-in on Android is optional. When you sign in, Hyperion uses your Supabase account to synchronize eligible license entitlements and supported study progress between the Android app and website/PWA. Study synchronization runs when a connection is available and does not prevent offline study.
 • Website/PWA users can sign in with Google. Supported website learning progress can be synchronized with the signed-in Hyperion account across supported browsers and devices.
 • Google Play subscriptions are billed and managed by Google Play. Website/PWA licenses are purchased through the website and processed through PayMongo or reviewed after a manual QR-payment submission. These are separate billing products, although eligible entitlements can be linked to the same Hyperion account when you sign in and synchronize.
 • Hyperion does not display third-party advertisements or sell personal information for advertising.
@@ -30,7 +30,7 @@ Hyperion Maritime ("Hyperion", "we", "our", or "us") provides Hyperion Maritime 
 2. INFORMATION PROCESSED
 
 2.1 ANDROID APPLICATION
-Local study information: The app stores study activity such as selected answers, practice and mock-exam progress, saved or resumable sessions, bookmarks, mistakes/review records, study-time segments, streak and history information, and app preferences in private local application storage. This information is not synchronized to your website account. Hyperion generally cannot retrieve local-only study records if you clear app storage or uninstall the app. Android system backup is disabled for the app.
+Local study information: The app stores study activity such as selected answers, practice and mock-exam progress, saved or resumable sessions, bookmarks, mistakes/review records, study-time segments, streak and history information, and app preferences in private local application storage. When you sign in to a Hyperion account, supported records (currently bookmarks, mistakes/review records, study-time segments, and completed session history) are synchronized with that account when an internet connection is available. The app continues to work offline; changes made offline are kept locally until a later synchronization. Google sign-in is optional. Records that have not synchronized remain device-local and may be lost if you clear app storage or uninstall the app. Android system backup is disabled for the app.
 
 Optional Hyperion account and sign-in: If you choose Continue with Google, Google provides an identity token that is exchanged with Supabase Auth. Hyperion and Supabase process the account email address, provider identity/user ID, account metadata made available by Google, and authentication/session information. The app stores its sign-in session in Android encrypted preferences. Hyperion does not receive your Google password.
 
@@ -53,7 +53,7 @@ PayMongo checkout: PayMongo and the selected payment method provider process the
 
 Manual QR-payment submissions: your account, name, selected product and term, amount, transaction/reference number, optional company/school and notes, proof image if submitted, submission status, and administrative review records. A manual submission does not activate a license until it has been verified and approved. If you send a payment screenshot through Facebook/Messenger or email, the relevant provider also processes that image. Avoid including unrelated personal or financial details in a screenshot.
 
-Account-linked learning progress: supported website/PWA session history and metadata, saved/resumable progress, answers and progress state, bookmarks, mistakes/review records, study-time entries, mock-exam progress, and daily check-in/streak information. The learning-progress service validates access to saved question content before it stores or returns a snapshot.
+Account-linked learning progress: supported Android and website/PWA progress, including bookmarks, mistakes/review records, completed session history and metadata, study-time entries, saved/resumable progress, answers and progress state, mock-exam progress, and daily check-in/streak information where supported by the platform. Android synchronizes its supported records after optional sign-in when online. The learning-progress service validates access to saved question content before it stores or returns a snapshot.
 
 Browser and offline storage: localStorage, IndexedDB, service-worker caches, and similar browser storage may hold sign-in state, settings, local progress, and offline application/content data. Clearing browser storage can remove local-only data or require you to sign in again.
 
@@ -84,7 +84,7 @@ Email providers: delivery and storage of messages you send to or receive from ou
 We share information with these providers only as reasonably needed for them to perform the described services. We may also disclose information when required by law or valid legal process, to investigate fraud or protect users and systems, or as part of a business transfer where permitted by law. Providers may process information under their own policies and may retain independent payment, security, or support records.
 
 6. ADVERTISING, ANALYTICS, AND TRACKING
-Hyperion does not display third-party advertisements and does not sell personal information for advertising. The Android app removes the Google advertising ID permission. The current Android source includes Firebase Remote Config for promo-code and activation-status checks and uses Google Cloud Firestore for certain activation records. The Android build does not include the Firebase Analytics SDK dependency as of October 30, 2026, and the current app code does not intentionally collect Firebase Analytics events. Website browser storage and service-worker caches support authentication, settings, progress, offline use, and security; hosting and security providers may process technical request logs.
+Hyperion does not display third-party advertisements and does not sell personal information for advertising. The Android app removes the Google advertising ID permission. The current Android source includes Firebase Remote Config for promo-code and activation-status checks and uses Google Cloud Firestore for certain activation records. The Android build does not include the Firebase Analytics SDK dependency as of October 31, 2026, and the current app code does not intentionally collect Firebase Analytics events. Website browser storage and service-worker caches support authentication, settings, progress, offline use, and security; hosting and security providers may process technical request logs.
 
 7. DATA RETENTION
 Android study data remains in the app's private storage until you clear app storage or uninstall the app. Hyperion does not keep a cloud copy of Android-only study progress. Android sign-in sessions and cached account entitlements remain in encrypted app storage while needed for sign-in and license recognition. Signing out clears the Hyperion account session and linked entitlement cache. Google Play's purchase records remain subject to Google's retention practices.
