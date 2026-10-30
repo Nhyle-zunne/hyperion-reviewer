@@ -228,6 +228,13 @@ object LicenseManager {
     private val _isHyperionProUnlockedFlow = MutableStateFlow(false)
     val isHyperionProUnlockedFlow: StateFlow<Boolean> = _isHyperionProUnlockedFlow.asStateFlow()
 
+    // Developer access is granted only after the signed-in user is approved by the
+    // same server-side check-admin endpoint used by the website. Keep this process-local
+    // and bind it to the current Supabase user so it cannot transfer between accounts.
+    private val _isDeveloperAdminAccessFlow = MutableStateFlow(false)
+    val isDeveloperAdminAccessFlow: StateFlow<Boolean> = _isDeveloperAdminAccessFlow.asStateFlow()
+    @Volatile private var verifiedDeveloperAdminUserId: String? = null
+
     private val SALT_PART_A = byteArrayOf(0x12, 0x03, 0x0A, 0x1F, 0x08)
     private val SALT_PART_B = byteArrayOf(0x13, 0x15, 0x14, 0x05)
     private val SALT_PART_C = byteArrayOf(0x17, 0x1B, 0x08, 0x13, 0x0E, 0x13, 0x17, 0x1F, 0x05)
@@ -388,13 +395,43 @@ object LicenseManager {
     }
 
     fun setCurrentAccountUserId(context: Context, userId: String?) {
+        val nextUserId = userId.orEmpty()
+        if (verifiedDeveloperAdminUserId != null && verifiedDeveloperAdminUserId != nextUserId) {
+            verifiedDeveloperAdminUserId = null
+            _isDeveloperAdminAccessFlow.value = false
+        }
         accountEntitlementPreferences(context)?.edit()
-            ?.putString(ACCOUNT_CURRENT_USER_ID_KEY, userId.orEmpty())
+            ?.putString(ACCOUNT_CURRENT_USER_ID_KEY, nextUserId)
             ?.apply()
         refreshAccountEntitlementFlows(context)
     }
 
+    /**
+     * Apply developer access only after the server's ADMIN_EMAILS allowlist check
+     * has returned isAdmin=true for this exact authenticated Supabase user.
+     * The grant is process-local and is discarded on sign-out, account switch, or app restart.
+     */
+    fun setVerifiedDeveloperAdminAccess(context: Context, userId: String, enabled: Boolean) {
+        val currentUserId = accountEntitlementPreferences(context)
+            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        val verifiedUserId = userId.takeIf {
+            enabled && it.isNotBlank() && it == currentUserId
+        }
+        verifiedDeveloperAdminUserId = verifiedUserId
+        _isDeveloperAdminAccessFlow.value = verifiedUserId != null
+        refreshAccountEntitlementFlows(context)
+    }
+
+    fun isDeveloperAdminAccessActive(context: Context): Boolean {
+        val verifiedUserId = verifiedDeveloperAdminUserId ?: return false
+        val currentUserId = accountEntitlementPreferences(context)
+            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        return verifiedUserId == currentUserId
+    }
+
     fun clearAccountEntitlements(context: Context) {
+        verifiedDeveloperAdminUserId = null
+        _isDeveloperAdminAccessFlow.value = false
         accountEntitlementPreferences(context)?.edit()?.clear()?.apply()
         refreshAccountEntitlementFlows(context)
     }
@@ -412,6 +449,7 @@ object LicenseManager {
         _isEngineMgtProUnlockedFlow.value = engineMgt
         _isHyperionProUnlockedFlow.value = isHyperionProUnlocked(context) || (oic && gmdss && ew && deckMgt && engineMgt)
         _isProActivatedFlow.value = oic || gmdss || ew || deckMgt || engineMgt
+        _isDeveloperAdminAccessFlow.value = isDeveloperAdminAccessActive(context)
     }
     /**
      * Purges old permanent clearance / lifetime licenses that were issued under previous system.
@@ -1132,6 +1170,7 @@ object LicenseManager {
     }
 
     fun isOicNwProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.oicNwUnlocked || billing.entitlements.value.allAccessUnlocked) {
@@ -1142,6 +1181,7 @@ object LicenseManager {
     }
 
     fun isGmdssProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.gmdssUnlocked || billing.entitlements.value.allAccessUnlocked) {
@@ -1152,6 +1192,7 @@ object LicenseManager {
     }
 
     fun isEngineOicEwProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.engineOicEwUnlocked || billing.entitlements.value.allAccessUnlocked) {
@@ -1162,6 +1203,7 @@ object LicenseManager {
     }
 
     fun isDeckMgtProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.deckMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
@@ -1172,6 +1214,7 @@ object LicenseManager {
     }
 
     fun isEngineMgtProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.engineMgtUnlocked || billing.entitlements.value.allAccessUnlocked) {
@@ -1182,6 +1225,7 @@ object LicenseManager {
     }
 
     fun isHyperionProUnlocked(context: Context): Boolean {
+        if (isDeveloperAdminAccessActive(context)) return true
         try {
             val billing = com.nhyle.hyperionmaritime.data.billing.BillingManager.getInstance(context)
             if (billing.entitlements.value.allAccessUnlocked || (billing.entitlements.value.oicNwUnlocked && billing.entitlements.value.gmdssUnlocked && billing.entitlements.value.engineOicEwUnlocked && billing.entitlements.value.deckMgtUnlocked && billing.entitlements.value.engineMgtUnlocked)) {
