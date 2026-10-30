@@ -195,15 +195,29 @@ object LearningProgressSyncAdapter {
 
         val roomMistakes = database.mistakeDao().getAllMistakesOnce().associateBy { it.questionId }
         val localVault = MistakesVaultManager.loadEntries(context)
-        val deletedMistakes = localVault.filter { entry ->
-            LearningProgressDeletionLedger.isDeleted(
-                ledger, "vault", entry.questionId, roomMistakes[entry.questionId]?.lastFailedTimestamp ?: 1L
-            )
+        // Room and the legacy vault file can temporarily diverge during migrations or
+        // interrupted writes. Apply tombstones to the union so an orphaned Room row
+        // cannot keep a deleted mistake visible after the next account sync.
+        val deletedMistakeIds = LinkedHashSet<String>()
+        roomMistakes.values.forEach { mistake ->
+            if (LearningProgressDeletionLedger.isDeleted(
+                    ledger, "vault", mistake.questionId, mistake.lastFailedTimestamp
+                )
+            ) {
+                deletedMistakeIds.add(mistake.questionId)
+            }
         }
-        deletedMistakes.forEach { database.mistakeDao().removeMistake(it.questionId) }
-        if (deletedMistakes.isNotEmpty()) {
-            val deletedIds = deletedMistakes.map { it.questionId }.toSet()
-            MistakesVaultManager.saveEntries(context, localVault.filterNot { it.questionId in deletedIds })
+        localVault.forEach { entry ->
+            if (LearningProgressDeletionLedger.isDeleted(
+                    ledger, "vault", entry.questionId, roomMistakes[entry.questionId]?.lastFailedTimestamp ?: 1L
+                )
+            ) {
+                deletedMistakeIds.add(entry.questionId)
+            }
+        }
+        deletedMistakeIds.forEach { database.mistakeDao().removeMistake(it) }
+        if (deletedMistakeIds.isNotEmpty()) {
+            MistakesVaultManager.saveEntries(context, localVault.filterNot { it.questionId in deletedMistakeIds })
         }
     }
 
