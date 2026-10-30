@@ -147,7 +147,7 @@ sealed class Screen {
 class ReviewerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = HyperionDatabase.getInstance(application)
-    private val repository = ReviewerRepository(database)
+    private val repository = ReviewerRepository(database, application)
     private val prefs = application.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
 
     private val _marinaExamTargetMillis = MutableStateFlow(prefs.getLong("marina_exam_target_millis", 0L))
