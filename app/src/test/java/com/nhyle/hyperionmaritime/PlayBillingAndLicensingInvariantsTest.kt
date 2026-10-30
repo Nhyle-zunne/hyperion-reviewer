@@ -11,6 +11,7 @@ import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.matchesPlayOffer
 import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
 import com.nhyle.hyperionmaritime.data.billing.resolveRequestedBillingCycle
+import com.nhyle.hyperionmaritime.data.billing.resolvePurchasedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import java.time.Instant
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
@@ -246,6 +247,50 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals(BillingCycle.MONTHLY, resolveRequestedBillingCycle(BillingCycle.MONTHLY))
         assertEquals(BillingCycle.YEARLY, resolveRequestedBillingCycle(BillingCycle.YEARLY))
         assertEquals("Only legacy purchases without saved cycle metadata use the monthly fallback", BillingCycle.MONTHLY, resolveRequestedBillingCycle(null))
+    }
+
+    @Test
+    fun cancelledOrUnfinishedCheckoutCannotOverwriteTheActiveSubscriptionCycle() {
+        assertEquals(
+            "An unchanged Play purchase retains its active monthly cycle after a yearly checkout is cancelled",
+            BillingCycle.MONTHLY,
+            resolvePurchasedBillingCycle(
+                activeCycle = BillingCycle.MONTHLY,
+                pendingCycle = BillingCycle.YEARLY,
+                previousPurchaseTimeEpochMs = 1_000L,
+                currentPurchaseTimeEpochMs = 1_000L
+            )
+        )
+        assertEquals(
+            "A genuinely newer Play purchase commits the newly selected yearly cycle",
+            BillingCycle.YEARLY,
+            resolvePurchasedBillingCycle(
+                activeCycle = BillingCycle.MONTHLY,
+                pendingCycle = BillingCycle.YEARLY,
+                previousPurchaseTimeEpochMs = 1_000L,
+                currentPurchaseTimeEpochMs = 2_000L
+            )
+        )
+        assertEquals(
+            "A first weekly purchase can commit its selected cycle when no prior plan exists",
+            BillingCycle.WEEKLY,
+            resolvePurchasedBillingCycle(
+                activeCycle = null,
+                pendingCycle = BillingCycle.WEEKLY,
+                previousPurchaseTimeEpochMs = 0L,
+                currentPurchaseTimeEpochMs = 2_000L
+            )
+        )
+        assertEquals(
+            "A missing Play purchase timestamp must not let an unconfirmed choice replace an existing plan",
+            BillingCycle.MONTHLY,
+            resolvePurchasedBillingCycle(
+                activeCycle = BillingCycle.MONTHLY,
+                pendingCycle = BillingCycle.WEEKLY,
+                previousPurchaseTimeEpochMs = 1_000L,
+                currentPurchaseTimeEpochMs = 0L
+            )
+        )
     }
 
     @Test
