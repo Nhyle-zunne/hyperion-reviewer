@@ -48,6 +48,13 @@ import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.UpdateAvailability
 import androidx.lifecycle.lifecycleScope
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncWorker
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -100,6 +107,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MaritimeQuestionBank.init(applicationContext)
         LicenseManager.init(applicationContext)
+        scheduleLearningProgressSync()
         lifecycleScope.launch {
             SupabaseAccountManager.restoreSessionAndSync(applicationContext)
         }
@@ -119,6 +127,20 @@ class MainActivity : ComponentActivity() {
                 HyperionApp(viewModel = viewModel)
             }
         }
+    }
+
+    private fun scheduleLearningProgressSync() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = PeriodicWorkRequestBuilder<LearningProgressSyncWorker>(
+            15, TimeUnit.MINUTES
+        ).setConstraints(constraints).build()
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            "hyperion-account-learning-progress-sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     private fun isOnline(context: Context): Boolean {
