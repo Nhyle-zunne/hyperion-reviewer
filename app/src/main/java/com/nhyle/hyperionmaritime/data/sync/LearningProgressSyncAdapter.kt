@@ -8,6 +8,7 @@ import com.nhyle.hyperionmaritime.data.local.MistakeEntity
 import com.nhyle.hyperionmaritime.data.local.MistakeEntry
 import com.nhyle.hyperionmaritime.data.local.MistakesVaultManager
 import com.nhyle.hyperionmaritime.data.local.QuestionAttemptHistoryManager
+import com.nhyle.hyperionmaritime.data.local.SessionJsonHelper
 import com.nhyle.hyperionmaritime.data.local.QuestionAttemptRecord
 import com.nhyle.hyperionmaritime.data.local.QuestionHistoryEntry
 import com.nhyle.hyperionmaritime.data.model.Difficulty
@@ -167,6 +168,11 @@ object LearningProgressSyncAdapter {
             }
             val duration = segments[record.id].orEmpty().sumOf { it.durationMs }.coerceAtLeast(0L)
             val finishedAt = record.timestamp.coerceAtLeast(0L)
+            val answeredCount = if (record.answersJson.isNotBlank()) {
+                SessionJsonHelper.deserializeAnswers(record.answersJson).values.count { it.selectedIndex != null }
+            } else {
+                record.totalQuestions
+            }.coerceIn(0, record.totalQuestions.coerceAtLeast(0))
             entries.put(JSONObject()
                 .put("id", record.id)
                 .put("mode", mode)
@@ -175,7 +181,7 @@ object LearningProgressSyncAdapter {
                 .put("part", record.part?.toIntOrNull() ?: JSONObject.NULL)
                 .put("correct", record.correctCount)
                 .put("total", record.totalQuestions)
-                .put("answered", record.totalQuestions)
+                .put("answered", answeredCount)
                 .put("percent", record.percentage)
                 .put("durationMs", duration)
                 .put("startedAt", (finishedAt - duration).coerceAtLeast(0L))
