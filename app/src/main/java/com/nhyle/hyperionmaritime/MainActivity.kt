@@ -350,6 +350,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
+                    is Screen.PrivacyPolicy -> PrivacyPolicyScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
                     is Screen.MTestMImport -> MTestMImportScreen(
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
