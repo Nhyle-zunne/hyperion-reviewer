@@ -62,6 +62,28 @@ private data class SupabaseSession(
 internal fun isGooglePlayAccountLinkConflict(error: Throwable): Boolean =
     error is IOException && error.message.orEmpty().contains("Supabase request failed (409):", ignoreCase = true)
 
+private val learningProgressOwnerLock = Any()
+
+/**
+ * Durably claims this device's offline study data for one Hyperion account before
+ * any cloud read/write begins. A synchronous commit prevents process death from
+ * losing the ownership marker after private progress has already been uploaded.
+ */
+internal fun claimLearningProgressOwner(
+    preferences: SharedPreferences,
+    userId: String
+): Boolean {
+    if (userId.isBlank()) return false
+    return synchronized(learningProgressOwnerLock) {
+        val currentOwner = preferences.getString("owner_user_id", null)
+        when {
+            currentOwner == userId -> true
+            !currentOwner.isNullOrBlank() -> false
+            else -> preferences.edit().putString("owner_user_id", userId).commit()
+        }
+    }
+}
+
 internal fun isMissingGooglePlayEntitlementsTable(error: Throwable): Boolean {
     if (error !is IOException) return false
     val message = error.message.orEmpty()
@@ -303,10 +325,9 @@ object SupabaseAccountManager {
 
     private suspend fun syncLearningProgressNow(context: Context, session: SupabaseSession): String {
         val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
-        val previousOwner = prefs.getString("owner_user_id", null)
-        if (!previousOwner.isNullOrBlank() && previousOwner != session.userId) {
+        if (!claimLearningProgressOwner(prefs, session.userId)) {
             throw IOException(
-                "Study progress sync is paused because this device's local study data is linked to another Hyperion account. Sign in with that original account to keep the data private."
+                "Study progress sync is paused because this device's local study data is linked to another Hyperion account, or its ownership marker could not be saved. Sign in with the original account to keep the data private."
             )
         }
 
@@ -374,7 +395,6 @@ object SupabaseAccountManager {
             jsonBody = JSONObject().put("action", "read")
         ))
         LearningProgressSyncAdapter.applyCloudSnapshot(context, verifiedResponse.optJSONObject("data"))
-        prefs.edit().putString("owner_user_id", session.userId).apply()
         return "Study progress synchronized across your signed-in devices."
     }
 
