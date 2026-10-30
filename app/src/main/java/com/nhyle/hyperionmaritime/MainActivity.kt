@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
+import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.DailyCheckInDialog
 import com.nhyle.hyperionmaritime.ui.components.ResultsLoadingDialog
@@ -155,6 +156,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        BillingManager.getInstance(applicationContext).queryPurchasesOnResume()
         if (::appUpdateManager.isInitialized && isOnline(this)) {
             appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
                 if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
