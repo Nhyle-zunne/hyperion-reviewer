@@ -543,16 +543,6 @@ fun HyperionDrawerContent(
                         )
 
                         DrawerNavRow(
-                            label = "PRIVACY POLICY",
-                            icon = Icons.Default.Info,
-                            isSelected = currentScreen is Screen.PrivacyPolicy,
-                            onClick = {
-                                onCloseDrawer()
-                                viewModel.navigateTo(Screen.PrivacyPolicy)
-                            }
-                        )
-
-                        DrawerNavRow(
                             label = "ABOUT HYPERION",
                             icon = Icons.Default.Info,
                             isSelected = currentScreen is Screen.About,
