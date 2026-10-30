@@ -4,19 +4,26 @@ The Android app uses optional native Google sign-in with the existing Hyperion S
 
 ## One-time Google OAuth setup
 
-1. In Supabase Dashboard, open Authentication → Sign In / Providers → Google and note the existing Web OAuth client ID. Do not replace the existing website OAuth client.
-2. In the same Google Cloud project, create Android OAuth clients for every signing certificate that must be supported. Use the exact package name com.nhyle.hyperionmaritime and the SHA-1 values listed below.
-3. Configure the Supabase Google provider Client IDs field with the Web client ID first, followed by the Android client IDs, comma-separated. Keep the existing Google client secret unchanged. Supabase documents this multi-client format and requires the Web client ID first.
-4. Set HYPERION_GOOGLE_WEB_CLIENT_ID in the Android Gradle build to the Web OAuth client ID (the first client ID above), not an Android client ID and not the client secret.
-5. Rebuild the Android app and test Google sign-in on a physical Android device.
+The Google OAuth clients have been created in the same Google Cloud project (project number 831625838811). All Android clients use package name com.nhyle.hyperionmaritime.
+
+| Purpose | OAuth client ID |
+|---|---|
+| Supabase / native sign-in Web client (primary; must be first in Supabase's list) | 831625838811-nakuna5j6odd0qf4pc6odquvad3n4j3j.apps.googleusercontent.com |
+| Existing additional Supabase Google client (preserve) | 831625838811-6gdqdssjqn1pknnc3qj6kaj92rjkp4h7.apps.googleusercontent.com |
+| AI Studio direct-install debug Android client | 831625838811-ucrc7l8gvaee9ll1d529c2jrcj5ij4r6.apps.googleusercontent.com |
+| Google Play App Signing Android client | 831625838811-sq5mrfg4g2gt8nv0g6mb2lf5dfge7d41.apps.googleusercontent.com |
+
+1. In Supabase Dashboard, Authentication → Sign In / Providers → Google, keep the existing Google Client Secret unchanged. The Client IDs field must contain all four IDs above, comma-separated, with the Web client ID (the first row) first. Preserve the existing second ID; append the two Android client IDs if they are not already listed.
+2. The first ID above is the Web client ID. It is the ID supplied to Credential Manager in the Android app. Do not use either Android client ID as the app's Web client ID.
+3. The Android debug client and Play client must remain separate because the certificates differ. Do not use the Play upload-key certificate in place of the Play App Signing certificate.
+4. Save the Supabase Google provider settings if you changed its Client IDs list, then rebuild/install the Android app on a physical device.
+
+Supabase's documented configuration for multiple platform OAuth clients is a comma-separated Client IDs list with the Web client ID first. The same Web client ID is used in the Android app to request Google ID tokens.
 
 The Web client ID is a public identifier intended to be included in the native application. The OAuth client secret must never be embedded in the Android app, committed to source control, or pasted into AI Studio prompts.
 
-For a local Gradle build, place this property in the developer's user-level ~/.gradle/gradle.properties file:
+The official Android Gradle configuration now defaults HYPERION_GOOGLE_WEB_CLIENT_ID to the Web client ID above, while still allowing an explicit Gradle property or environment variable to override it. AI Studio builds synced from this repository therefore do not need a separate local Gradle property for this production client ID. Do not add the client secret to the repository.
 
-    HYPERION_GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
-
-For CI, set HYPERION_GOOGLE_WEB_CLIENT_ID as an Actions secret/environment value and expose it to Gradle as ORG_GRADLE_PROJECT_HYPERION_GOOGLE_WEB_CLIENT_ID.
 
 ## Verified Hyperion signing fingerprints
 
