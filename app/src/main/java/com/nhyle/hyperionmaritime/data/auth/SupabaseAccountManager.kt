@@ -9,9 +9,11 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.nhyle.hyperionmaritime.BuildConfig
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
@@ -97,10 +99,28 @@ object SupabaseAccountManager {
                 .addCredentialOption(option)
                 .build()
 
-            val credentialResponse = CredentialManager.create(activity).getCredential(
-                context = activity,
-                request = request
-            )
+            val credentialManager = CredentialManager.create(activity)
+            val credentialResponse = try {
+                credentialManager.getCredential(
+                    context = activity,
+                    request = request
+                )
+            } catch (_: NoCredentialException) {
+                // The account-picker flow can return no credentials when the device has
+                // no previously available Google credential (for example, no eligible
+                // account, account reauthentication required, or sign-in prompts disabled).
+                // Fall back to Google's explicit Sign in with Google button flow.
+                val explicitSignInOption = GetSignInWithGoogleOption.Builder(webClientId)
+                    .setNonce(sha256Hex(rawNonce))
+                    .build()
+                val explicitSignInRequest = GetCredentialRequest.Builder()
+                    .addCredentialOption(explicitSignInOption)
+                    .build()
+                credentialManager.getCredential(
+                    context = activity,
+                    request = explicitSignInRequest
+                )
+            }
             val credential = credentialResponse.credential as? CustomCredential
                 ?: throw IllegalStateException("Google sign-in did not return a Google ID token.")
             if (credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
