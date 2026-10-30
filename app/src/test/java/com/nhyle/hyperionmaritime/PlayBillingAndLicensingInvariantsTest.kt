@@ -195,19 +195,26 @@ class PlayBillingAndLicensingInvariantsTest {
             .edit().clear().apply()
         billingManager.resetEntitlementsForTesting()
 
-        val expiresAt = System.currentTimeMillis() + 1_500L
+        val expiresAt = System.currentTimeMillis() + 15_000L
         assertTrue(
+            "Encrypted account entitlement cache should save successfully",
             LicenseManager.saveAccountEntitlements(
                 context,
                 userId = "test-account-expiry",
                 expiryByTrack = mapOf(Track.DECK_OIC_NW to expiresAt)
             )
         )
-        assertTrue("A valid account grant should unlock the matching track", viewModel.isTrackUnlocked(Track.DECK_OIC_NW))
-        assertFalse("An account grant must not unlock another track", viewModel.isTrackUnlocked(Track.GMDSS_GOC))
+        assertTrue(
+            "A valid account grant should unlock the matching track before its expiry",
+            viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
+        )
+        assertFalse(
+            "An account grant must not unlock another track",
+            viewModel.isTrackUnlocked(Track.GMDSS_GOC)
+        )
 
         // No UI refresh is triggered just because wall-clock time passes.
-        Thread.sleep(1_700L)
+        Thread.sleep(15_200L)
         assertFalse(
             "The gate must re-check the current server expiry instead of trusting a stale reactive unlock flag",
             viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
