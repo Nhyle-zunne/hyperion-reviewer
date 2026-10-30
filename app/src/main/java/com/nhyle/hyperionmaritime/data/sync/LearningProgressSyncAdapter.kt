@@ -71,7 +71,7 @@ object LearningProgressSyncAdapter {
         val questionIndex = loadQuestionIndex(database).toMutableMap()
         val bookmarkQuestions = questionItems(storage, BOOKMARKS_KEY, questionIndex)
         if (bookmarkQuestions.isNotEmpty()) {
-            database.questionDao().insertAll(bookmarkQuestions.map { it.toEntity() })
+            database.questionDao().insertAll(bookmarkQuestions.mapNotNull { it.toQuestion()?.toEntity() })
             val bookmarks = questionItems(storage, BOOKMARKS_KEY, questionIndex).mapNotNull { item ->
                 val savedAt = item.optLong("savedAt", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
                 item.optString("id").takeIf { it.isNotBlank() }?.let { BookmarkEntity(it, savedAt) }
@@ -79,7 +79,7 @@ object LearningProgressSyncAdapter {
             if (bookmarks.isNotEmpty()) database.bookmarkDao().insertBookmarks(bookmarks)
         }
 
-        applyCloudMistakes(context, database, questionIndex, storage)
+        applyCloudMistakes(context, database, storage)
         applyCloudStudySegments(database, storage)
         applyCloudHistory(database, storage)
     }
@@ -112,7 +112,6 @@ object LearningProgressSyncAdapter {
         val result = JSONArray()
         MistakesVaultManager.loadEntries(context).forEach { entry ->
             val question = entry.question
-            val track = question.track.name
             val local = roomMistakes[entry.questionId]
             val lastWrong = local?.lastFailedTimestamp
                 ?: MistakesVaultManager.getVaultFile(context).lastModified().takeIf { it > 0L }
@@ -239,12 +238,10 @@ object LearningProgressSyncAdapter {
     private suspend fun applyCloudMistakes(
         context: Context,
         database: HyperionDatabase,
-        questionIndex: Map<String, Question>,
         storage: JSONObject
     ) {
         val current = MistakesVaultManager.loadEntries(context).associateBy { it.questionId }.toMutableMap()
         val roomRows = database.mistakeDao().getAllMistakesOnce().associateBy { it.questionId }.toMutableMap()
-        val items = JSONArray()
         val wrapper = runCatching { JSONObject(storage.optString(VAULT_KEY, "{}")) }.getOrNull()
         val remoteItems = wrapper?.optJSONObject("state")?.optJSONArray("items") ?: JSONArray()
 
