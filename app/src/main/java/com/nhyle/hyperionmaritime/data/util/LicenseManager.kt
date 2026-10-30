@@ -175,6 +175,9 @@ object LicenseManager {
 
     private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
     private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
+    // Persist a high-water mark so changing the device clock backwards cannot extend
+    // the 72-hour offline lease after the app has observed a later time.
+    private const val ACCOUNT_LAST_VERIFIED_EPOCH_KEY = "account_entitlements_last_verified_epoch"
     private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
     private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
     private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
@@ -311,38 +314,58 @@ object LicenseManager {
         ownerUserId: String?,
         currentUserId: String?,
         syncedAtEpochMs: Long,
+        lastVerifiedEpochMs: Long,
         expiryEpochMs: Long,
         nowEpochMs: Long
     ): Boolean {
         if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
-        if (
-            syncedAtEpochMs <= 0L ||
-            nowEpochMs < syncedAtEpochMs - 5L * 60L * 1000L ||
-            nowEpochMs - syncedAtEpochMs > ACCOUNT_OFFLINE_GRACE_MS
-        ) return false
-        return expiryEpochMs > nowEpochMs
+        if (syncedAtEpochMs <= 0L) return false
+
+        // Older installs do not have a high-water mark yet. Treat their last verified
+        // time as the original successful sync time, preserving the existing 72-hour lease.
+        val highWaterMark = maxOf(syncedAtEpochMs, lastVerifiedEpochMs)
+        val clockRollbackToleranceMs = 5L * 60L * 1000L
+        if (nowEpochMs < highWaterMark - clockRollbackToleranceMs) return false
+
+        // Within the small clock-skew tolerance, never let a lower wall clock move the
+        // effective time backwards. Both the offline grace and server expiry use it.
+        val effectiveNow = maxOf(nowEpochMs, highWaterMark)
+        if (effectiveNow - syncedAtEpochMs > ACCOUNT_OFFLINE_GRACE_MS) return false
+        return expiryEpochMs > effectiveNow
     }
 
     private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
         val prefs = accountEntitlementPreferences(context) ?: return false
         val now = System.currentTimeMillis()
-        return isAccountEntitlementValid(
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+        val allowed = isAccountEntitlementValid(
             ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null),
             currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null),
-            syncedAtEpochMs = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L),
+            syncedAtEpochMs = syncedAt,
+            lastVerifiedEpochMs = lastVerified,
             expiryEpochMs = prefs.getLong(accountExpiryKey(track), 0L),
             nowEpochMs = now
         )
+
+        // Advance the persisted high-water mark at most once per minute to avoid
+        // writing SharedPreferences on every question/access-gate check.
+        if (allowed && now > lastVerified + 60L * 1000L) {
+            prefs.edit().putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, now).apply()
+        }
+        return allowed
     }
 
     /** Stores active, server-read website entitlements with a bounded offline grace period. */
     fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
         if (userId.isBlank()) return false
         val prefs = accountEntitlementPreferences(context) ?: return false
+        val syncedAt = System.currentTimeMillis()
         val editor = prefs.edit()
             .putString(ACCOUNT_OWNER_USER_ID_KEY, userId)
             .putString(ACCOUNT_CURRENT_USER_ID_KEY, userId)
-            .putLong(ACCOUNT_SYNCED_AT_KEY, System.currentTimeMillis())
+            .putLong(ACCOUNT_SYNCED_AT_KEY, syncedAt)
+            .putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
         Track.values().forEach { track ->
             editor.putLong(accountExpiryKey(track), expiryByTrack[track] ?: 0L)
         }
