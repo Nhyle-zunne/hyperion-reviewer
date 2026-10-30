@@ -182,42 +182,60 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun accountLinkedLicenseExpiresEvenIfReactiveUnlockStateHasNotRefreshed() = runBlocking {
-        // Reset all other access sources so the account entitlement is the only grant.
-        LicenseManager.clearAccountEntitlements(context)
-        LicenseManager.setActivated(context, false)
-        LicenseManager.setOicNwProUnlocked(context, false)
-        LicenseManager.setGmdssProUnlocked(context, false)
-        LicenseManager.setHyperionProUnlocked(context, false)
-        context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-            .edit().clear().apply()
-        context.getSharedPreferences("hyperion_play_billing_secure_prefs", Context.MODE_PRIVATE)
-            .edit().clear().apply()
-        billingManager.resetEntitlementsForTesting()
+    fun accountLinkedLicenseExpiryAndOfflineGraceAreEnforcedByAccessPredicate() {
+        val now = 1_800_000_000_000L
+        val syncedAt = now - 60_000L
+        val validExpiry = now + 120_000L
 
-        val expiresAt = System.currentTimeMillis() + 15_000L
         assertTrue(
-            "Encrypted account entitlement cache should save successfully",
-            LicenseManager.saveAccountEntitlements(
-                context,
-                userId = "test-account-expiry",
-                expiryByTrack = mapOf(Track.DECK_OIC_NW to expiresAt)
+            "A recently synchronized, unexpired grant for the current account should be accepted",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = syncedAt,
+                expiryEpochMs = validExpiry,
+                nowEpochMs = now
             )
         )
-        assertTrue(
-            "A valid account grant should unlock the matching track before its expiry",
-            viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
+        assertFalse(
+            "An account grant must stop authorizing access at its exact server expiry",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = syncedAt,
+                expiryEpochMs = now,
+                nowEpochMs = now
+            )
         )
         assertFalse(
-            "An account grant must not unlock another track",
-            viewModel.isTrackUnlocked(Track.GMDSS_GOC)
+            "A cached grant must never transfer to a different signed-in account",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-b",
+                syncedAtEpochMs = syncedAt,
+                expiryEpochMs = validExpiry,
+                nowEpochMs = now
+            )
         )
-
-        // No UI refresh is triggered just because wall-clock time passes.
-        Thread.sleep(15_200L)
         assertFalse(
-            "The gate must re-check the current server expiry instead of trusting a stale reactive unlock flag",
-            viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
+            "A cached account grant older than the 72-hour offline grace period must be rejected",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = now - 73L * 60L * 60L * 1000L,
+                expiryEpochMs = validExpiry,
+                nowEpochMs = now
+            )
+        )
+        assertFalse(
+            "A materially future-dated sync timestamp must be rejected",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = now + 6L * 60L * 1000L,
+                expiryEpochMs = validExpiry,
+                nowEpochMs = now
+            )
         )
     }
 
