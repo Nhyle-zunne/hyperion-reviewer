@@ -83,7 +83,7 @@ data class ActivePlanInfo(
     val isTerminalLicense: Boolean = false,
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
-    val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
+    val expiryTimestamp: Long = BillingCycle.YEARLY.expiryAfter(purchaseTimestamp),
     val highWaterMarkEpoch: Long = 0L
 ) {
     // 100% Offline-Safe: Server-authoritative; never expires locally or cuts off at sea without internet
@@ -932,7 +932,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 editor.putString("play_plan_cycle_gmdss", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_gmdss", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.expiryAfter(purchaseTime)
                     editor.putLong("play_expiry_time_gmdss", correctedExpiry)
                 }
             }
@@ -944,11 +944,39 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 editor.putString("play_plan_cycle_all_access", BillingCycle.MONTHLY.name)
                 val purchaseTime = securePrefs.getLong("play_purchase_time_all_access", 0L)
                 if (purchaseTime > 0L) {
-                    val correctedExpiry = purchaseTime + BillingCycle.MONTHLY.durationMs
+                    val correctedExpiry = BillingCycle.MONTHLY.expiryAfter(purchaseTime)
                     editor.putLong("play_expiry_time_all_access", correctedExpiry)
                 }
             }
             editor.putBoolean(migrationKey, true)
+            editor.apply()
+        }
+
+        // Recalculate legacy locally estimated expiries using calendar billing periods.
+        // This is deliberately separate from future server-verified expiry storage.
+        val calendarMigrationKey = "billing_migrated_calendar_expiry_v4"
+        if (!securePrefs.getBoolean(calendarMigrationKey, false)) {
+            val editor = securePrefs.edit()
+            val now = System.currentTimeMillis()
+            val entries = listOf(
+                Triple(KEY_OIC_NW_UNLOCKED, "play_purchase_time_oic", "play_expiry_time_oic") to "play_plan_cycle_oic",
+                Triple(KEY_GMDSS_UNLOCKED, "play_purchase_time_gmdss", "play_expiry_time_gmdss") to "play_plan_cycle_gmdss",
+                Triple(KEY_ALL_ACCESS_UNLOCKED, "play_purchase_time_all_access", "play_expiry_time_all_access") to "play_plan_cycle_all_access",
+                Triple(KEY_ENGINE_OIC_EW_UNLOCKED, "play_purchase_time_engine_ew", "play_expiry_time_engine_ew") to "play_plan_cycle_engine_ew",
+                Triple(KEY_DECK_MGT_UNLOCKED, "play_purchase_time_deck_mgt", "play_expiry_time_deck_mgt") to "play_plan_cycle_deck_mgt",
+                Triple(KEY_ENGINE_MGT_UNLOCKED, "play_purchase_time_engine_mgt", "play_expiry_time_engine_mgt") to "play_plan_cycle_engine_mgt"
+            )
+            entries.forEach { (keys, cycleKey) ->
+                val (unlockedKey, purchaseKey, expiryKey) = keys
+                val purchaseTime = securePrefs.getLong(purchaseKey, 0L)
+                if (securePrefs.getBoolean(unlockedKey, false) && purchaseTime > 0L) {
+                    val cycle = securePrefs.getString(cycleKey, null)
+                        ?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() }
+                        ?: BillingCycle.MONTHLY
+                    editor.putLong(expiryKey, cycle.nextExpiryAfter(purchaseTime, now))
+                }
+            }
+            editor.putBoolean(calendarMigrationKey, true)
             editor.apply()
         }
     }
@@ -978,22 +1006,13 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val now = System.currentTimeMillis()
         val oicPurchase = securePrefs.getLong("play_purchase_time_oic", if (purchaseTime > 0L) purchaseTime else now)
-        var oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicPurchase + oicCycle.durationMs)
-        if (oic && oicExpiry < oicPurchase + oicCycle.durationMs) {
-            oicExpiry = oicPurchase + oicCycle.durationMs
-        }
+        val oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicCycle.nextExpiryAfter(oicPurchase, now))
 
         val gmdssPurchase = securePrefs.getLong("play_purchase_time_gmdss", if (purchaseTime > 0L) purchaseTime else now)
-        var gmdssExpiry = securePrefs.getLong("play_expiry_time_gmdss", gmdssPurchase + gmdssCycle.durationMs)
-        if (gmdss && gmdssExpiry < gmdssPurchase + gmdssCycle.durationMs) {
-            gmdssExpiry = gmdssPurchase + gmdssCycle.durationMs
-        }
+        val gmdssExpiry = securePrefs.getLong("play_expiry_time_gmdss", gmdssCycle.nextExpiryAfter(gmdssPurchase, now))
 
         val allAccessPurchase = securePrefs.getLong("play_purchase_time_all_access", if (purchaseTime > 0L) purchaseTime else now)
-        var allAccessExpiry = securePrefs.getLong("play_expiry_time_all_access", allAccessPurchase + allAccessCycle.durationMs)
-        if (allAccess && allAccessExpiry < allAccessPurchase + allAccessCycle.durationMs) {
-            allAccessExpiry = allAccessPurchase + allAccessCycle.durationMs
-        }
+        val allAccessExpiry = securePrefs.getLong("play_expiry_time_all_access", allAccessCycle.nextExpiryAfter(allAccessPurchase, now))
 
         val playHighWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
 
@@ -1023,7 +1042,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val hasEw = securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
         val ewPurchase = securePrefs.getLong("play_purchase_time_engine_ew", if (purchaseTime > 0L) purchaseTime else now)
-        val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", ewPurchase + engineEwCycle.durationMs)
+        val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", engineEwCycle.nextExpiryAfter(ewPurchase, now))
         val engineEwPlan = if (hasEw) ActivePlanInfo(
             cycle = engineEwCycle,
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
@@ -1034,7 +1053,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val hasDm = securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false)
         val dmPurchase = securePrefs.getLong("play_purchase_time_deck_mgt", if (purchaseTime > 0L) purchaseTime else now)
-        val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", dmPurchase + deckMgtCycle.durationMs)
+        val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", deckMgtCycle.nextExpiryAfter(dmPurchase, now))
         val deckMgtPlan = if (hasDm) ActivePlanInfo(
             cycle = deckMgtCycle,
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
@@ -1045,7 +1064,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val hasEm = securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
         val emPurchase = securePrefs.getLong("play_purchase_time_engine_mgt", if (purchaseTime > 0L) purchaseTime else now)
-        val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", emPurchase + engineMgtCycle.durationMs)
+        val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", engineMgtCycle.nextExpiryAfter(emPurchase, now))
         val engineMgtPlan = if (hasEm) ActivePlanInfo(
             cycle = engineMgtCycle,
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
@@ -1238,8 +1257,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         lastRequestedCycles[productId] = cycle
         val now = System.currentTimeMillis()
-        val durationMs = cycle.durationMs
-        val expiryTime = now + durationMs
+        val expiryTime = cycle.nextExpiryAfter(now, now)
         val mockToken = "mock_sandbox_sub_token_${productId}_$now"
         val editor = securePrefs.edit()
 
