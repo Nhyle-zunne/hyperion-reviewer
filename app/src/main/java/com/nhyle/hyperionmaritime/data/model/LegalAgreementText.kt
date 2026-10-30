@@ -6,13 +6,13 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object LegalAgreementText {
     const val TITLE = "TERMS OF USE"
-    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: October 30, 2026"
-    const val TERMS_VERSION = "2026-10-30"
+    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: October 31, 2026"
+    const val TERMS_VERSION = "2026-10-31"
 
     const val DISCLAIMER_SUMMARY = """Hyperion Maritime Reviewer is an independent educational resource. It is not MARINA, a government service, a maritime administration, a licensing board, or an examination authority, and it is not affiliated with, endorsed by, or authorized by those bodies. It does not guarantee examination results, a Certificate of Competency, an endorsement, or employment."""
 
     const val FULL_AGREEMENT_TEXT = """TERMS OF USE
-Effective Date: October 30, 2026 · Last Updated: October 30, 2026
+Effective Date: October 30, 2026 · Last Updated: October 31, 2026
 Service / Developer: Hyperion Maritime
 Website: https://hyperionmaritime.org
 Contact: hyperionmaritimex@gmail.com
@@ -63,11 +63,13 @@ You may use Hyperion for personal, lawful study and examination preparation. You
 The Hyperion name, branding, software, interface, original explanations, and other materials owned by Hyperion are protected by applicable intellectual-property laws. Subject to these Terms and any paid or offline license, we grant you a limited, personal, revocable, non-exclusive, non-transferable right to use the relevant service for individual educational review. Rights in third-party regulations, standards, and materials remain with their respective owners.
 
 6. STUDY DATA, OFFLINE USE, AND SYNCHRONIZATION
-Android study records and preferences are stored locally on the device and are not uploaded to or merged with website learning progress. Clearing Android app storage or uninstalling the app may permanently remove local study records and offline app data.
+Android study activity is stored locally first, and Google sign-in remains optional. When you sign in to the same Hyperion account used on the website/PWA, supported Android records—bookmarks, mistakes/review records, study-time segments, completed session history, and question-level attempt history—are synchronized with that account when an internet connection is available. Changes made offline remain on the device until a later successful synchronization. The app remains usable offline and does not require sign-in for local study.
+
+Android active or resumable sessions, app preferences, and other unsupported or device-specific records are not currently part of cross-platform progress synchronization. Clearing app storage or uninstalling the app may permanently remove Android-only records and any progress that has not yet synchronized. Account deletion removes the account-linked cloud copy but does not erase Android records that remain on the device.
 
 The website/PWA uses browser storage and service-worker caches for local state and offline operation. When signed in and online, supported website learning data may be synchronized with your Hyperion account. Not every browser-local item, setting, cache, or device-specific record is synchronized or recoverable. Clearing browser storage may remove local-only data or require you to sign in again.
 
-Account license synchronization between Android and the website is separate from study-progress synchronization. It does not copy Android study history to the website or website study progress to Android.
+License synchronization and study-progress synchronization are separate services. Study-progress synchronization is limited to the record types described above; it does not transfer every Android or browser-local record, preference, active session, or offline cache between platforms.
 
 7. PRIVACY AND ACCOUNT DELETION
 Our Privacy Policy explains the personal information and device/account data processed by each platform, third-party providers, retention, and your privacy rights. Read it at https://hyperionmaritime.org/privacy-policy or from the app's Legal & Compliance menu.
