@@ -2191,7 +2191,7 @@ private fun ActiveLicenseOverviewCard(
                         pass.isWebsite && pass.isPlay -> "WEBSITE + PLAY STORE"
                         pass.isWebsite -> "WEBSITE LICENSE"
                         pass.isOffline && pass.isPlay -> "OFFLINE + PLAY STORE"
-                        pass.isOffline -> "OFFLINE LICENSE KEY"
+                        pass.isOffline -> "OFFLINE LICENSE"
                         else -> "GOOGLE PLAY STORE"
                     }
 
