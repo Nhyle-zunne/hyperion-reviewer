@@ -10,6 +10,7 @@ import com.nhyle.hyperionmaritime.data.billing.PlayProductItem
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
 import com.nhyle.hyperionmaritime.data.local.QuestionAttemptHistoryManager
 import com.nhyle.hyperionmaritime.data.model.ReviewerTrack
+import com.nhyle.hyperionmaritime.data.model.LegalAgreementText
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -79,6 +80,36 @@ class ReviewerViewModelTest {
         billingManager = BillingManager.getInstance(context)
         billingManager.resetEntitlementsForTesting()
         viewModel = ReviewerViewModel(application)
+    }
+
+    @Test
+    fun existingInstallMustAcceptTheCurrentTermsVersion() {
+        val prefs = context.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+        val originalAccepted = prefs.getBoolean("has_accepted_terms", false)
+        val originalVersion = prefs.getString("accepted_terms_version", null)
+
+        try {
+            // Older installs only have the legacy Boolean, so they must review the
+            // newly revised Terms and Privacy acknowledgement.
+            prefs.edit()
+                .putBoolean("has_accepted_terms", true)
+                .remove("accepted_terms_version")
+                .apply()
+            val legacyInstall = ReviewerViewModel(application)
+            assertFalse(legacyInstall.hasAcceptedTerms.value)
+
+            // An install that accepted this exact revision can proceed normally.
+            prefs.edit()
+                .putString("accepted_terms_version", LegalAgreementText.TERMS_VERSION)
+                .apply()
+            val currentInstall = ReviewerViewModel(application)
+            assertTrue(currentInstall.hasAcceptedTerms.value)
+        } finally {
+            val editor = prefs.edit().putBoolean("has_accepted_terms", originalAccepted)
+            if (originalVersion == null) editor.remove("accepted_terms_version")
+            else editor.putString("accepted_terms_version", originalVersion)
+            editor.apply()
+        }
     }
 
     @After
