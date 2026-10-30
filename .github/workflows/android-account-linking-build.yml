@@ -160,4 +160,4 @@ jobs:
           retention-days: 14
 
       - name: Run Android unit tests
-        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest
+        run: gradle --no-daemon --max-workers=2 --stacktrace --info testDebugUnitTest
