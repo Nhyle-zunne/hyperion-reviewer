@@ -293,7 +293,13 @@ object QuestionAttemptHistoryManager {
         var tempFile: File? = null
         try {
             tempFile = File.createTempFile("qstats_tmp_", ".json", parentDir)
-            tempFile.writeText(jsonString)
+            // Flush the complete replacement payload to durable storage before any
+            // rename can replace the last known-good history file.
+            tempFile.outputStream().use { output ->
+                output.write(jsonString.toByteArray(Charsets.UTF_8))
+                output.flush()
+                output.fd.sync()
+            }
 
             if (!tempFile.exists() || tempFile.length() == 0L) {
                 Log.e(TAG, "Temp file creation failed or was empty")
