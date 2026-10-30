@@ -247,7 +247,7 @@ fun AccountSignInDialog(onDismiss: () -> Unit) {
                                 lineHeight = 18.sp
                             )
                             Text(
-                                text = "GOOGLE PLAY BILLING IS SEPARATE: Deleting your Hyperion account does NOT cancel a Google Play subscription. It may continue renewing and charging your Google account until you cancel it separately. The Play purchase may remain usable on this Android device while active, but it will no longer be linked to this deleted Hyperion account and cannot be transferred to a different Hyperion account.",
+                                text = "GOOGLE PLAY BILLING IS SEPARATE: Deleting your Hyperion account does NOT cancel a Google Play subscription. It may continue renewing and charging your Google account until you cancel it separately. The Play purchase may remain usable on this Android device while active. A purchase created with Hyperion account binding may not be linkable to a different Hyperion account after deletion.",
                                 color = colors.foreground,
                                 fontSize = 12.sp,
                                 lineHeight = 18.sp
