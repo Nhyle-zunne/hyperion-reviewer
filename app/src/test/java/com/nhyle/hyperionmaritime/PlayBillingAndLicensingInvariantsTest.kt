@@ -185,7 +185,16 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun offlinePlaySnapshotCannotRenewVerificationLease() {
+    fun offlinePlaySnapshotCannotRevokeOrRenewCachedEntitlements() {
+        assertFalse(
+            "An offline Play ownership snapshot is not authoritative and must not clear cached access",
+            shouldApplyPlayPurchaseSnapshot(hasValidatedInternet = false)
+        )
+        assertTrue(
+            "A validated online Play ownership snapshot may update or revoke cached access",
+            shouldApplyPlayPurchaseSnapshot(hasValidatedInternet = true)
+        )
+
         val now = System.currentTimeMillis()
         val highWater = now - 10L * 60L * 1000L
 
