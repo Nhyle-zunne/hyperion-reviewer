@@ -189,6 +189,20 @@ class PlayBillingAndLicensingInvariantsTest {
         val lastVerified = now - 30_000L
         val validExpiry = now + 120_000L
 
+        assertEquals(
+            "A successful sync must not move the persisted lease time backwards after a clock rollback",
+            lastVerified,
+            LicenseManager.nextAccountEntitlementVerificationTime(
+                now - 6L * 60L * 1000L,
+                lastVerified
+            )
+        )
+        assertEquals(
+            "A later verified sync may advance the account lease high-water mark",
+            now + 60_000L,
+            LicenseManager.nextAccountEntitlementVerificationTime(now + 60_000L, lastVerified)
+        )
+
         assertTrue(
             "A recently synchronized, unexpired grant for the current account should be accepted",
             LicenseManager.isAccountEntitlementValid(
