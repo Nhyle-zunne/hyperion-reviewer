@@ -340,6 +340,30 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
+    fun accountSubscriptionDisplayClockNeverMovesBehindItsVerificationHighWaterMark() {
+        val now = Instant.parse("2026-10-30T11:00:00Z").toEpochMilli()
+        val verifiedAt = now + 10L * 60L * 1000L
+        assertEquals(
+            "A small wall-clock rollback must not make displayed subscription time increase",
+            verifiedAt,
+            LicenseManager.effectiveAccountEntitlementDisplayNow(
+                nowEpochMs = now,
+                syncedAtEpochMs = now,
+                lastVerifiedEpochMs = verifiedAt
+            )
+        )
+        assertEquals(
+            "A correctly advanced wall clock remains the effective display time",
+            verifiedAt + 5L * 60L * 1000L,
+            LicenseManager.effectiveAccountEntitlementDisplayNow(
+                nowEpochMs = verifiedAt + 5L * 60L * 1000L,
+                syncedAtEpochMs = now,
+                lastVerifiedEpochMs = verifiedAt
+            )
+        )
+    }
+
+    @Test
     fun playSubscriptionCacheHasBoundedOfflineGraceAndRejectsClockRollback() {
         val now = System.currentTimeMillis()
         val expiry = now + 30L * 24L * 60L * 60L * 1000L
