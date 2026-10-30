@@ -42,7 +42,8 @@ data class SupabaseAccountState(
     val isLoading: Boolean = false,
     val message: String? = null,
     val activeWebsiteLicenses: Int = 0,
-    val activePlaySubscriptionsLinked: Int = 0
+    val activePlaySubscriptionsLinked: Int = 0,
+    val isDeveloperAdminAccess: Boolean = false
 )
 
 private data class SupabaseSession(
@@ -224,23 +225,30 @@ object SupabaseAccountManager {
     }
 
     private suspend fun syncAndUpdateState(context: Context, initialSession: SupabaseSession) {
+        // A previous admin verification must not survive an unsuccessful or changed-account recheck.
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, initialSession.userId, false)
         _state.value = _state.value.copy(
             email = initialSession.email.ifBlank { null },
-            isLoading = true
+            isLoading = true,
+            isDeveloperAdminAccess = false
         )
         try {
             val result = withContext(Dispatchers.IO) {
                 val freshSession = getFreshSession(context, initialSession)
+                val isDeveloperAdmin = verifyDeveloperAdminAccess(freshSession) == true
+                LicenseManager.setVerifiedDeveloperAdminAccess(context, freshSession.userId, isDeveloperAdmin)
                 val playLinkResult = syncGooglePlayPurchases(context, freshSession)
                 val licenseCount = syncEntitlements(context, freshSession)
-                Triple(freshSession, licenseCount, playLinkResult)
+                AccountSyncResult(freshSession, licenseCount, playLinkResult, isDeveloperAdmin)
             }
-            val session = result.first
-            val count = result.second
-            val playLinks = result.third
+            val session = result.session
+            val count = result.licenseCount
+            val playLinks = result.playLinks
             val messageParts = mutableListOf<String>()
-            messageParts += if (count == 0) {
-                "No active website or linked Google Play licenses were found for this account."
+            messageParts += if (result.isDeveloperAdmin) {
+                "Developer access verified by Hyperion. All five tracks are unlocked."
+            } else if (count == 0) {
+                "No active website or linked Google Play license was found for this account."
             } else {
                 "Synced $count active license track${if (count == 1) "" else "s"}."
             }
@@ -255,18 +263,47 @@ object SupabaseAccountManager {
                 isLoading = false,
                 activeWebsiteLicenses = count,
                 activePlaySubscriptionsLinked = playLinks.activeCount,
+                isDeveloperAdminAccess = result.isDeveloperAdmin,
                 message = messageParts.joinToString(" ")
             )
         } catch (_: Exception) {
             _state.value = _state.value.copy(
                 email = initialSession.email.ifBlank { null },
                 isLoading = false,
+                isDeveloperAdminAccess = LicenseManager.isDeveloperAdminAccessActive(context),
                 message = "Signed in, but website licenses could not be refreshed. Connect to the internet and tap Sync to retry."
             )
         }
     }
 
     private data class PlayLinkSyncResult(val activeCount: Int, val hadFailures: Boolean)
+    private data class AccountSyncResult(
+        val session: SupabaseSession,
+        val licenseCount: Int,
+        val playLinks: PlayLinkSyncResult,
+        val isDeveloperAdmin: Boolean
+    )
+
+    /**
+     * Reuses the website's check-admin action, which validates the Supabase JWT
+     * and checks the server-only ADMIN_EMAILS allowlist. A 403 means ordinary
+     * user; network/auth errors fail closed and never grant developer privileges.
+     */
+    private fun verifyDeveloperAdminAccess(session: SupabaseSession): Boolean? {
+        return try {
+            val response = requestText(
+                method = "POST",
+                url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/admin-payment-review",
+                accessToken = session.accessToken,
+                jsonBody = JSONObject().put("action", "check-admin")
+            )
+            JSONObject(response).optBoolean("isAdmin", false)
+        } catch (error: IOException) {
+            if (error.message.orEmpty().contains("Supabase request failed (403):")) false else null
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     private suspend fun syncGooglePlayPurchases(context: Context, session: SupabaseSession): PlayLinkSyncResult {
         return try {
