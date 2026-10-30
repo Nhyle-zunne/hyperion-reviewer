@@ -707,6 +707,25 @@ fun StoreScreen(
 
     val entitlements by billingManager.entitlements.collectAsStateWithLifecycle()
     val selectedTrack by viewModel.selectedTrack.collectAsState()
+    val accountEntitlementRevision by LicenseManager.accountEntitlementRevisionFlow.collectAsStateWithLifecycle()
+
+    // Website grants are stored separately from Play purchases. Read only validated,
+    // current-account grants and re-read whenever the secure account cache is refreshed.
+    val oicWebsiteExp = remember(context, accountEntitlementRevision) {
+        LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_OIC_NW)
+    }
+    val gmdssWebsiteExp = remember(context, accountEntitlementRevision) {
+        LicenseManager.getAccountEntitlementExpiry(context, Track.GMDSS_GOC)
+    }
+    val ewWebsiteExp = remember(context, accountEntitlementRevision) {
+        LicenseManager.getAccountEntitlementExpiry(context, Track.ENGINE_OIC_EW)
+    }
+    val dmWebsiteExp = remember(context, accountEntitlementRevision) {
+        LicenseManager.getAccountEntitlementExpiry(context, Track.DECK_MGT)
+    }
+    val emWebsiteExp = remember(context, accountEntitlementRevision) {
+        LicenseManager.getAccountEntitlementExpiry(context, Track.ENGINE_MGT)
+    }
 
     var selectedOffer by rememberSaveable {
         mutableStateOf<SelectedOffer?>(null)
@@ -966,11 +985,11 @@ fun StoreScreen(
             val emPlayExp = if (entitlements.engineMgtPlan?.isExpired == false) entitlements.engineMgtPlan!!.expiryTimestamp else 0L
             val allPlayExp = if (entitlements.allAccessPlan?.isExpired == false) entitlements.allAccessPlan!!.expiryTimestamp else 0L
 
-            val effectiveOicExp = maxOf(oicOfflineExp, oicPlayExp, allPlayExp, allOfflineExp)
-            val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssPlayExp, allPlayExp, allOfflineExp)
-            val effectiveEwExp = maxOf(ewOfflineExp, ewPlayExp, allPlayExp, allOfflineExp)
-            val effectiveDmExp = maxOf(dmOfflineExp, dmPlayExp, allPlayExp, allOfflineExp)
-            val effectiveEmExp = maxOf(emOfflineExp, emPlayExp, allPlayExp, allOfflineExp)
+            val effectiveOicExp = maxOf(oicOfflineExp, oicPlayExp, oicWebsiteExp, allPlayExp, allOfflineExp)
+            val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssPlayExp, gmdssWebsiteExp, allPlayExp, allOfflineExp)
+            val effectiveEwExp = maxOf(ewOfflineExp, ewPlayExp, ewWebsiteExp, allPlayExp, allOfflineExp)
+            val effectiveDmExp = maxOf(dmOfflineExp, dmPlayExp, dmWebsiteExp, allPlayExp, allOfflineExp)
+            val effectiveEmExp = maxOf(emOfflineExp, emPlayExp, emWebsiteExp, allPlayExp, allOfflineExp)
 
             val hasDirectAllAccess = (allPlayExp > now) || (allOfflineExp > now)
             val hasActiveOic = (effectiveOicExp > now) || isOicOffline || entitlements.oicNwUnlocked
@@ -992,7 +1011,8 @@ fun StoreScreen(
 
             val isAnyOffline = isAllAccessOffline || isOicOffline || isGmdssOffline || isEwOffline || isDmOffline || isEmOffline
             val isAnyPlayPlan = entitlements.allAccessUnlocked || entitlements.oicNwUnlocked || entitlements.gmdssUnlocked || entitlements.engineOicEwUnlocked || entitlements.deckMgtUnlocked || entitlements.engineMgtUnlocked
-            if (isAnyOffline || isAnyPlayPlan) {
+            val isAnyWebsitePlan = listOf(oicWebsiteExp, gmdssWebsiteExp, ewWebsiteExp, dmWebsiteExp, emWebsiteExp).any { it > now }
+            if (isAnyOffline || isAnyPlayPlan || isAnyWebsitePlan) {
                 ActiveLicenseOverviewCard(
                     selectedTrack = selectedTrack,
                     isAllAccess = hasActiveAllAccess,
@@ -1010,14 +1030,19 @@ fun StoreScreen(
                     effectiveDmExp = effectiveDmExp,
                     effectiveEmExp = effectiveEmExp,
                     oicPlayExp = oicPlayExp,
+                    oicWebsiteExp = oicWebsiteExp,
                     oicOfflineExp = oicOfflineExp,
                     gmdssPlayExp = gmdssPlayExp,
+                    gmdssWebsiteExp = gmdssWebsiteExp,
                     gmdssOfflineExp = gmdssOfflineExp,
                     ewPlayExp = ewPlayExp,
+                    ewWebsiteExp = ewWebsiteExp,
                     ewOfflineExp = ewOfflineExp,
                     dmPlayExp = dmPlayExp,
+                    dmWebsiteExp = dmWebsiteExp,
                     dmOfflineExp = dmOfflineExp,
                     emPlayExp = emPlayExp,
+                    emWebsiteExp = emWebsiteExp,
                     emOfflineExp = emOfflineExp,
                     isOffline = isAnyOffline,
                     isPlay = isAnyPlayPlan,
@@ -2012,7 +2037,8 @@ private data class ActivePassSummary(
     val title: String,
     val activeExp: Long,
     val isOffline: Boolean,
-    val isPlay: Boolean
+    val isPlay: Boolean,
+    val isWebsite: Boolean
 )
 
 @Composable
@@ -2033,14 +2059,19 @@ private fun ActiveLicenseOverviewCard(
     effectiveDmExp: Long,
     effectiveEmExp: Long,
     oicPlayExp: Long,
+    oicWebsiteExp: Long,
     oicOfflineExp: Long,
     gmdssPlayExp: Long,
+    gmdssWebsiteExp: Long,
     gmdssOfflineExp: Long,
     ewPlayExp: Long,
+    ewWebsiteExp: Long,
     ewOfflineExp: Long,
     dmPlayExp: Long,
+    dmWebsiteExp: Long,
     dmOfflineExp: Long,
     emPlayExp: Long,
+    emWebsiteExp: Long,
     emOfflineExp: Long,
     isOffline: Boolean,
     isPlay: Boolean,
@@ -2057,6 +2088,7 @@ private fun ActiveLicenseOverviewCard(
         effectiveOicExp, effectiveGmdssExp, effectiveEwExp, effectiveDmExp, effectiveEmExp,
         oicOfflineExp, gmdssOfflineExp, ewOfflineExp, dmOfflineExp, emOfflineExp,
         oicPlayExp, gmdssPlayExp, ewPlayExp, dmPlayExp, emPlayExp,
+        oicWebsiteExp, gmdssWebsiteExp, ewWebsiteExp, dmWebsiteExp, emWebsiteExp,
         entitlements.oicNwUnlocked, entitlements.gmdssUnlocked,
         entitlements.engineOicEwUnlocked, entitlements.deckMgtUnlocked, entitlements.engineMgtUnlocked
     ) {
@@ -2067,7 +2099,8 @@ private fun ActiveLicenseOverviewCard(
                     title = "DECK OIC-NW PASS",
                     activeExp = effectiveOicExp,
                     isOffline = oicOfflineExp > now,
-                    isPlay = (oicPlayExp > now) || entitlements.oicNwUnlocked
+                    isPlay = (oicPlayExp > now) || entitlements.oicNwUnlocked,
+                    isWebsite = oicWebsiteExp > now
                 )
             )
         }
@@ -2077,7 +2110,8 @@ private fun ActiveLicenseOverviewCard(
                     title = "GMDSS GOC PASS",
                     activeExp = effectiveGmdssExp,
                     isOffline = gmdssOfflineExp > now,
-                    isPlay = (gmdssPlayExp > now) || entitlements.gmdssUnlocked
+                    isPlay = (gmdssPlayExp > now) || entitlements.gmdssUnlocked,
+                    isWebsite = gmdssWebsiteExp > now
                 )
             )
         }
@@ -2087,7 +2121,8 @@ private fun ActiveLicenseOverviewCard(
                     title = "ENGINE OIC-EW PASS",
                     activeExp = effectiveEwExp,
                     isOffline = ewOfflineExp > now,
-                    isPlay = (ewPlayExp > now) || entitlements.engineOicEwUnlocked
+                    isPlay = (ewPlayExp > now) || entitlements.engineOicEwUnlocked,
+                    isWebsite = ewWebsiteExp > now
                 )
             )
         }
@@ -2097,7 +2132,8 @@ private fun ActiveLicenseOverviewCard(
                     title = "DECK MANAGEMENT PASS",
                     activeExp = effectiveDmExp,
                     isOffline = dmOfflineExp > now,
-                    isPlay = (dmPlayExp > now) || entitlements.deckMgtUnlocked
+                    isPlay = (dmPlayExp > now) || entitlements.deckMgtUnlocked,
+                    isWebsite = dmWebsiteExp > now
                 )
             )
         }
@@ -2107,7 +2143,8 @@ private fun ActiveLicenseOverviewCard(
                     title = "ENGINE MANAGEMENT PASS",
                     activeExp = effectiveEmExp,
                     isOffline = emOfflineExp > now,
-                    isPlay = (emPlayExp > now) || entitlements.engineMgtUnlocked
+                    isPlay = (emPlayExp > now) || entitlements.engineMgtUnlocked,
+                    isWebsite = emWebsiteExp > now
                 )
             )
         }
@@ -2201,6 +2238,10 @@ private fun ActiveLicenseOverviewCard(
                     }
 
                     val channelLabel = when {
+                        pass.isWebsite && pass.isOffline && pass.isPlay -> "WEBSITE + PLAY + OFFLINE"
+                        pass.isWebsite && pass.isOffline -> "WEBSITE + OFFLINE"
+                        pass.isWebsite && pass.isPlay -> "WEBSITE + PLAY STORE"
+                        pass.isWebsite -> "WEBSITE LICENSE"
                         pass.isOffline && pass.isPlay -> "OFFLINE + PLAY STORE"
                         pass.isOffline -> "OFFLINE LICENSE KEY"
                         else -> "GOOGLE PLAY STORE"
