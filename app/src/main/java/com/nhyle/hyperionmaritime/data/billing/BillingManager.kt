@@ -71,6 +71,13 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
  * contains a trial or introductory phase, the final pricing phase is the base plan's
  * recurring period, so it takes precedence over the offer's base-plan display name.
  */
+/**
+ * Preserve a cycle explicitly saved when the checkout was launched. The monthly
+ * fallback exists only for very old purchases with no recorded cycle metadata.
+ */
+internal fun resolveRequestedBillingCycle(requestedCycle: BillingCycle?): BillingCycle =
+    requestedCycle ?: BillingCycle.MONTHLY
+
 internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
     val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
     val recognizedPeriod = recurringPeriod in setOf("P1W", "P7D", "P1M", "P30D", "P1Y", "P365D", "P12M")
@@ -903,7 +910,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         // The cycle is persisted before launching Play Billing, so an explicit
                         // weekly selection remains weekly after process restart. Do not reinterpret
                         // it as monthly merely because this is a restore/query rather than a new tap.
-                        val effectiveCycle = requestedCycle ?: BillingCycle.MONTHLY
+                        val effectiveCycle = resolveRequestedBillingCycle(requestedCycle)
 
                         val offer = details?.subscriptionOfferDetails?.firstOrNull { candidate ->
                             effectiveCycle.matchesPlayOffer(
