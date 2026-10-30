@@ -690,7 +690,6 @@ fun openGooglePlaySubscriptions(context: Context) {
 fun StoreScreen(
     viewModel: ReviewerViewModel,
     onOpenDrawer: () -> Unit,
-    onNavigateToDeviceRegistration: () -> Unit = { viewModel.navigateTo(Screen.Activation) },
     onNavigateToTerms: () -> Unit = { viewModel.navigateTo(Screen.TermsAndDisclaimer) },
     modifier: Modifier = Modifier
 ) {
@@ -1065,8 +1064,7 @@ fun StoreScreen(
                     isPlay = isAnyPlayPlan,
                     offlineInfo = offlineInfo,
                     entitlements = entitlements,
-                    colors = colors,
-                    onNavigateToDeviceRegistration = onNavigateToDeviceRegistration
+                    colors = colors
                 )
             }
 
@@ -1300,40 +1298,7 @@ fun StoreScreen(
                     )
                 }
 
-                OutlinedButton(
-                    onClick = onNavigateToDeviceRegistration,
-                    shape = RectangleShape,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = colors.cardBackground,
-                        contentColor = colors.textMuted
-                    ),
-                    border = BorderStroke(1.dp, colors.borderInactive),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                    modifier = Modifier
-                        .weight(1.1f)
-                        .height(38.dp)
-                        .testTag("enter_terminal_key_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Key,
-                        contentDescription = null,
-                        tint = colors.textMuted,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "ENTER TERMINAL KEY",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = colors.textMuted,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+
             }
 
             OutlinedButton(
@@ -1470,7 +1435,7 @@ fun StoreScreen(
 
                     Text(
                         text = expiredPopupMessage
-                            ?: "Your Hyperion subscription pass or terminal license has expired or been revoked. Please select a pass below or enter an active key to restore clearance.",
+                            ?: "Your Hyperion subscription pass or terminal license has expired or been revoked. Please select an available pass below to restore access.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.5.sp,
@@ -1483,33 +1448,6 @@ fun StoreScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                showExpiredPopup = false
-                                onNavigateToDeviceRegistration()
-                            },
-                            shape = RectangleShape,
-                            border = BorderStroke(1.dp, colors.borderInactive),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = colors.cardBackground,
-                                contentColor = colors.textMuted
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp)
-                        ) {
-                            Text(
-                                text = "ENTER KEY",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.5.sp
-                                ),
-                                color = colors.textMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
 
                         Button(
                             onClick = { showExpiredPopup = false },
@@ -2091,7 +2029,6 @@ private fun ActiveLicenseOverviewCard(
     offlineInfo: com.nhyle.hyperionmaritime.data.util.OfflineLicenseInfo?,
     entitlements: com.nhyle.hyperionmaritime.data.billing.TrackEntitlements,
     colors: StoreColors,
-    onNavigateToDeviceRegistration: () -> Unit
 ) {
     val isTampered = offlineInfo?.isTampered == true
     val now = System.currentTimeMillis()
