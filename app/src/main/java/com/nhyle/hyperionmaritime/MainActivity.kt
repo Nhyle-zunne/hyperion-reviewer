@@ -252,6 +252,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
+                    is Screen.PrivacyPolicy -> PrivacyPolicyScreen(
+                        viewModel = viewModel,
+                        onOpenDrawer = { viewModel.openDrawer() }
+                    )
                     is Screen.TrackSelection -> TrackSelectionScreen(
                         viewModel = viewModel
                     )
