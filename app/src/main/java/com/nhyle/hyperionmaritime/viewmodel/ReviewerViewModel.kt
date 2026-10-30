@@ -1783,7 +1783,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     private val backStack = ArrayDeque<Screen>()
 
     private val _currentScreen = MutableStateFlow<Screen>(
-        if (prefs.getBoolean("has_accepted_terms", false)) Screen.TrackSelection else Screen.TermsOnboarding
+        if (prefs.getString("accepted_terms_version", null) == LegalAgreementText.TERMS_VERSION) {
+            Screen.TrackSelection
+        } else {
+            Screen.TermsOnboarding
+        }
     )
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
