@@ -44,6 +44,12 @@ class PlayBillingAndLicensingInvariantsTest {
         application = context as Application
         MaritimeQuestionBank.init(context)
 
+        // Robolectric cannot provide Android Keystore-backed encrypted preferences.
+        // Use a dedicated in-memory/test preferences file for account cache invariants.
+        val accountPrefs = context.getSharedPreferences("hyperion_account_entitlements_test", Context.MODE_PRIVATE)
+        accountPrefs.edit().clear().apply()
+        LicenseManager.setAccountEntitlementPreferencesForTesting(accountPrefs)
+
         // Reset all licenses to clean unactivated state
         LicenseManager.setActivated(context, false)
         LicenseManager.setOicNwProUnlocked(context, false)
@@ -71,7 +77,9 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.setOicNwProUnlocked(context, false)
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
+        LicenseManager.clearAccountEntitlements(context)
         LicenseManager.init(context)
+        LicenseManager.setAccountEntitlementPreferencesForTesting(null)
     }
 
     @Test
