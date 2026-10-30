@@ -344,6 +344,24 @@ object LicenseManager {
         return prefs.getLong(accountExpiryKey(track), 0L)
     }
 
+    /**
+     * The monotonic display clock for account-backed expiry countdowns. It mirrors
+     * the high-water mark used by account entitlement validation, so a small wall-clock
+     * rollback cannot make the displayed remaining duration increase.
+     */
+    fun getAccountEntitlementEffectiveNow(context: Context): Long {
+        val prefs = accountEntitlementPreferences(context.applicationContext)
+            ?: return System.currentTimeMillis()
+        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
+        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) {
+            return System.currentTimeMillis()
+        }
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+        return maxOf(System.currentTimeMillis(), syncedAt, lastVerified)
+    }
+
     /** Keep the offline lease's verification timestamp monotonic across device-clock rollback. */
     internal fun nextAccountEntitlementVerificationTime(
         nowEpochMs: Long,
