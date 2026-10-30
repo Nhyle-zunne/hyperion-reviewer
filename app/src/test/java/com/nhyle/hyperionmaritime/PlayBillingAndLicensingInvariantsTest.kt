@@ -12,6 +12,7 @@ import com.nhyle.hyperionmaritime.data.billing.matchesPlayOffer
 import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
 import com.nhyle.hyperionmaritime.data.billing.resolveRequestedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.resolvePurchasedBillingCycle
+import com.nhyle.hyperionmaritime.data.billing.isNewPlaySubscriptionPurchase
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import java.time.Instant
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
@@ -251,24 +252,39 @@ class PlayBillingAndLicensingInvariantsTest {
 
     @Test
     fun cancelledOrUnfinishedCheckoutCannotOverwriteTheActiveSubscriptionCycle() {
+        assertFalse(
+            "A repeated purchase token and unchanged purchase timestamp are the same subscription",
+            isNewPlaySubscriptionPurchase("monthly-token", "monthly-token", 1_000L, 1_000L)
+        )
+        assertTrue(
+            "A later purchase timestamp confirms a newly purchased subscription",
+            isNewPlaySubscriptionPurchase("monthly-token", "monthly-token", 1_000L, 2_000L)
+        )
+        assertTrue(
+            "A replacement purchase token confirms a plan replacement even if timestamps are equal",
+            isNewPlaySubscriptionPurchase("monthly-token", "yearly-replacement-token", 1_000L, 1_000L)
+        )
+        assertFalse(
+            "Missing purchase timestamps must not commit an unconfirmed Store selection",
+            isNewPlaySubscriptionPurchase("monthly-token", "monthly-token", 1_000L, 0L)
+        )
+
         assertEquals(
             "An unchanged Play purchase retains its active monthly cycle after a yearly checkout is cancelled",
             BillingCycle.MONTHLY,
             resolvePurchasedBillingCycle(
                 activeCycle = BillingCycle.MONTHLY,
                 pendingCycle = BillingCycle.YEARLY,
-                previousPurchaseTimeEpochMs = 1_000L,
-                currentPurchaseTimeEpochMs = 1_000L
+                isNewPurchase = false
             )
         )
         assertEquals(
-            "A genuinely newer Play purchase commits the newly selected yearly cycle",
+            "A genuinely new Play purchase commits the newly selected yearly cycle",
             BillingCycle.YEARLY,
             resolvePurchasedBillingCycle(
                 activeCycle = BillingCycle.MONTHLY,
                 pendingCycle = BillingCycle.YEARLY,
-                previousPurchaseTimeEpochMs = 1_000L,
-                currentPurchaseTimeEpochMs = 2_000L
+                isNewPurchase = true
             )
         )
         assertEquals(
@@ -277,18 +293,7 @@ class PlayBillingAndLicensingInvariantsTest {
             resolvePurchasedBillingCycle(
                 activeCycle = null,
                 pendingCycle = BillingCycle.WEEKLY,
-                previousPurchaseTimeEpochMs = 0L,
-                currentPurchaseTimeEpochMs = 2_000L
-            )
-        )
-        assertEquals(
-            "A missing Play purchase timestamp must not let an unconfirmed choice replace an existing plan",
-            BillingCycle.MONTHLY,
-            resolvePurchasedBillingCycle(
-                activeCycle = BillingCycle.MONTHLY,
-                pendingCycle = BillingCycle.WEEKLY,
-                previousPurchaseTimeEpochMs = 1_000L,
-                currentPurchaseTimeEpochMs = 0L
+                isNewPurchase = true
             )
         )
     }
