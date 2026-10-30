@@ -67,6 +67,28 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
 }
 
 /**
+ * Matches the recurring billing period of a Play subscription offer. When an offer
+ * contains a trial or introductory phase, the final pricing phase is the base plan's
+ * recurring period, so it takes precedence over the offer's base-plan display name.
+ */
+internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
+    val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
+    val periodMatch = when (this) {
+        BillingCycle.WEEKLY -> recurringPeriod == "P1W" || recurringPeriod == "P7D"
+        BillingCycle.MONTHLY -> recurringPeriod == "P1M" || recurringPeriod == "P30D"
+        BillingCycle.YEARLY -> recurringPeriod == "P1Y" || recurringPeriod == "P365D" || recurringPeriod == "P12M"
+    }
+    if (recurringPeriod.isNotBlank()) return periodMatch
+
+    val base = basePlanId.lowercase()
+    return when (this) {
+        BillingCycle.WEEKLY -> base.contains("weekly")
+        BillingCycle.MONTHLY -> base.contains("monthly")
+        BillingCycle.YEARLY -> base.contains("yearly") || base.contains("annual")
+    }
+}
+
+/**
  * Local fallback only: BillingClient exposes subscription signup time, not its live
  * renewal expiry. The server-verified SubscriptionsV2 expiry must override this estimate
  * whenever the user has linked the purchase to a Hyperion account.
@@ -1337,18 +1359,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val offers = details.subscriptionOfferDetails ?: return null
 
         val matchedOffer = offers.firstOrNull { offer ->
-            val basePlan = offer.basePlanId.lowercase()
-            val phases = offer.pricingPhases.pricingPhaseList
-            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
-
-            when (cycle) {
-                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W"
-                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M"
-                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y"
-            }
+            cycle.matchesPlayOffer(
+                basePlanId = offer.basePlanId,
+                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            )
         }
 
-        return matchedOffer?.offerToken ?: offers.firstOrNull()?.offerToken
+        // Never silently fall back to a different base plan (e.g. yearly when the
+        // user explicitly selected weekly). The caller will show an unavailable-plan
+        // message instead of charging for a different duration.
+        return matchedOffer?.offerToken
     }
 
     fun launchBillingFlow(
@@ -1383,6 +1403,13 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
 
         val offerToken = getOfferToken(productId, cycle)
+        if (offerToken.isNullOrBlank()) {
+            Log.e(TAG, "No Google Play offer matched the selected cycle: product=$productId, cycle=$cycle")
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("The selected subscription duration is unavailable. Refresh the store and choose another available plan.")
+                .build()
+        }
 
         val productDetailsParamsBuilder = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
@@ -1418,16 +1445,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val isPending = ent.pendingPurchaseProductId == productId
 
         val matchedOffer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-            val basePlan = offer.basePlanId.lowercase()
-            val phases = offer.pricingPhases.pricingPhaseList
-            val period = phases.firstOrNull()?.billingPeriod?.uppercase() ?: ""
-
-            when (cycle) {
-                BillingCycle.WEEKLY -> basePlan.contains("weekly") || period == "P1W"
-                BillingCycle.MONTHLY -> basePlan.contains("monthly") || period == "P1M"
-                BillingCycle.YEARLY -> basePlan.contains("yearly") || period == "P1Y"
-            }
-        } ?: details?.subscriptionOfferDetails?.firstOrNull()
+            cycle.matchesPlayOffer(
+                basePlanId = offer.basePlanId,
+                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            )
+        }
 
         val subPrice = matchedOffer?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
         val fallbackPrice = BillingConstants.getFallbackPrice(productId, cycle)
