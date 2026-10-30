@@ -113,11 +113,15 @@ fun formatSubscriptionTimeRemaining(
     val hours = totalHours % 24L
     val minutes = totalMinutes % 60L
 
+    val dayUnit = if (days == 1L) "day" else "days"
+    val hourUnit = if (totalHours == 1L) "hr" else "hrs"
+    val minuteUnit = if (totalMinutes == 1L) "min" else "mins"
+
     return when {
-        days > 0L && hours > 0L -> "$days days, $hours hrs remaining"
-        days > 0L -> "$days days remaining"
-        totalHours > 0L -> "$totalHours hrs, $minutes mins remaining"
-        else -> "$totalMinutes mins remaining"
+        days > 0L && hours > 0L -> "$days $dayUnit, $hours ${if (hours == 1L) "hr" else "hrs"} remaining"
+        days > 0L -> "$days $dayUnit remaining"
+        totalHours > 0L -> "$totalHours $hourUnit, $minutes ${if (minutes == 1L) "min" else "mins"} remaining"
+        else -> "$totalMinutes $minuteUnit remaining"
     }
 }
 
