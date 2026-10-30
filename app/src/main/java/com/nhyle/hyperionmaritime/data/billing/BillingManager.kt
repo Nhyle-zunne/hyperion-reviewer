@@ -25,6 +25,7 @@ import com.android.billingclient.api.queryPurchasesAsync
 import com.nhyle.hyperionmaritime.BuildConfig
 import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,20 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
+
+/**
+ * Creates the Google Play obfuscated account identifier for the signed-in Hyperion user.
+ * Google Play limits this value to 64 characters and recommends a one-way hash rather
+ * than personally identifiable information. Older purchases remain linkable without it.
+ */
+internal fun obfuscatedHyperionAccountId(userId: String?): String? {
+    val normalizedUserId = userId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val digest = MessageDigest.getInstance("SHA-256")
+        .digest(("hyperion-maritime:" + normalizedUserId).toByteArray(Charsets.UTF_8))
+    return digest.joinToString("") { byte ->
+        (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+}
 
 /**
  * Subscription billing cycles supported by Hyperion Maritime Exam Reviewer.
@@ -1554,9 +1569,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val productDetailsParamsList = listOf(productDetailsParamsBuilder.build())
 
-        val flowParams = BillingFlowParams.newBuilder()
+        val flowBuilder = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(productDetailsParamsList)
-            .build()
+
+        // Bind this new Play purchase to the signed-in Hyperion account when available.
+        // Sign-in is optional; users without an app account can still purchase normally.
+        obfuscatedHyperionAccountId(LicenseManager.getCurrentAccountUserId(appContext))
+            ?.let(flowBuilder::setObfuscatedAccountId)
+
+        val flowParams = flowBuilder.build()
 
         checkoutFlowProductId = productId
         _entitlements.update { it.copy(pendingPurchaseProductId = productId, errorMessage = null) }
