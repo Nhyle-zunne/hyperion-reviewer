@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
+import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import com.nhyle.hyperionmaritime.data.billing.shouldApplyPlayPurchaseSnapshot
@@ -231,6 +232,31 @@ class PlayBillingAndLicensingInvariantsTest {
                 savedHighWaterMarkEpochMs = now
             )
         )
+    }
+
+    @Test
+    fun displayedSubscriptionDurationUsesThePlanTermNotTheOfflineVerificationLease() {
+        BillingCycle.values().forEach { cycle ->
+            val now = System.currentTimeMillis()
+            val plan = ActivePlanInfo(
+                cycle = cycle,
+                purchaseTimestamp = now,
+                expiryTimestamp = now + cycle.durationMs,
+                highWaterMarkEpoch = now,
+                lastVerifiedAtEpoch = now
+            )
+
+            assertFalse("${cycle.label} plan should be active immediately after purchase", plan.isExpired)
+            assertTrue(
+                "The offline ownership-verification lease must remain capped at 72 hours",
+                plan.remainingTimeMs in 0L..BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
+            )
+            assertEquals(
+                "${cycle.label} dashboard display must show its actual subscription term",
+                "${cycle.durationDays} days remaining",
+                plan.getFormattedTimeRemaining()
+            )
+        }
     }
 
     @Test
