@@ -32,8 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,9 +43,6 @@ import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 import com.nhyle.hyperionmaritime.viewmodel.Screen
 
-/**
- * Product information and the current Android app/platform capabilities.
- */
 @Composable
 fun AboutScreen(
     viewModel: ReviewerViewModel,
@@ -55,7 +50,6 @@ fun AboutScreen(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalSpaghettiColors.current
-    val uriHandler = LocalUriHandler.current
 
     BackHandler {
         viewModel.navigateBack()
@@ -68,7 +62,7 @@ fun AboutScreen(
     ) {
         MaritimeTopBar(
             title = "ABOUT HYPERION",
-            subtitle = "THE MARITIME LICENSURE REVIEWER",
+            subtitle = "THE MARITIME LEARNING PLATFORM",
             showBackButton = false,
             onMenuClick = onOpenDrawer
         )
@@ -103,14 +97,14 @@ fun AboutScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
-                        text = "Hyperion is an independent study companion for maritime candidates preparing for theoretical licensure examinations. It brings question-based practice, competency review, mock examinations, and revision tools together so learners can study at their own pace.",
+                        text = "Hyperion is an independent maritime examination-preparation platform for deck officers, marine engineers, and radio operators. It combines question-based practice, competency-focused review, timed mock examinations, and tools that help learners revisit difficult material and build a consistent study routine.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.muted,
                         lineHeight = 19.sp
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Hyperion is not MARINA, a government service, maritime administration, or examination authority. It is not affiliated with, endorsed by, or authorized by those bodies and does not guarantee examination results or professional certification.",
+                        text = "Hyperion is not an official government, MARINA, maritime administration, or examination-authority service. It does not guarantee examination results or professional certification.",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.foreground,
                         lineHeight = 19.sp
@@ -118,116 +112,113 @@ fun AboutScreen(
                 }
             }
 
-            MianSectionHeader(title = "REVIEWER TRACKS")
-
-            MianRuleCard(
-                ruleColor = colors.border,
-                containerColor = colors.surface
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    AboutBullet("OIC-NW Deck — Operational Level")
-                    AboutBullet("Deck Management Level — Chief Mate and Master Mariner preparation")
-                    AboutBullet("OIC-EW Engine — Operational Level")
-                    AboutBullet("Engine Management Level — Second Engineer and Chief Engineer preparation")
-                    AboutBullet("GMDSS GOC — Radio Operator preparation")
-                    Text(
-                        text = "Available question sets, competencies, and paid access may vary by track, app version, and license.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-
-            MianSectionHeader(title = "TOOLS FOR YOUR STUDY ROUTINE")
-
+            MianSectionHeader(title = "REVIEWER PATHWAYS")
             AboutItemCard(
-                title = "LOCAL STUDY STORAGE",
-                description = "Android practice and mock-exam history, bookmarks, mistakes, saved sessions, study time, streak data, and preferences are stored locally on this device.",
+                title = "DECK OPERATIONAL",
+                description = "OIC-NW preparation and competency-based practice.",
+                icon = Icons.Default.Navigation
+            )
+            AboutItemCard(
+                title = "DECK MANAGEMENT",
+                description = "Chief Mate and Master Mariner preparation.",
+                icon = Icons.Default.Description
+            )
+            AboutItemCard(
+                title = "ENGINE OPERATIONAL",
+                description = "OIC-EW preparation and competency-based practice.",
                 icon = Icons.Default.Storage
             )
-
             AboutItemCard(
-                title = "PRACTICE & MOCK EXAM TOOLS",
-                description = "Competency-focused practice, Quick Scan review, question-bank search, timed mock examinations, answer review, and progress summaries.",
+                title = "ENGINE MANAGEMENT",
+                description = "Second Engineer and Chief Engineer preparation.",
                 icon = Icons.Default.Psychology
             )
-
             AboutItemCard(
-                title = "LICENSE VERIFICATION",
-                description = "Google Play subscriptions, eligible Hyperion account entitlements, and signed device-bound offline activation passes are checked according to their source and applicable verification rules.",
+                title = "RADIO OPERATOR",
+                description = "GMDSS GOC preparation.",
                 icon = Icons.Default.Security
             )
 
-            MianSectionHeader(title = "ACCOUNTS & CROSS-PLATFORM ACCESS")
+            MianSectionHeader(title = "STUDY TOOLS")
+            AboutItemCard(
+                title = "PRACTICE AND QUICK SCAN",
+                description = "Practice sessions, competence-focused drills, Quick Scan, and targeted question review.",
+                icon = Icons.Default.Search
+            )
+            AboutItemCard(
+                title = "MOCK EXAMINATIONS",
+                description = "Timed exam-style practice with results and review tools.",
+                icon = Icons.Default.Description
+            )
+            AboutItemCard(
+                title = "STUDY HISTORY AND REVIEW",
+                description = "Bookmarks, mistakes notebook, saved sessions, history, study-time summaries, and streak tracking.",
+                icon = Icons.Default.History
+            )
+            AboutItemCard(
+                title = "LOCAL-FIRST AND OFFLINE USE",
+                description = "Android study records are stored locally. Supported question content and licensed features can be used offline subject to the app's current access checks.",
+                icon = Icons.Default.Storage
+            )
+
+            MianSectionHeader(title = "ACCOUNTS AND LICENSES")
+            AboutItemCard(
+                title = "OPTIONAL ANDROID SIGN-IN",
+                description = "Google sign-in is optional on Android. When signed in with the same Hyperion account on the website, eligible website and Google Play entitlements can be synchronized across platforms.",
+                icon = Icons.Default.Info
+            )
+            AboutItemCard(
+                title = "SEPARATE STUDY DATA",
+                description = "Android study history stays on the device. Supported website/PWA learning progress syncs to the website account separately. License synchronization does not copy study history between platforms.",
+                icon = Icons.Default.Security
+            )
+            AboutItemCard(
+                title = "PLATFORM BILLING",
+                description = "Google Play handles Android subscription billing. Website purchases use website checkout and PayMongo. Linking eligible entitlements to one Hyperion account does not merge billing, cancellation, or refund processes.",
+                icon = Icons.Default.Description
+            )
+            AboutItemCard(
+                title = "ACCOUNT DELETION",
+                description = "You can permanently delete your Hyperion account from My Hyperion Account. Deletion removes linked licenses and account data, but does not cancel Google Play billing or erase local Android study records.",
+                icon = Icons.Default.Gavel
+            )
+
+            MianSectionHeader(title = "LEGAL & COMPLIANCE")
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface,
+                onClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
+            ) {
+                LegalNavigationRow(
+                    icon = Icons.Default.Gavel,
+                    title = "TERMS OF USE",
+                    description = "Educational-use terms, platform billing, licenses, and account rules."
+                )
+            }
 
             MianRuleCard(
                 ruleColor = colors.border,
-                containerColor = colors.surface
+                containerColor = colors.surface,
+                onClick = { viewModel.navigateTo(Screen.PrivacyPolicy) }
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Google sign-in on Android is optional. You can use local study features and make Google Play purchases without signing in.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                    Text(
-                        text = "When you sign in to Android and the website using the same Hyperion account and synchronization succeeds, eligible active website licenses and Google Play entitlements may be recognized on both platforms.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                    Text(
-                        text = "This is license synchronization, not study-progress synchronization. Android study records remain on this device; supported website/PWA learning progress is synchronized separately to your website account. Using the same email address alone does not link purchases.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.foreground,
-                        lineHeight = 18.sp
-                    )
-                    Text(
-                        text = "Google Play continues to manage and bill Play purchases. Website licenses are handled through website checkout and PayMongo. The billing, cancellation, and refund processes remain separate.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                        lineHeight = 18.sp
-                    )
-                }
+                LegalNavigationRow(
+                    icon = Icons.Default.Security,
+                    title = "PRIVACY POLICY",
+                    description = "Personal information, account data, providers, retention, and deletion."
+                )
             }
 
-            MianSectionHeader(title = "LEGAL, PRIVACY & SUPPORT")
-
-            AboutNavigationCard(
-                title = "TERMS OF USE & SUBSCRIPTION POLICY",
-                description = "Educational disclaimer, intellectual property, use restrictions, billing, and account deletion terms.",
-                icon = Icons.Default.Gavel,
-                onClick = { viewModel.navigateTo(Screen.TermsAndDisclaimer) }
-            )
-
-            AboutNavigationCard(
-                title = "PRIVACY POLICY",
-                description = "Information processed by Android and the website, account synchronization, retention, providers, and deletion choices.",
-                icon = Icons.Default.Security,
-                onClick = { viewModel.navigateTo(Screen.PrivacyPolicy) }
-            )
-
-            AboutNavigationCard(
-                title = "EXAM GUIDELINES",
-                description = "Reference information about examination structure and preparation. Always verify current requirements with official sources.",
-                icon = Icons.Default.Description,
+            MianRuleCard(
+                ruleColor = colors.border,
+                containerColor = colors.surface,
                 onClick = { viewModel.navigateTo(Screen.ExamGuidelines) }
-            )
-
-            AboutNavigationCard(
-                title = "ABOUT HYPERION SUPPORT",
-                description = "Email: hyperionmaritimex@gmail.com\nWebsite: hyperionmaritime.org",
-                icon = Icons.Default.Info,
-                onClick = { uriHandler.openUri("mailto:hyperionmaritimex@gmail.com") }
-            )
+            ) {
+                LegalNavigationRow(
+                    icon = Icons.Default.Description,
+                    title = "EXAM GUIDELINES",
+                    description = "Examination references, item counts, and study guidance."
+                )
+            }
 
             Surface(
                 shape = RoundedCornerShape(2.dp),
@@ -251,65 +242,38 @@ fun AboutScreen(
 }
 
 @Composable
-private fun AboutBullet(text: String) {
-    val colors = LocalSpaghettiColors.current
-    Row(verticalAlignment = Alignment.Top) {
-        Text(
-            text = "•",
-            color = colors.accent,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.padding(end = 8.dp)
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.foreground,
-            lineHeight = 18.sp
-        )
-    }
-}
-
-@Composable
-private fun AboutNavigationCard(
-    title: String,
-    description: String,
+private fun LegalNavigationRow(
     icon: ImageVector,
-    onClick: () -> Unit
+    title: String,
+    description: String
 ) {
     val colors = LocalSpaghettiColors.current
-    MianRuleCard(
-        ruleColor = colors.border,
-        containerColor = colors.surface,
-        onClick = onClick
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.foreground,
-                modifier = Modifier.size(20.dp)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = colors.foreground,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+                color = colors.foreground
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = colors.foreground
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.muted,
-                    fontSize = 11.sp,
-                    lineHeight = 17.sp
-                )
-            }
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.muted,
+                fontSize = 11.sp
+            )
         }
     }
 }
@@ -347,7 +311,7 @@ private fun AboutItemCard(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
