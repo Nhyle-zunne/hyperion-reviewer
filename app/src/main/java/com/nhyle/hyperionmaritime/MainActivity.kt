@@ -354,7 +354,8 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                     is Screen.FreePractice -> FreePracticeScreen(
                         viewModel = viewModel
                     )
-                    is Screen.Activation -> ActivationScreen(
+                    // Legacy key-activation routes now lead to the current purchase options.
+                    is Screen.Activation -> StoreScreen(
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
@@ -362,7 +363,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
-                    is Screen.License -> LicenseScreen(
+                    is Screen.License -> StoreScreen(
                         viewModel = viewModel,
                         onOpenDrawer = { viewModel.openDrawer() }
                     )
