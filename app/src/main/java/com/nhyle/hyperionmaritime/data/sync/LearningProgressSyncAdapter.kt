@@ -53,7 +53,7 @@ object LearningProgressSyncAdapter {
         filterDeletedStore(storage, BOOKMARKS_KEY, "items", "savedAt", "bookmarks", deletionLedger)
         mergeStore(
             storage, VAULT_KEY, "items", "lastWrongAt",
-            filterDeletedItems(nativeMistakes(appContext, database), deletionLedger, "vault", "lastWrongAt"), 500
+            filterDeletedItems(nativeMistakes(appContext, database, questionIndex), deletionLedger, "vault", "lastWrongAt"), 500
         )
         filterDeletedStore(storage, VAULT_KEY, "items", "lastWrongAt", "vault", deletionLedger)
         mergeStore(
@@ -127,16 +127,27 @@ object LearningProgressSyncAdapter {
         return result
     }
 
-    private suspend fun nativeMistakes(context: Context, database: HyperionDatabase): JSONArray {
+    private suspend fun nativeMistakes(
+        context: Context,
+        database: HyperionDatabase,
+        questions: Map<String, Question>
+    ): JSONArray {
         val roomMistakes = database.mistakeDao().getAllMistakesOnce().associateBy { it.questionId }
+        val vaultEntries = MistakesVaultManager.loadEntries(context).associateBy { it.questionId }
+        // Room is the source of attempt counts/timestamps; the vault is the source
+        // of its saved Question payload. Merge their IDs so a Room-only mistake is
+        // not silently omitted from the cross-device snapshot.
+        val questionIds = LinkedHashSet<String>().apply {
+            addAll(roomMistakes.keys)
+            addAll(vaultEntries.keys)
+        }
         val result = JSONArray()
-        MistakesVaultManager.loadEntries(context).forEach { entry ->
-            val question = entry.question
-            val local = roomMistakes[entry.questionId]
-            val lastWrong = local?.lastFailedTimestamp ?: 1L
+        questionIds.forEach { questionId ->
+            val local = roomMistakes[questionId]
+            val question = vaultEntries[questionId]?.question ?: questions[questionId] ?: return@forEach
             result.put(question.toQuestionJson()
                 .put("wrongCount", (local?.timesFailed ?: 1).coerceAtLeast(1))
-                .put("lastWrongAt", lastWrong)
+                .put("lastWrongAt", local?.lastFailedTimestamp ?: 1L)
                 .put("lastSelectedIndex", JSONObject.NULL))
         }
         return result
