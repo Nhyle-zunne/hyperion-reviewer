@@ -81,83 +81,9 @@ jobs:
           }
           JSON
 
-      - name: Build installable debug APK
-        # The Web OAuth client ID is optional for a compile-only build. When the
-        # repository secret is configured, the debug APK can exercise Google sign-in.
-        # Production Firebase config and real-device acceptance testing remain separate.
-        env:
-          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
-        run: gradle --no-daemon --max-workers=2 --stacktrace assembleDebug
-
-      - name: Export debug signing-certificate SHA-1
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-        run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          echo "Checking debug APK at: $APK"
-          if [[ ! -s "$APK" ]]; then
-            echo "::error::Debug APK not found at the expected path."
-            find app/build/outputs/apk -maxdepth 5 -type f -name '*.apk' -print || true
-            exit 1
-          fi
-
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          if [[ -z "$APKSIGNER" || ! -x "$APKSIGNER" ]]; then
-            echo "::error::Could not find an executable apksigner under $ANDROID_HOME/build-tools."
-            find "$ANDROID_HOME/build-tools" -type f -name apksigner -print -exec ls -l {} \; || true
-            exit 1
-          fi
-          echo "Using apksigner at: $APKSIGNER"
-
-          if ! CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK" 2>&1)"; then
-            echo "::error::apksigner verification failed; diagnostic output follows."
-            printf '%s\n' "$CERT_OUTPUT"
-            exit 1
-          fi
-          printf '%s\n' "$CERT_OUTPUT"
-
-          SHA1="$(printf '%s\n' "$CERT_OUTPUT" | sed -nE 's/.*certificate SHA-1 digest:[[:space:]]*([[:xdigit:]:]+).*/\1/ip' | head -n 1 | tr -d ':')"
-          if [[ -z "$SHA1" ]]; then
-            echo "::error::Could not parse a SHA-1 fingerprint from apksigner output."
-            exit 1
-          fi
-
-          printf '%s\n' "$SHA1" > app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
-          echo "Debug signing-certificate SHA-1 exported successfully."
-
-      - name: Write test-build configuration note
-        env:
-          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
-        run: |
-          {
-            echo "Hyperion Maritime Android debug test build"
-            echo "Package: com.nhyle.hyperionmaritime"
-            echo "Debug signing-certificate SHA-1 is in DEBUG_CERT_SHA1.txt."
-            if [ -n "$HYPERION_GOOGLE_WEB_CLIENT_ID" ]; then
-              echo "Web OAuth client ID: supplied to this build (value intentionally not printed)."
-            else
-              echo "Web OAuth client ID: NOT supplied. Google sign-in will show the setup-required error until the HYPERION_GOOGLE_WEB_CLIENT_ID GitHub Actions secret is configured and the build is rebuilt."
-            fi
-            echo "Register this debug signing SHA-1 in the Android OAuth client in Google Cloud before testing native Google sign-in."
-            echo "This is a debug-signed sideload build, not a Play Store release."
-          } > app/build/outputs/apk/debug/TESTING_README.txt
-
-      - name: Write APK checksum
-        run: sha256sum app/build/outputs/apk/debug/app-debug.apk > app/build/outputs/apk/debug/SHA256SUMS.txt
-
-      - name: Upload installable debug APK for device testing
-        uses: actions/upload-artifact@v4
-        with:
-          name: hyperion-maritime-account-linking-debug-apk
-          path: |
-            app/build/outputs/apk/debug/app-debug.apk
-            app/build/outputs/apk/debug/SHA256SUMS.txt
-            app/build/outputs/apk/debug/DEBUG_CERT_SHA1.txt
-            app/build/outputs/apk/debug/TESTING_README.txt
-          if-no-files-found: error
-          retention-days: 14
-
+      # Android Studio is the developer's run/install path. CI only executes
+      # the unit/Robolectric suite; it does not package or upload APK artifacts.
       - name: Run Android unit tests
-        run: gradle --no-daemon --max-workers=2 --stacktrace --info testDebugUnitTest
+        env:
+          HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
+        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest
