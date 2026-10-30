@@ -1297,8 +1297,6 @@ fun StoreScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
-
             }
 
             OutlinedButton(
@@ -1448,7 +1446,6 @@ fun StoreScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-
                         Button(
                             onClick = { showExpiredPopup = false },
                             shape = RectangleShape,
@@ -2028,7 +2025,7 @@ private fun ActiveLicenseOverviewCard(
     isPlay: Boolean,
     offlineInfo: com.nhyle.hyperionmaritime.data.util.OfflineLicenseInfo?,
     entitlements: com.nhyle.hyperionmaritime.data.billing.TrackEntitlements,
-    colors: StoreColors,
+    colors: StoreColors
 ) {
     val isTampered = offlineInfo?.isTampered == true
     val now = System.currentTimeMillis()
