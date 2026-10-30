@@ -353,6 +353,40 @@ class QuestionAttemptStatsTest {
     }
 
     @Test
+    fun test10_syncedQuestionAttemptsMergeIdempotently() {
+        val local = QuestionAttemptHistoryManager.recordAttempt(
+            context, "DECK_OIC_NW", "SYNC_Q1", false, timestamp = 1_000L
+        )
+        val remote = QuestionHistoryEntry(
+            questionId = "SYNC_Q1",
+            track = "DECK_OIC_NW",
+            allTimeCorrect = 1,
+            allTimeIncorrect = 1,
+            attempts = listOf(
+                local.attempts.single(),
+                com.nhyle.hyperionmaritime.data.local.QuestionAttemptRecord(
+                    timestamp = 2_000L,
+                    isCorrect = true,
+                    id = "remote-attempt-2"
+                )
+            )
+        )
+        val key = QuestionAttemptHistoryManager.makeKey("DECK_OIC_NW", "SYNC_Q1")
+
+        QuestionAttemptHistoryManager.mergeSyncedEntries(context, mapOf(key to remote))
+        val firstMerge = QuestionAttemptHistoryManager.getHistory(context, "DECK_OIC_NW", "SYNC_Q1")
+        assertEquals(2, firstMerge?.totalAttempts)
+        assertEquals(1, firstMerge?.allTimeCorrect)
+        assertEquals(1, firstMerge?.allTimeIncorrect)
+
+        QuestionAttemptHistoryManager.mergeSyncedEntries(context, mapOf(key to remote))
+        val secondMerge = QuestionAttemptHistoryManager.getHistory(context, "DECK_OIC_NW", "SYNC_Q1")
+        assertEquals("Retrying the same cloud snapshot must not duplicate attempts", 2, secondMerge?.totalAttempts)
+        assertEquals(1, secondMerge?.allTimeCorrect)
+        assertEquals(1, secondMerge?.allTimeIncorrect)
+    }
+
+    @Test
     fun test9_trackSeparationForIdenticalQuestionIds() {
         // Same question ID "OVERLAP_Q1" on two different tracks
         QuestionAttemptHistoryManager.recordAttempt(context, "DECK_OIC_NW", "OVERLAP_Q1", true)
