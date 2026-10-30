@@ -315,6 +315,30 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
+    fun accountLinkingIncludesOnlyDistinctRealPlayPurchaseTokens() {
+        val purchases = collectPlayPurchasesForAccountLinking(
+            allAccessToken = "real-all-access-token",
+            oicNwToken = "real-oic-token",
+            gmdssToken = "mock_sandbox_sub_token_gmdss",
+            engineOicEwToken = "real-oic-token",
+            deckMgtToken = "",
+            engineMgtToken = null
+        )
+
+        assertEquals(
+            listOf("real-all-access-token", "real-oic-token"),
+            purchases.map { it.purchaseToken }
+        )
+        assertEquals(
+            listOf(
+                BillingConstants.PRODUCT_ALL_ACCESS_PASS,
+                BillingConstants.PRODUCT_OIC_NW_PASS
+            ),
+            purchases.map { it.productId }
+        )
+    }
+
+    @Test
     fun savedWeeklyMonthlyAndYearlySelectionsSurviveProcessRestart() {
         assertEquals(BillingCycle.WEEKLY, resolveRequestedBillingCycle(BillingCycle.WEEKLY))
         assertEquals(BillingCycle.MONTHLY, resolveRequestedBillingCycle(BillingCycle.MONTHLY))
