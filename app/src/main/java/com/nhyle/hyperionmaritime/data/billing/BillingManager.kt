@@ -55,20 +55,46 @@ data class ActivePlanInfo(
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
-    val highWaterMarkEpoch: Long = 0L
+    val highWaterMarkEpoch: Long = 0L,
+    val lastVerifiedAtEpoch: Long = purchaseTimestamp
 ) {
-    // 100% Offline-Safe: Server-authoritative; never expires locally or cuts off at sea without internet
-    val isExpired: Boolean
-        get() = false
-
     val effectiveNow: Long
-        get() = System.currentTimeMillis()
+        get() = maxOf(System.currentTimeMillis(), highWaterMarkEpoch)
+
+    /** A local Play cache must be refreshed online within the bounded at-sea grace period. */
+    val requiresOnlineVerification: Boolean
+        get() {
+            if (isTerminalLicense) return false
+            val now = System.currentTimeMillis()
+            val clockRolledBack = highWaterMarkEpoch > 0L &&
+                now < highWaterMarkEpoch - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+            val verificationMissing = lastVerifiedAtEpoch <= 0L
+            val verificationStale = !verificationMissing &&
+                effectiveNow - lastVerifiedAtEpoch > BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
+            return clockRolledBack || verificationMissing || verificationStale
+        }
+
+    /** Cached access is rejected after either the server period estimate or offline lease ends. */
+    val isExpired: Boolean
+        get() = !isTerminalLicense && (
+            requiresOnlineVerification ||
+                expiryTimestamp <= 0L ||
+                effectiveNow >= expiryTimestamp
+            )
 
     val remainingTimeMs: Long
-        get() = if (isTerminalLicense) Long.MAX_VALUE else (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
+        get() {
+            if (isTerminalLicense) return Long.MAX_VALUE
+            if (requiresOnlineVerification) return 0L
+            val planRemaining = (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
+            val leaseRemaining = (lastVerifiedAtEpoch + BillingConstants.OFFLINE_VERIFICATION_GRACE_MS - effectiveNow)
+                .coerceAtLeast(0L)
+            return minOf(planRemaining, leaseRemaining)
+        }
 
     fun getFormattedTimeRemaining(): String {
         if (isTerminalLicense) return "Active Plan"
+        if (requiresOnlineVerification) return "Reconnect to verify subscription"
         if (isExpired) return "Subscription Expired"
         val remainingMs = remainingTimeMs
         val totalSecs = remainingMs / 1000L
@@ -98,6 +124,7 @@ data class ActivePlanInfo(
 
     fun getFullExpiryBadge(): String {
         if (isTerminalLicense) return "ACTIVE PLAN"
+        if (requiresOnlineVerification) return "VERIFY ONLINE"
         if (isExpired) return "EXPIRED"
         return "${getFormattedTimeRemaining().uppercase()} • ${getFormattedExpiryDate().uppercase()}"
     }
@@ -108,6 +135,11 @@ data class ActivePlanInfo(
  * Converted to ProductType.SUBS (Auto-Renewing Subscriptions across Weekly, Monthly, Yearly cycles).
  */
 object BillingConstants {
+    // Match the account-linked license cache: allow up to 72 hours at sea after
+    // the last successful Google Play ownership query, then require online verification.
+    const val OFFLINE_VERIFICATION_GRACE_MS = 72L * 60L * 60L * 1000L
+    const val CLOCK_ROLLBACK_TOLERANCE_MS = 5L * 60L * 1000L
+
     const val PRODUCT_OIC_NW_PASS = "hyperion_oic_nw_pass"
     const val PRODUCT_GMDSS_PASS = "hyperion_gmdss_pass"
     const val PRODUCT_ALL_ACCESS_PASS = "hyperion_all_access_pass"
@@ -377,6 +409,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         private const val KEY_PURCHASE_TIME = "play_purchase_timestamp"
         private const val KEY_BASE_PLAN = "play_base_plan_id"
+        private const val KEY_PLAY_HIGH_WATER_MARK = "play_license_high_water_mark"
+        private const val KEY_PLAY_LAST_VERIFIED_AT = "play_license_last_verified_at"
         private const val KEY_SIGNATURE_HASH = "play_entitlements_hash"
         private const val MAX_RECONNECT_DELAY_MS = 32000L
 
@@ -678,6 +712,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         var lastPurchaseTime = 0L
         var lastBasePlan: String? = null
 
+        val queryTimeEpoch = System.currentTimeMillis()
+        val savedHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
+        val priorVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
+        val clockRollbackDetected = savedHighWaterMark > 0L &&
+            queryTimeEpoch < savedHighWaterMark - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+        // A failed device-clock check must not renew the offline lease, even if Play
+        // returned a cached purchase snapshot.
+        val verifiedAtEpoch = if (clockRollbackDetected) priorVerifiedAt else queryTimeEpoch
+
         val editor = securePrefs.edit()
 
         for (purchase in purchases) {
@@ -735,15 +778,16 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
                         val cycle = effectiveCycle
                         val cycleDurationMs = cycle.durationMs
-                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else System.currentTimeMillis()
-                        val now = System.currentTimeMillis()
-                        val savedWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
-                        val currentWaterMark = maxOf(savedWaterMark, purchaseTime, now)
+                        val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
+                        val currentWaterMark = maxOf(savedHighWaterMark, purchaseTime, queryTimeEpoch)
+                        val effectiveQueryTime = maxOf(queryTimeEpoch, currentWaterMark)
 
-                        // A subscription returning PurchaseState.PURCHASED from Google Play is actively entitled.
-                        // Advance expiration forward across recurring cycles so users are never locked out while active in Google Play.
+                        // BillingClient's PURCHASED result confirms current ownership at query time.
+                        // Purchase.purchaseTime is the original signup time, so this local period
+                        // estimate is display metadata only; the 72-hour verification lease is
+                        // what bounds offline access until the next Google Play query.
                         var expiryTime = purchaseTime + cycleDurationMs
-                        while (expiryTime <= now && cycleDurationMs > 0L) {
+                        while (expiryTime <= effectiveQueryTime && cycleDurationMs > 0L) {
                             expiryTime += cycleDurationMs
                         }
 
@@ -754,7 +798,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_GMDSS_PASS -> {
@@ -763,7 +808,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
@@ -772,7 +818,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_DECK_MGT_PASS -> {
@@ -781,7 +828,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
@@ -790,7 +838,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                             }
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
@@ -799,7 +848,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
-                                    highWaterMarkEpoch = currentWaterMark
+                                    highWaterMarkEpoch = currentWaterMark,
+                                    lastVerifiedAtEpoch = verifiedAtEpoch
                                 )
                                 allAccessPlan = plan
                                 oicPlan = plan
@@ -824,6 +874,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         // Google Play Subscriptions are verified server-side; device clock changes do not invalidate active purchases
         val isClockTampered = false
 
+        // Keep Google Play's last-successful-query timestamp separate from purchase time.
+        // Purchase.purchaseTime never changes after renewal, so it cannot be used as an offline lease.
         // Synchronize Secure SharedPreferences disk cache strictly with active Google Play purchases
         if (oicPlan != null) {
             editor.putBoolean(KEY_OIC_NW_UNLOCKED, true)
@@ -919,6 +971,21 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
         editor.putLong(KEY_PURCHASE_TIME, lastPurchaseTime)
+
+        val hasAnyOwnedPurchase = hasOic || hasGmdss || hasAll || hasEw || hasDm || hasEm
+        if (hasAnyOwnedPurchase) {
+            editor.putLong(
+                KEY_PLAY_HIGH_WATER_MARK,
+                maxOf(savedHighWaterMark, queryTimeEpoch, lastPurchaseTime)
+            )
+            if (!clockRollbackDetected) {
+                editor.putLong(KEY_PLAY_LAST_VERIFIED_AT, queryTimeEpoch)
+            }
+        } else {
+            // A successful empty Play snapshot revokes all local Play plans immediately.
+            editor.remove(KEY_PLAY_LAST_VERIFIED_AT)
+            editor.putLong(KEY_PLAY_HIGH_WATER_MARK, maxOf(savedHighWaterMark, queryTimeEpoch))
+        }
         editor.apply()
 
         _entitlements.update {
@@ -1025,14 +1092,32 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             allAccessExpiry = allAccessPurchase + allAccessCycle.durationMs
         }
 
-        val playHighWaterMark = securePrefs.getLong("play_license_high_water_mark", 0L)
+        var playHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
+        var playLastVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
+
+        // Older app builds did not persist the last successful Play-query timestamp.
+        // Give an existing encrypted cache one bounded migration grace, then require
+        // a fresh Google Play query. New builds persist the timestamp on every query.
+        val hasLegacyCachedPlayPlan = oic || gmdss || allAccess ||
+            securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false) ||
+            securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false) ||
+            securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
+        if (hasLegacyCachedPlayPlan && playLastVerifiedAt <= 0L) {
+            playLastVerifiedAt = now
+            playHighWaterMark = maxOf(playHighWaterMark, now)
+            securePrefs.edit()
+                .putLong(KEY_PLAY_LAST_VERIFIED_AT, playLastVerifiedAt)
+                .putLong(KEY_PLAY_HIGH_WATER_MARK, playHighWaterMark)
+                .apply()
+        }
 
         val oicPlan = if (oic) ActivePlanInfo(
             cycle = oicCycle,
             purchaseToken = securePrefs.getString(KEY_OIC_TOKEN, null),
             purchaseTimestamp = oicPurchase,
             expiryTimestamp = oicExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
@@ -1040,7 +1125,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_GMDSS_TOKEN, null),
             purchaseTimestamp = gmdssPurchase,
             expiryTimestamp = gmdssExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
@@ -1048,7 +1134,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null),
             purchaseTimestamp = allAccessPurchase,
             expiryTimestamp = allAccessExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasEw = securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
@@ -1059,7 +1146,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
             purchaseTimestamp = ewPurchase,
             expiryTimestamp = ewExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasDm = securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false)
@@ -1070,7 +1158,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
             purchaseTimestamp = dmPurchase,
             expiryTimestamp = dmExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasEm = securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
@@ -1081,7 +1170,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
             purchaseTimestamp = emPurchase,
             expiryTimestamp = emExpiry,
-            highWaterMarkEpoch = playHighWaterMark
+            highWaterMarkEpoch = playHighWaterMark,
+            lastVerifiedAtEpoch = playLastVerifiedAt
         ) else null
 
         val hasOicActive = oicPlan != null && !oicPlan.isExpired
