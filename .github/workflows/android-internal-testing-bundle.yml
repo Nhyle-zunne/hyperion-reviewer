@@ -69,6 +69,9 @@ jobs:
           print("Production Firebase configuration verified for the expected Android package.")
           PY
 
+      - name: Run Android unit and Robolectric tests
+        run: gradle --no-daemon --max-workers=2 --stacktrace testDebugUnitTest
+
       - name: Restore upload keystore from Actions secret
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
