@@ -47,6 +47,7 @@ class PlayBillingAndLicensingInvariantsTest {
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.setMasterProUnlocked(context, false)
+        LicenseManager.clearAccountEntitlements(context)
         LicenseManager.init(context)
 
         // Clear Play Billing secure preferences
@@ -182,9 +183,10 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun accountLinkedLicenseExpiryAndOfflineGraceAreEnforcedByAccessPredicate() {
+    fun accountLinkedLicenseExpiryOfflineGraceAndClockRollbackAreEnforced() {
         val now = 1_800_000_000_000L
         val syncedAt = now - 60_000L
+        val lastVerified = now - 30_000L
         val validExpiry = now + 120_000L
 
         assertTrue(
@@ -193,6 +195,7 @@ class PlayBillingAndLicensingInvariantsTest {
                 ownerUserId = "account-a",
                 currentUserId = "account-a",
                 syncedAtEpochMs = syncedAt,
+                lastVerifiedEpochMs = lastVerified,
                 expiryEpochMs = validExpiry,
                 nowEpochMs = now
             )
@@ -203,6 +206,7 @@ class PlayBillingAndLicensingInvariantsTest {
                 ownerUserId = "account-a",
                 currentUserId = "account-a",
                 syncedAtEpochMs = syncedAt,
+                lastVerifiedEpochMs = lastVerified,
                 expiryEpochMs = now,
                 nowEpochMs = now
             )
@@ -213,6 +217,7 @@ class PlayBillingAndLicensingInvariantsTest {
                 ownerUserId = "account-a",
                 currentUserId = "account-b",
                 syncedAtEpochMs = syncedAt,
+                lastVerifiedEpochMs = lastVerified,
                 expiryEpochMs = validExpiry,
                 nowEpochMs = now
             )
@@ -223,6 +228,7 @@ class PlayBillingAndLicensingInvariantsTest {
                 ownerUserId = "account-a",
                 currentUserId = "account-a",
                 syncedAtEpochMs = now - 73L * 60L * 60L * 1000L,
+                lastVerifiedEpochMs = now,
                 expiryEpochMs = validExpiry,
                 nowEpochMs = now
             )
@@ -233,12 +239,34 @@ class PlayBillingAndLicensingInvariantsTest {
                 ownerUserId = "account-a",
                 currentUserId = "account-a",
                 syncedAtEpochMs = now + 6L * 60L * 1000L,
+                lastVerifiedEpochMs = now + 6L * 60L * 1000L,
                 expiryEpochMs = validExpiry,
                 nowEpochMs = now
             )
         )
+        assertFalse(
+            "A device clock rolled back by more than five minutes must not extend its account lease",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = syncedAt,
+                lastVerifiedEpochMs = now,
+                expiryEpochMs = validExpiry,
+                nowEpochMs = now - 6L * 60L * 1000L
+            )
+        )
+        assertFalse(
+            "Even a rollback within tolerance must not move the effective time before the last observed time",
+            LicenseManager.isAccountEntitlementValid(
+                ownerUserId = "account-a",
+                currentUserId = "account-a",
+                syncedAtEpochMs = syncedAt,
+                lastVerifiedEpochMs = now,
+                expiryEpochMs = now - 1L,
+                nowEpochMs = now - 2L * 60L * 1000L
+            )
+        )
     }
-
     @Test
     fun test4_freeTierStrict5QuestionCeiling() = runBlocking {
         // Ensure user is completely unentitled
