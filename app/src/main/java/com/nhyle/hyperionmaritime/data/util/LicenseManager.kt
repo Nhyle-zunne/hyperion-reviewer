@@ -316,6 +316,17 @@ object LicenseManager {
         }
     }
 
+    /**
+     * Allows Robolectric tests to supply an isolated preferences implementation because
+     * Android Keystore-backed EncryptedSharedPreferences is not available in that runtime.
+     * Production code never calls this; app sessions always use the encrypted store above.
+     */
+    internal fun setAccountEntitlementPreferencesForTesting(prefs: SharedPreferences?) {
+        synchronized(this) {
+            accountEntitlementPrefsCache = prefs
+        }
+    }
+
     private fun accountExpiryKey(track: Track): String = ACCOUNT_EXPIRY_PREFIX + track.name
 
     fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
