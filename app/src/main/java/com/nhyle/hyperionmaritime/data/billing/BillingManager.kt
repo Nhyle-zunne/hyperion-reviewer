@@ -1456,7 +1456,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             )
         }
 
-        val subPrice = matchedOffer?.pricingPhases?.pricingPhaseList?.firstOrNull()?.formattedPrice
+        // The last phase is the ongoing recurring base-plan price. Earlier
+        // phases can be free trials or introductory prices and are not the renewal price.
+        val subPrice = matchedOffer?.pricingPhases?.pricingPhaseList?.lastOrNull()?.formattedPrice
         val fallbackPrice = BillingConstants.getFallbackPrice(productId, cycle)
         val fallbackShort = BillingConstants.getFallbackShortPrice(productId, cycle)
 
