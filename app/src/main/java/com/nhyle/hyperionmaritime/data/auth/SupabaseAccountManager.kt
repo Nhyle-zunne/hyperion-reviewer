@@ -101,26 +101,36 @@ object SupabaseAccountManager {
                 .build()
 
             val credentialManager = CredentialManager.create(activity)
+
+            // Google recommends a separate explicit button flow when the Credential
+            // Manager bottom sheet is dismissed, no account is available to that flow,
+            // or the device account needs reauthentication. A cancellation from this
+            // first chooser must therefore not end the user's sign-in attempt.
+            suspend fun requestExplicitGoogleSignIn() =
+                credentialManager.getCredential(
+                    context = activity,
+                    request = GetCredentialRequest.Builder()
+                        .addCredentialOption(
+                            GetSignInWithGoogleOption.Builder(webClientId)
+                                .setNonce(sha256Hex(rawNonce))
+                                .build()
+                        )
+                        .build()
+                )
+
             val credentialResponse = try {
                 credentialManager.getCredential(
                     context = activity,
                     request = request
                 )
             } catch (_: NoCredentialException) {
-                // The account-picker flow can return no credentials when the device has
-                // no previously available Google credential (for example, no eligible
-                // account, account reauthentication required, or sign-in prompts disabled).
-                // Fall back to Google's explicit Sign in with Google button flow.
-                val explicitSignInOption = GetSignInWithGoogleOption.Builder(webClientId)
-                    .setNonce(sha256Hex(rawNonce))
-                    .build()
-                val explicitSignInRequest = GetCredentialRequest.Builder()
-                    .addCredentialOption(explicitSignInOption)
-                    .build()
-                credentialManager.getCredential(
-                    context = activity,
-                    request = explicitSignInRequest
+                requestExplicitGoogleSignIn()
+            } catch (_: GetCredentialCancellationException) {
+                _state.value = _state.value.copy(
+                    isLoading = true,
+                    message = "Opening Google sign-in…"
                 )
+                requestExplicitGoogleSignIn()
             }
             val credential = credentialResponse.credential as? CustomCredential
                 ?: throw IllegalStateException("Google sign-in did not return a Google ID token.")
