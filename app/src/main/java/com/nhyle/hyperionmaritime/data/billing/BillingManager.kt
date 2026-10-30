@@ -146,6 +146,14 @@ internal fun canRefreshPlayVerification(
         nowEpochMs >= savedHighWaterMarkEpochMs - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
 }
 
+/**
+ * An offline Play Billing snapshot is not authoritative for revocation. It may be empty
+ * because the Play Store cannot refresh ownership while disconnected, so do not replace
+ * or clear the last successfully verified local subscription cache from that snapshot.
+ */
+internal fun shouldApplyPlayPurchaseSnapshot(hasValidatedInternet: Boolean): Boolean =
+    hasValidatedInternet
+
 object BillingConstants {
     // Match the account-linked license cache: allow up to 72 hours at sea after
     // the last successful Google Play ownership query, then require online verification.
@@ -724,6 +732,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     }
 
     private suspend fun processPurchases(purchases: List<Purchase>) = withContext(Dispatchers.IO) {
+        // BillingClient may expose a locally cached or empty snapshot while offline.
+        // Without validated internet it cannot be used to revoke the last known-good
+        // subscription cache. Wait for an online ownership query before mutating it.
+        if (!shouldApplyPlayPurchaseSnapshot(hasValidatedInternet())) {
+            Log.i(TAG, "Skipping offline Play ownership snapshot; preserving last verified subscription cache")
+            return@withContext
+        }
+
         var oicPlan: ActivePlanInfo? = null
         var gmdssPlan: ActivePlanInfo? = null
         var allAccessPlan: ActivePlanInfo? = null
