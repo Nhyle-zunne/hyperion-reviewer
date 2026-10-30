@@ -171,8 +171,8 @@ fun AboutScreen(
                 icon = Icons.Default.Info
             )
             AboutItemCard(
-                title = "SEPARATE STUDY DATA",
-                description = "Android study history stays on the device. Supported website/PWA learning progress syncs to the website account separately. License synchronization does not copy study history between platforms.",
+                title = "STUDY DATA AND SYNCHRONIZATION",
+                description = "Android study records are saved locally first. When you sign in and have internet access, supported records such as bookmarks, mistakes, question-attempt history, study-time entries, and completed sessions can also synchronize to your Hyperion account. Other device-only records remain on this device. License synchronization is separate from study-progress synchronization.",
                 icon = Icons.Default.Security
             )
             AboutItemCard(
@@ -184,6 +184,11 @@ fun AboutScreen(
                 title = "ACCOUNT DELETION",
                 description = "You can permanently delete your Hyperion account from My Hyperion Account. Deletion removes linked licenses and account data, but does not cancel Google Play billing or erase local Android study records.",
                 icon = Icons.Default.Gavel
+            )
+            AboutItemCard(
+                title = "REFUNDS AND BILLING QUESTIONS",
+                description = "Google Play manages refunds for Android purchases. For website orders, email hyperionmaritimex@gmail.com with your order reference. Requests are reviewed under applicable law and the purchase terms; account deletion does not itself create a refund.",
+                icon = Icons.Default.Description
             )
 
             MianSectionHeader(title = "LEGAL & COMPLIANCE")
