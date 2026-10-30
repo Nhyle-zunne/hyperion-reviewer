@@ -507,7 +507,11 @@ object SupabaseAccountManager {
             }
             if (connected == null) return PlayLinkSyncResult(activeCount = 0, hadFailures = true)
 
-            billing.queryPurchasesAsync()
+            if (!billing.queryPurchasesAsync()) {
+                // Never link tokens from an older in-memory snapshot after Play's
+                // current ownership query failed or could not run online.
+                return PlayLinkSyncResult(activeCount = 0, hadFailures = true)
+            }
             val purchases = billing.getOwnedPurchasesForAccountLinking()
             var activeCount = 0
             var hadFailures = false
