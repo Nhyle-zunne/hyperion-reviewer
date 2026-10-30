@@ -16,6 +16,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.nhyle.hyperionmaritime.BuildConfig
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncAdapter
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -285,6 +286,63 @@ object SupabaseAccountManager {
         }
     }
 
+    /**
+     * Synchronize Android's offline-first study records with the same protected snapshot
+     * used by the website/PWA. A device is bound to its first successfully synced account:
+     * switching accounts pauses study sync rather than uploading one person's local data
+     * into another person's account.
+     */
+    suspend fun syncLearningProgressInBackground(context: Context) {
+        val appContext = context.applicationContext
+        val saved = withContext(Dispatchers.IO) { readSession(appContext) } ?: return
+        withContext(Dispatchers.IO) {
+            val fresh = getFreshSession(appContext, saved)
+            syncLearningProgressNow(appContext, fresh)
+        }
+    }
+
+    private suspend fun syncLearningProgressNow(context: Context, session: SupabaseSession): String {
+        val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
+        val previousOwner = prefs.getString("owner_user_id", null)
+        if (!previousOwner.isNullOrBlank() && previousOwner != session.userId) {
+            throw IOException(
+                "Study progress sync is paused because this device's local study data is linked to another Hyperion account. Sign in with that original account to keep the data private."
+            )
+        }
+
+        val endpoint = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/learning-progress"
+        val readResponse = JSONObject(requestText(
+            method = "POST",
+            url = endpoint,
+            accessToken = session.accessToken,
+            jsonBody = JSONObject().put("action", "read")
+        ))
+        val remoteSnapshot = readResponse.optJSONObject("data")
+        val mergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
+
+        val writeResponse = JSONObject(requestText(
+            method = "POST",
+            url = endpoint,
+            accessToken = session.accessToken,
+            jsonBody = JSONObject().put("action", "write").put("data", mergedSnapshot)
+        ))
+        if (!writeResponse.optBoolean("ok", false)) {
+            throw IOException("The study progress service did not confirm the synchronization.")
+        }
+
+        // Re-read the server-sanitized snapshot before importing question-bearing records
+        // into Android. This respects the same entitlement checks used by the PWA.
+        val verifiedResponse = JSONObject(requestText(
+            method = "POST",
+            url = endpoint,
+            accessToken = session.accessToken,
+            jsonBody = JSONObject().put("action", "read")
+        ))
+        LearningProgressSyncAdapter.applyCloudSnapshot(context, verifiedResponse.optJSONObject("data"))
+        prefs.edit().putString("owner_user_id", session.userId).apply()
+        return "Study progress synchronized across your signed-in devices."
+    }
+
     private suspend fun syncAndUpdateState(context: Context, initialSession: SupabaseSession) {
         // A previous admin verification must not survive an unsuccessful or changed-account recheck.
         LicenseManager.setVerifiedDeveloperAdminAccess(context, initialSession.userId, false)
@@ -300,7 +358,13 @@ object SupabaseAccountManager {
                 LicenseManager.setVerifiedDeveloperAdminAccess(context, freshSession.userId, isDeveloperAdmin)
                 val playLinkResult = syncGooglePlayPurchases(context, freshSession)
                 val licenseCount = syncEntitlements(context, freshSession)
-                AccountSyncResult(freshSession, licenseCount, playLinkResult, isDeveloperAdmin)
+                val studyProgressMessage = try {
+                    syncLearningProgressNow(context, freshSession)
+                } catch (progressError: Exception) {
+                    progressError.message?.takeIf { it.isNotBlank() }
+                        ?: "Study progress sync is pending. Your Android study data remains saved locally."
+                }
+                AccountSyncResult(freshSession, licenseCount, playLinkResult, isDeveloperAdmin, studyProgressMessage)
             }
             val session = result.session
             val count = result.licenseCount
@@ -322,6 +386,7 @@ object SupabaseAccountManager {
             if (playLinks.hadFailures) {
                 messageParts += "Some Google Play subscriptions could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
             }
+            messageParts += result.studyProgressMessage
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
                 isLoading = false,
@@ -349,7 +414,8 @@ object SupabaseAccountManager {
         val session: SupabaseSession,
         val licenseCount: Int,
         val playLinks: PlayLinkSyncResult,
-        val isDeveloperAdmin: Boolean
+        val isDeveloperAdmin: Boolean,
+        val studyProgressMessage: String
     )
 
     /**
