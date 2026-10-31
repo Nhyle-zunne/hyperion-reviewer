@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
@@ -104,6 +106,10 @@ object SupabaseAccountManager {
 
     private val _state = MutableStateFlow(SupabaseAccountState())
     val state: StateFlow<SupabaseAccountState> = _state.asStateFlow()
+    private val learningProgressSyncMutex = Mutex()
+    private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 2 * 60 * 1000L
+    private const val LEARNING_PROGRESS_LAST_SUCCESS_KEY = "last_successful_sync_at"
+
 
     suspend fun signInWithGoogle(activity: Activity) {
         _state.value = _state.value.copy(isLoading = true, message = null)
@@ -321,11 +327,33 @@ object SupabaseAccountManager {
         val saved = withContext(Dispatchers.IO) { readSession(appContext) } ?: return
         withContext(Dispatchers.IO) {
             val fresh = getFreshSession(appContext, saved)
-            syncLearningProgressNow(appContext, fresh)
+            syncLearningProgressNow(appContext, fresh, enforceBackgroundCooldown = true)
         }
     }
 
-    private suspend fun syncLearningProgressNow(context: Context, session: SupabaseSession): String {
+    private suspend fun syncLearningProgressNow(
+        context: Context,
+        session: SupabaseSession,
+        enforceBackgroundCooldown: Boolean = false
+    ): String = learningProgressSyncMutex.withLock {
+        val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val lastSuccess = prefs.getLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, 0L)
+        if (enforceBackgroundCooldown && lastSuccess > 0L &&
+            now - lastSuccess < LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS
+        ) {
+            return@withLock "Study progress was synchronized recently."
+        }
+
+        val result = syncLearningProgressUnlocked(context, session)
+        // Persist the cooldown only after the server sync and local snapshot application
+        // both completed successfully. Manual account syncs also suppress a duplicate
+        // background worker immediately following sign-in or a user-initiated refresh.
+        prefs.edit().putLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, System.currentTimeMillis()).commit()
+        result
+    }
+
+    private suspend fun syncLearningProgressUnlocked(context: Context, session: SupabaseSession): String {
         val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
         if (!claimLearningProgressOwner(prefs, session.userId)) {
             throw IOException(
