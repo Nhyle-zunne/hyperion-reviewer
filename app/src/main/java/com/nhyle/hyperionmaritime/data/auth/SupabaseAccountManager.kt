@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
+import android.util.Log
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
@@ -102,6 +103,7 @@ internal fun isMissingGooglePlayEntitlementsTable(error: Throwable): Boolean {
  * Website entitlements are loaded with the user's JWT and remain protected by database RLS.
  */
 object SupabaseAccountManager {
+    private const val TAG = "HyperionGoogleSignIn"
     private const val SESSION_PREFS = "hyperion_supabase_session"
     private const val CONNECT_TIMEOUT_MS = 15_000
     private const val READ_TIMEOUT_MS = 20_000
@@ -163,14 +165,23 @@ object SupabaseAccountManager {
                 message = "Signed in. Checking your website licenses…"
             )
             syncAndUpdateState(activity.applicationContext, session)
-        } catch (_: GetCredentialCancellationException) {
-            _state.value = _state.value.copy(isLoading = false, message = "Sign-in cancelled.")
+        } catch (e: GetCredentialCancellationException) {
+            // Credential Manager can surface this for both a user dismissal and certain
+            // authorization/configuration failures. Keep tokens and credential payloads
+            // out of logs; record only the exception type/message and stack for diagnosis.
+            Log.w(TAG, "Google Credential Manager cancellation: ${e.javaClass.simpleName}: ${e.message.orEmpty()}", e)
+            _state.value = _state.value.copy(
+                isLoading = false,
+                message = "Google sign-in was interrupted. Please try again. If this keeps happening, send support the Android Logcat error."
+            )
         } catch (e: GetCredentialException) {
+            Log.e(TAG, "Google Credential Manager error: ${e.javaClass.simpleName}: ${e.message.orEmpty()}", e)
             _state.value = _state.value.copy(
                 isLoading = false,
                 message = e.message?.takeIf { it.isNotBlank() } ?: "Google sign-in failed. Please try again."
             )
         } catch (e: Exception) {
+            Log.e(TAG, "Google sign-in failed: ${e.javaClass.simpleName}: ${e.message.orEmpty()}", e)
             _state.value = _state.value.copy(
                 isLoading = false,
                 message = e.message?.takeIf { it.isNotBlank() } ?: "Unable to sign in right now. Please try again."
