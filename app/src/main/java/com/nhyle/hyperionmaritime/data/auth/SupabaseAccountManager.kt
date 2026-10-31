@@ -344,6 +344,7 @@ object SupabaseAccountManager {
         var expectedUpdatedAt: Any? = readResponse.opt("updated_at")
             ?.takeUnless { it == JSONObject.NULL }
         var saved = false
+        var cloudSnapshotApplied = false
 
         // Avoid a database UPDATE when the native merge produced no data changes.
         // The Edge Function sanitizes the snapshot on every read, so the already-read
@@ -368,6 +369,7 @@ object SupabaseAccountManager {
                 .put("action", "write")
                 .put("data", mergedSnapshot)
                 .put("expected_updated_at", expectedUpdatedAt ?: JSONObject.NULL)
+                .put("return_data", true)
 
             try {
                 val writeResponse = JSONObject(requestText(
@@ -378,6 +380,11 @@ object SupabaseAccountManager {
                 ))
                 if (!writeResponse.optBoolean("ok", false)) {
                     throw IOException("The study progress service did not confirm the synchronization.")
+                }
+                val sanitizedSnapshot = writeResponse.optJSONObject("data")
+                if (sanitizedSnapshot != null) {
+                    LearningProgressSyncAdapter.applyCloudSnapshot(context, sanitizedSnapshot)
+                    cloudSnapshotApplied = true
                 }
                 saved = true
                 break
@@ -403,15 +410,17 @@ object SupabaseAccountManager {
             throw IOException("Study progress changed repeatedly on another device. Your local study data is safe and will retry.")
         }
 
-        // Re-read the server-sanitized snapshot before importing question-bearing records
-        // into Android. This respects the same entitlement checks used by the PWA.
-        val verifiedResponse = JSONObject(requestText(
-            method = "POST",
-            url = endpoint,
-            accessToken = session.accessToken,
-            jsonBody = JSONObject().put("action", "read")
-        ))
-        LearningProgressSyncAdapter.applyCloudSnapshot(context, verifiedResponse.optJSONObject("data"))
+        // Updated servers return the already-sanitized snapshot with successful writes.
+        // Keep the authenticated read-back fallback for older server deployments.
+        if (!cloudSnapshotApplied) {
+            val verifiedResponse = JSONObject(requestText(
+                method = "POST",
+                url = endpoint,
+                accessToken = session.accessToken,
+                jsonBody = JSONObject().put("action", "read")
+            ))
+            LearningProgressSyncAdapter.applyCloudSnapshot(context, verifiedResponse.optJSONObject("data"))
+        }
         return "Study progress synchronized across your signed-in devices."
     }
 
