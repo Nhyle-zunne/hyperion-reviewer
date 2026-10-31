@@ -108,7 +108,7 @@ object SupabaseAccountManager {
     private val _state = MutableStateFlow(SupabaseAccountState())
     val state: StateFlow<SupabaseAccountState> = _state.asStateFlow()
     private val learningProgressSyncMutex = Mutex()
-    private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 2 * 60 * 1000L
+    private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 5 * 60 * 1000L
     private const val LEARNING_PROGRESS_LAST_SUCCESS_KEY = "last_successful_sync_at"
 
 
