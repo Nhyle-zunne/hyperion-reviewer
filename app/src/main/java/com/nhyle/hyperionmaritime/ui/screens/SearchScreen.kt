@@ -349,6 +349,7 @@ fun SearchScreen(
                             }
                         }
                     }
+                }
 
                 // Tier 2: Dynamic Competence Selection Row
                 item {
