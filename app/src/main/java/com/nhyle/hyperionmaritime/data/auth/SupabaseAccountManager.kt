@@ -36,6 +36,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
+import java.util.zip.GZIPInputStream
 import java.time.OffsetDateTime
 
 data class SupabaseAccountState(
@@ -764,6 +765,7 @@ object SupabaseAccountManager {
             readTimeout = READ_TIMEOUT_MS
             setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
             setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept-Encoding", "gzip")
             if (!accessToken.isNullOrBlank()) {
                 setRequestProperty("Authorization", "Bearer $accessToken")
             }
@@ -781,7 +783,11 @@ object SupabaseAccountManager {
             }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
+            val decodedStream = if (
+                stream != null && connection.getHeaderField("Content-Encoding")
+                    ?.contains("gzip", ignoreCase = true) == true
+            ) GZIPInputStream(stream) else stream
+            val body = decodedStream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
                 val apiMessage = try {
                     val error = JSONObject(body)
