@@ -7,7 +7,7 @@ package com.nhyle.hyperionmaritime.data.model
 object LegalAgreementText {
     const val TITLE = "TERMS OF USE"
     const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: October 31, 2026"
-    const val TERMS_VERSION = "2026-10-31"
+    const val TERMS_VERSION = "2026-10-31-2"
 
     const val DISCLAIMER_SUMMARY = """Hyperion Maritime Reviewer is an independent educational resource. It is not MARINA, a government service, a maritime administration, a licensing board, or an examination authority, and it is not affiliated with, endorsed by, or authorized by those bodies. It does not guarantee examination results, a Certificate of Competency, an endorsement, or employment."""
 
