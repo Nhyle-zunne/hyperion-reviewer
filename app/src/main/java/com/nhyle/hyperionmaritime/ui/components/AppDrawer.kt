@@ -94,18 +94,11 @@ fun HyperionDrawerContent(
 ) {
     val colors = LocalSpaghettiColors.current
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
-    val isActivated by viewModel.isActivated.collectAsStateWithLifecycle()
-    val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsStateWithLifecycle()
-    val isGmdssProUnlocked by viewModel.isGmdssProUnlocked.collectAsStateWithLifecycle()
-    val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsStateWithLifecycle()
-    val isDmActive by viewModel.isDeckMgtProUnlocked.collectAsStateWithLifecycle()
-    val isEmActive by viewModel.isEngineMgtProUnlocked.collectAsStateWithLifecycle()
-    val isUnlocked by viewModel.isUnlocked.collectAsStateWithLifecycle()
+    val selectedTrack by viewModel.selectedTrack.collectAsStateWithLifecycle()
+    val isTrackLicensed by viewModel.isTrackLicensed.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
     val accountState by SupabaseAccountManager.state.collectAsStateWithLifecycle()
 
-    val hasAnyActiveLicense = isOicNwProUnlocked || isGmdssProUnlocked || isEwActive || isDmActive || isEmActive || isActivated || isUnlocked
-    var lockedFeatureName by remember { mutableStateOf<String?>(null) }
 
     var isQuestionBankExpanded by remember { mutableStateOf(true) }
     var isAccountSupportExpanded by remember { mutableStateOf(false) }
@@ -316,13 +309,14 @@ fun HyperionDrawerContent(
                             label = "SEARCH QUESTION BANK",
                             icon = Icons.Default.Search,
                             isSelected = currentScreen is Screen.Search,
-                            isLocked = !hasAnyActiveLicense,
+                            isLocked = !isTrackLicensed,
                             onClick = {
-                                if (hasAnyActiveLicense) {
+                                if (isTrackLicensed) {
                                     onCloseDrawer()
                                     viewModel.navigateTo(Screen.Search)
                                 } else {
-                                    lockedFeatureName = "the Question Bank Search index"
+                                    onCloseDrawer()
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -331,13 +325,14 @@ fun HyperionDrawerContent(
                             label = "BOOKMARKED QUESTIONS",
                             icon = Icons.Default.Bookmark,
                             isSelected = currentScreen is Screen.Bookmarks,
-                            isLocked = !hasAnyActiveLicense,
+                            isLocked = !isTrackLicensed,
                             onClick = {
-                                if (hasAnyActiveLicense) {
+                                if (isTrackLicensed) {
                                     onCloseDrawer()
                                     viewModel.navigateTo(Screen.Bookmarks)
                                 } else {
-                                    lockedFeatureName = "Bookmarked Questions"
+                                    onCloseDrawer()
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -346,13 +341,14 @@ fun HyperionDrawerContent(
                             label = "SESSION LOG & DIAGNOSTICS",
                             icon = Icons.Default.History,
                             isSelected = currentScreen is Screen.History,
-                            isLocked = !hasAnyActiveLicense,
+                            isLocked = !isTrackLicensed,
                             onClick = {
-                                if (hasAnyActiveLicense) {
+                                if (isTrackLicensed) {
                                     onCloseDrawer()
                                     viewModel.navigateTo(Screen.History)
                                 } else {
-                                    lockedFeatureName = "Session Log & Diagnostics"
+                                    onCloseDrawer()
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -361,13 +357,14 @@ fun HyperionDrawerContent(
                             label = "MISTAKES NOTEBOOK (VAULT)",
                             icon = Icons.Default.Info,
                             isSelected = currentScreen is Screen.Vault,
-                            isLocked = !hasAnyActiveLicense,
+                            isLocked = !isTrackLicensed,
                             onClick = {
-                                if (hasAnyActiveLicense) {
+                                if (isTrackLicensed) {
                                     onCloseDrawer()
                                     viewModel.navigateTo(Screen.Vault)
                                 } else {
-                                    lockedFeatureName = "the Mistakes Notebook"
+                                    onCloseDrawer()
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -381,95 +378,6 @@ fun HyperionDrawerContent(
                                 viewModel.navigateTo(Screen.MTestMImport)
                             }
                         )
-                    }
-                }
-
-                lockedFeatureName?.let { feature ->
-                    HyperionDialog(
-                        onDismissRequest = { lockedFeatureName = null },
-                        properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
-                    ) {
-                        Surface(
-                            shape = RectangleShape,
-                            color = colors.surface,
-                            border = BorderStroke(1.dp, colors.border),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = "Locked",
-                                    tint = colors.accent,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = "ACTIVE LICENSE REQUIRED",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.foreground,
-                                    letterSpacing = 1.sp
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "An active license is required to access $feature. You can purchase a pass in the Pass Store or activate an offline key.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colors.muted,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(20.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { lockedFeatureName = null },
-                                        shape = RectangleShape,
-                                        border = BorderStroke(1.dp, colors.border),
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            contentColor = colors.foreground
-                                        ),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(42.dp)
-                                    ) {
-                                        Text(
-                                            text = "LATER",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.sp
-                                        )
-                                    }
-                                    Button(
-                                        onClick = {
-                                            lockedFeatureName = null
-                                            onCloseDrawer()
-                                            viewModel.navigateTo(Screen.Store)
-                                        },
-                                        shape = RectangleShape,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = colors.accent,
-                                            contentColor = colors.accentForeground
-                                        ),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(42.dp)
-                                    ) {
-                                        Text(
-                                            text = "STORE",
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 11.sp,
-                                            letterSpacing = 1.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
 
