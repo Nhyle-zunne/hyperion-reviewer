@@ -377,10 +377,16 @@ object SupabaseAccountManager {
         // Avoid a database UPDATE when the native merge produced no data changes.
         // The Edge Function sanitizes the snapshot on every read, so the already-read
         // remote snapshot is safe to apply locally when its storage is unchanged.
-        val remoteStorage = remoteSnapshot?.optJSONObject("storage")
-        val initialMergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
-        val mergedStorage = initialMergedSnapshot.optJSONObject("storage")
-        if (remoteSnapshot != null && remoteStorage?.toString() == mergedStorage?.toString()) {
+        // mergeNativeIntoSnapshot mutates the supplied JSONObject, including its nested
+        // storage object. Capture the actual server value first and merge into a deep copy
+        // so the no-op comparison cannot accidentally compare the object to itself.
+        val remoteStorageJson = remoteSnapshot?.optJSONObject("storage")?.toString()
+        val initialMergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(
+            context,
+            remoteSnapshot?.let { JSONObject(it.toString()) }
+        )
+        val mergedStorageJson = initialMergedSnapshot.optJSONObject("storage")?.toString()
+        if (remoteSnapshot != null && remoteStorageJson == mergedStorageJson) {
             LearningProgressSyncAdapter.applyCloudSnapshot(context, remoteSnapshot)
             return "Study progress is already up to date across your signed-in devices."
         }
@@ -391,7 +397,10 @@ object SupabaseAccountManager {
             val mergedSnapshot = if (attempt == 0) {
                 initialMergedSnapshot
             } else {
-                LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
+                LearningProgressSyncAdapter.mergeNativeIntoSnapshot(
+                    context,
+                    remoteSnapshot?.let { JSONObject(it.toString()) }
+                )
             }
             val writeBody = JSONObject()
                 .put("action", "write")
