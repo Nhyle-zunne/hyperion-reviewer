@@ -345,6 +345,17 @@ object SupabaseAccountManager {
             ?.takeUnless { it == JSONObject.NULL }
         var saved = false
 
+        // Avoid a database UPDATE when the native merge produced no data changes.
+        // The Edge Function sanitizes the snapshot on every read, so the already-read
+        // remote snapshot is safe to apply locally when its storage is unchanged.
+        val remoteStorage = remoteSnapshot?.optJSONObject("storage")
+        val mergedStorage = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(context, remoteSnapshot)
+            .optJSONObject("storage")
+        if (remoteSnapshot != null && remoteStorage?.toString() == mergedStorage?.toString()) {
+            LearningProgressSyncAdapter.applyCloudSnapshot(context, remoteSnapshot)
+            return "Study progress is already up to date across your signed-in devices."
+        }
+
         // A version conflict means another signed-in device changed the snapshot
         // since our read. Re-read and merge again rather than replacing that work.
         for (attempt in 0 until 3) {
