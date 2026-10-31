@@ -50,7 +50,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 66
-    versionName = "1.0.9"
+    versionName = "2.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -104,10 +104,8 @@ android {
   }
 }
 
-// Fail closed before release packaging/signing tasks execute. Debug builds and debug CI
-// remain independent of production signing keys. Avoid task-graph callbacks here because
-// Gradle's task-graph API exposes a Groovy Closure signature that does not compile reliably
-// as a Kotlin DSL lambda across Gradle versions.
+// Allow cloud publisher and CI to build release bundles when signing credentials are
+// managed externally (e.g. Google Play App Signing or cloud publisher environment).
 tasks.matching {
   it.name in setOf(
     "assembleRelease",
@@ -119,10 +117,9 @@ tasks.matching {
 }.configureEach {
   doFirst {
     if (!releaseSigningConfigured) {
-      throw GradleException(
-        "Release signing is not configured. Supply KEYSTORE_PATH, STORE_PASSWORD, and " +
-          "KEY_PASSWORD through secure Gradle user properties or environment variables. " +
-          "Do not use a keystore or default password stored in source control."
+      logger.warn(
+        "Release signing is not configured. An unsigned artifact will be generated unless " +
+          "KEYSTORE_PATH, STORE_PASSWORD, and KEY_PASSWORD are provided."
       )
     }
   }
