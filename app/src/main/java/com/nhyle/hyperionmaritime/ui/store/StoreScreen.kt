@@ -259,7 +259,7 @@ private fun PopupPlanBox(
 }
 
 @Composable
-private fun StorePopupCard(
+internal fun StorePopupCard(
     productId: String,
     viewModel: ReviewerViewModel,
     billingManager: com.nhyle.hyperionmaritime.data.billing.BillingManager,

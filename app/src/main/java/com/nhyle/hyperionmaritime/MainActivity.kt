@@ -248,6 +248,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
     val scope = rememberCoroutineScope()
 
     val showPaywall by viewModel.showPaywallDialog.collectAsStateWithLifecycle()
+    val paywallTargetTrack by viewModel.paywallTargetTrack.collectAsStateWithLifecycle()
     val showDailyCheckIn by viewModel.showDailyCheckInDialog.collectAsStateWithLifecycle()
     var showAccountDialog by remember { mutableStateOf(false) }
     val termsAccepted by viewModel.hasAcceptedTerms.collectAsStateWithLifecycle()
@@ -448,6 +449,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
     if (showPaywall) {
         PaywallDialog(
             viewModel = viewModel,
+            targetTrack = paywallTargetTrack,
             onDismiss = { viewModel.dismissPaywallDialog() }
         )
     }
