@@ -141,8 +141,6 @@ fun HomeScreen(
     var showMockExamWarningDialog by remember { mutableStateOf(false) }
     var showMockFunctionSelectionDialog by remember { mutableStateOf(false) }
     var showSearchLockedDialog by remember { mutableStateOf(false) }
-    var showUpgradeRequiredDialog by remember { mutableStateOf(false) }
-    var lockedFeatureName by remember { mutableStateOf("") }
 
     val trackMistakes = mistakeEntries.filter { it.track.equals(selectedTrack.name, ignoreCase = true) }
     val totalMistakes = trackMistakes.size
@@ -189,8 +187,7 @@ fun HomeScreen(
                 if (isTrackUnlocked) {
                     viewModel.navigateTo(Screen.Search)
                 } else {
-                    lockedFeatureName = "Question Bank Search"
-                    showUpgradeRequiredDialog = true
+                    viewModel.triggerPaywall(selectedTrack)
                 }
             },
             isSearchLocked = !isTrackUnlocked,
@@ -198,8 +195,7 @@ fun HomeScreen(
                 if (isTrackUnlocked) {
                     viewModel.navigateTo(Screen.Bookmarks)
                 } else {
-                    lockedFeatureName = "Bookmarked Questions"
-                    showUpgradeRequiredDialog = true
+                    viewModel.triggerPaywall(selectedTrack)
                 }
             },
             bookmarkCount = totalBookmarks,
@@ -357,8 +353,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.PracticeCompetenceSelect(isCrpMode = false, isOperationalReview = false))
                                 } else {
-                                    lockedFeatureName = "Practice All Questions"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -385,8 +380,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.QuickScanCompetenceSelect(selectedTrack))
                                 } else {
-                                    lockedFeatureName = "Quick Scan Material"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -405,8 +399,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     showMockExamWarningDialog = true
                                 } else {
-                                    lockedFeatureName = "Official Timed Mock Exam"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -433,8 +426,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.Flashcards)
                                 } else {
-                                    lockedFeatureName = "Flashcard Revision Mode"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -453,8 +445,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.Vault)
                                 } else {
-                                    lockedFeatureName = "Mistakes Notebook (Vault)"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -481,8 +472,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.History)
                                 } else {
-                                    lockedFeatureName = "Session Log & History"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -501,8 +491,7 @@ fun HomeScreen(
                                 if (isTrackUnlocked) {
                                     viewModel.navigateTo(Screen.Search)
                                 } else {
-                                    lockedFeatureName = "Question Bank Search"
-                                    showUpgradeRequiredDialog = true
+                                    viewModel.triggerPaywall(selectedTrack)
                                 }
                             }
                         )
@@ -512,132 +501,6 @@ fun HomeScreen(
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-    }
-
-    // Professional Chegg-style Upgrade Required Dialog
-    if (showUpgradeRequiredDialog) {
-        val trackTitle = when (selectedTrack) {
-            Track.DECK_OIC_NW -> "OIC-NW Deck"
-            Track.GMDSS_GOC -> "GMDSS Radio Operator"
-            Track.ENGINE_OIC_EW -> "Engine OIC-EW"
-            Track.ENGINE_MGT -> "Engine Management"
-            Track.DECK_MGT -> "Deck Management"
-        }
-        HyperionDialog(
-            onDismissRequest = { showUpgradeRequiredDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.90f)
-                    .widthIn(max = 420.dp)
-                    .background(colors.surface)
-                    .border(1.5.dp, colors.border, RectangleShape)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(colors.accent)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(colors.surface2)
-                                .border(1.dp, colors.border),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = colors.accent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "UPGRADE REQUIRED",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.foreground,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "Access to $lockedFeatureName requires an active $trackTitle license pass.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.foreground,
-                        lineHeight = 20.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Check the Bond Store to view available upgrade tracks and unlock full question banks.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                        lineHeight = 18.sp
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            onClick = { showUpgradeRequiredDialog = false },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.surface2,
-                            border = BorderStroke(1.dp, colors.border)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "NO",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.foreground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-
-                        Surface(
-                            onClick = {
-                                showUpgradeRequiredDialog = false
-                                viewModel.navigateTo(Screen.Store)
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.accent
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "YES",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.accentForeground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
     }
