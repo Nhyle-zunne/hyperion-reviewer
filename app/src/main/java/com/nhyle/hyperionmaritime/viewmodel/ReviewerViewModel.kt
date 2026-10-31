@@ -3343,6 +3343,24 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             refreshMistakes()
         }
         autoSaveCurrentSession()
+
+        // Intensive drills use a separate answer/queue flow, so they need their
+        // own auto-advance trigger rather than the standard quiz handler.
+        val shouldAutoNext = (isCorrect && _isAutoNextCorrect.value) || (!isCorrect && _isAutoNextWrong.value)
+        if (shouldAutoNext) {
+            cancelAutoAdvance()
+            val evaluatedQuestionId = currentQ.id
+            autoAdvanceJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(if (isCorrect) 750L else 1200L)
+                val stillOnSameAnswer = _isAnswerEvaluated.value &&
+                    _intensiveQueue.value.firstOrNull()?.id == evaluatedQuestionId &&
+                    _intensiveCurrentQuestionState.value?.isCorrect == isCorrect
+                if (stillOnSameAnswer) {
+                    autoAdvanceJob = null
+                    advanceIntensiveQuestion()
+                }
+            }
+        }
     }
 
     fun advanceIntensiveQuestion() {
@@ -4292,10 +4310,17 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             val shouldAutoNext = (isCorrect && _isAutoNextCorrect.value) || (!isCorrect && _isAutoNextWrong.value)
             if (shouldAutoNext) {
                 cancelAutoAdvance()
+                val evaluatedQuestionId = currentQ.id
                 autoAdvanceJob = viewModelScope.launch {
                     val delayMs = if (isCorrect) 750L else 1200L
                     kotlinx.coroutines.delay(delayMs)
-                    if (_isAnswerEvaluated.value && _currentQuestionIndex.value == currentIndex) {
+                    val stillOnSameAnswer = _isAnswerEvaluated.value &&
+                        _currentQuestionIndex.value == currentIndex &&
+                        _activeQuestions.value.getOrNull(currentIndex)?.id == evaluatedQuestionId
+                    if (stillOnSameAnswer) {
+                        // Clear the pending reference before advancing; the next question
+                        // must not inherit or cancel a completed auto-advance job.
+                        autoAdvanceJob = null
                         confirmOrNextQuestion()
                     }
                 }
