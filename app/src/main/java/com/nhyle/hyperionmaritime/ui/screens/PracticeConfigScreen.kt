@@ -189,7 +189,6 @@ fun PracticeConfigScreen(
     val isFreeTier = !isVerified
     // showFixedPool should be true for CRP Mode OR GMDSS Operational Review, but never for imported sheets
     val showFixedPool = !isMTestMDrill && (isCrpMode || (selectedTrack == Track.GMDSS_GOC && isOperationalReview))
-    var showVerificationDialog by remember { mutableStateOf(false) }
     val isAdvancedLocked = !isVerified
     val isRangeUnlocked = isActivated || isVerified || isMTestMDrill
 
@@ -929,7 +928,7 @@ fun PracticeConfigScreen(
                                         selectedDeliveryFormat = DrillDeliveryMode.INTENSIVE
                                     } else {
                                         Toast.makeText(context, "Requires Verification", Toast.LENGTH_SHORT).show()
-                                        showVerificationDialog = true
+                                        viewModel.triggerPaywall(selectedTrack)
                                     }
                                 }
                                 .border(
@@ -951,7 +950,7 @@ fun PracticeConfigScreen(
                                             selectedDeliveryFormat = DrillDeliveryMode.INTENSIVE
                                         } else {
                                             Toast.makeText(context, "Requires Verification", Toast.LENGTH_SHORT).show()
-                                            showVerificationDialog = true
+                                            viewModel.triggerPaywall(selectedTrack)
                                         }
                                     },
                                     enabled = isVerified,
@@ -1116,7 +1115,7 @@ fun PracticeConfigScreen(
                                             randomizeQuestionOrder = !randomizeQuestionOrder
                                         } else {
                                             Toast.makeText(context, "Requires Verification", Toast.LENGTH_SHORT).show()
-                                            showVerificationDialog = true
+                                            viewModel.triggerPaywall(selectedTrack)
                                         }
                                     }
                             ) {
@@ -1169,7 +1168,7 @@ fun PracticeConfigScreen(
                                         randomizeQuestionOrder = it
                                     } else {
                                         Toast.makeText(context, "Requires Verification", Toast.LENGTH_SHORT).show()
-                                        showVerificationDialog = true
+                                        viewModel.triggerPaywall(selectedTrack)
                                     }
                                 },
                                 modifier = Modifier.testTag("switch_randomize_question_order")
@@ -1650,7 +1649,7 @@ fun PracticeConfigScreen(
                     MianRuleCard(
                         ruleColor = colors.border,
                         containerColor = colors.surface,
-                        onClick = { showVerificationDialog = true }
+                        onClick = { viewModel.triggerPaywall(selectedTrack) }
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -1673,7 +1672,7 @@ fun PracticeConfigScreen(
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = "UPGRADE REQUIRED",
+                                    text = "TRACK PASS REQUIRED",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = colors.foreground,
@@ -2077,124 +2076,7 @@ fun PracticeConfigScreen(
         )
     }
 
-    // Store Purchase Confirm Dialog
-    if (showVerificationDialog) {
-        HyperionDialog(
-            onDismissRequest = { showVerificationDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(0.90f)
-                    .widthIn(max = 420.dp)
-                    .background(colors.surface)
-                    .border(1.5.dp, colors.border, RectangleShape)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.dp)
-                            .background(colors.accent)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(colors.surface2)
-                                .border(1.dp, colors.border),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = colors.accent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "UPGRADE REQUIRED",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = colors.foreground,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Text(
-                        text = "To unlock full access including the config page, please purchase via our store or activate a key.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.foreground,
-                        lineHeight = 20.sp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Would you like to check the Hyperion Store to view available track passes?",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.muted,
-                        lineHeight = 18.sp
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Surface(
-                            onClick = { showVerificationDialog = false },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.surface2,
-                            border = BorderStroke(1.dp, colors.border)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "NO",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.foreground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
 
-                        Surface(
-                            onClick = {
-                                showVerificationDialog = false
-                                viewModel.navigateTo(Screen.Store)
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp),
-                            shape = RectangleShape,
-                            color = colors.accent
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(
-                                    text = "YES",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = colors.accentForeground,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

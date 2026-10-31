@@ -84,6 +84,7 @@ fun SearchScreen(
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val selectedCompetenceFilter by viewModel.selectedCompetenceFilter.collectAsStateWithLifecycle()
     val selectedSearchTrack by viewModel.selectedSearchTrack.collectAsStateWithLifecycle()
+    val selectedTrack by viewModel.selectedTrack.collectAsStateWithLifecycle()
     val isOicNwActive by viewModel.isOicNwActive.collectAsStateWithLifecycle()
     val isGmdssActive by viewModel.isGmdssActive.collectAsStateWithLifecycle()
     val isEwActive by viewModel.isEngineOicEwProUnlocked.collectAsStateWithLifecycle()
@@ -102,8 +103,6 @@ fun SearchScreen(
 
     val hasAnyActiveLicense = isOicNwActive || isGmdssActive || isEwActive || isDmActive || isEmActive || isUnlocked
 
-    var showLockedDialog by remember { mutableStateOf(false) }
-    var lockedTrackForDialog by remember { mutableStateOf<Track?>(null) }
 
     // Auto-switch away from a locked track if the user owns a different active pass
     androidx.compose.runtime.LaunchedEffect(hasAnyActiveLicense, isOicNwActive, isGmdssActive, isEwActive, isDmActive, isEmActive) {
@@ -187,7 +186,7 @@ fun SearchScreen(
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Button(
-                            onClick = { viewModel.navigateTo(Screen.Store) },
+                            onClick = { viewModel.triggerPaywall(selectedTrack) },
                             shape = RectangleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colors.accent,
@@ -293,7 +292,7 @@ fun SearchScreen(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
                                         if (isOicNwActive) viewModel.setSearchTrack(Track.DECK_OIC_NW)
-                                        else { lockedTrackForDialog = Track.DECK_OIC_NW; showLockedDialog = true }
+                                        else viewModel.triggerPaywall(Track.DECK_OIC_NW)
                                     }
                                 )
                                 TrackChip(
@@ -304,7 +303,7 @@ fun SearchScreen(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
                                         if (isGmdssActive) viewModel.setSearchTrack(Track.GMDSS_GOC)
-                                        else { lockedTrackForDialog = Track.GMDSS_GOC; showLockedDialog = true }
+                                        else viewModel.triggerPaywall(Track.GMDSS_GOC)
                                     }
                                 )
                             }
@@ -322,7 +321,7 @@ fun SearchScreen(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
                                         if (isEwActive) viewModel.setSearchTrack(Track.ENGINE_OIC_EW)
-                                        else { lockedTrackForDialog = Track.ENGINE_OIC_EW; showLockedDialog = true }
+                                        else viewModel.triggerPaywall(Track.ENGINE_OIC_EW)
                                     }
                                 )
                                 TrackChip(
@@ -333,7 +332,7 @@ fun SearchScreen(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
                                         if (isDmActive) viewModel.setSearchTrack(Track.DECK_MGT)
-                                        else { lockedTrackForDialog = Track.DECK_MGT; showLockedDialog = true }
+                                        else viewModel.triggerPaywall(Track.DECK_MGT)
                                     }
                                 )
                                 TrackChip(
@@ -344,111 +343,12 @@ fun SearchScreen(
                                     modifier = Modifier.weight(1f),
                                     onClick = {
                                         if (isEmActive) viewModel.setSearchTrack(Track.ENGINE_MGT)
-                                        else { lockedTrackForDialog = Track.ENGINE_MGT; showLockedDialog = true }
+                                        else viewModel.triggerPaywall(Track.ENGINE_MGT)
                                     }
                                 )
                             }
                         }
                     }
-
-                    // Locked Track Intercept Confirmation Dialog
-                    if (showLockedDialog && lockedTrackForDialog != null) {
-                        val trackLabel = when (lockedTrackForDialog) {
-                            Track.DECK_OIC_NW -> "Deck OIC-NW"
-                            Track.GMDSS_GOC -> "GMDSS GOC"
-                            Track.ENGINE_OIC_EW -> "Engine OIC-EW"
-                            Track.DECK_MGT -> "Deck Management"
-                            Track.ENGINE_MGT -> "Engine Management"
-                            else -> "Selected"
-                        }
-
-                        HyperionDialog(
-                            onDismissRequest = { showLockedDialog = false },
-                            properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = true)
-                        ) {
-                            Surface(
-                                shape = RectangleShape,
-                                color = colors.surface,
-                                border = BorderStroke(1.dp, colors.border),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(20.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = "Locked",
-                                        tint = colors.accent,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = "TRACK LOCKED",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = colors.foreground,
-                                        letterSpacing = 1.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "$trackLabel question bank is locked. Purchase the pass in the Pass Store to unlock search access.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colors.muted,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        androidx.compose.material3.OutlinedButton(
-                                            onClick = { showLockedDialog = false },
-                                            shape = RectangleShape,
-                                            border = BorderStroke(1.dp, colors.border),
-                                            colors = ButtonDefaults.outlinedButtonColors(
-                                                contentColor = colors.foreground
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(42.dp)
-                                        ) {
-                                            Text(
-                                                text = "LATER",
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 11.sp,
-                                                letterSpacing = 1.sp
-                                            )
-                                        }
-                                        Button(
-                                            onClick = {
-                                                showLockedDialog = false
-                                                viewModel.navigateTo(Screen.Store)
-                                            },
-                                            shape = RectangleShape,
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = colors.accent,
-                                                contentColor = colors.accentForeground
-                                            ),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(42.dp)
-                                        ) {
-                                            Text(
-                                                text = "STORE",
-                                                fontWeight = FontWeight.ExtraBold,
-                                                fontSize = 11.sp,
-                                                letterSpacing = 1.sp
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
 
                 // Tier 2: Dynamic Competence Selection Row
                 item {

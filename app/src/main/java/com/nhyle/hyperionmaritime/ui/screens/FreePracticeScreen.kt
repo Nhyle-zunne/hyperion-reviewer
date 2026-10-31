@@ -294,7 +294,7 @@ fun FreePracticeScreen(
                         }
                     } else {
                         MianButton(
-                            onClick = { viewModel.navigateTo(Screen.Store) },
+                            onClick = { viewModel.triggerPaywall(selectedTrack) },
                             accent = true,
                             modifier = Modifier.weight(1.5f)
                         ) {
