@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -37,6 +38,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.time.OffsetDateTime
 
 data class SupabaseAccountState(
@@ -772,13 +774,28 @@ object SupabaseAccountManager {
             if (jsonBody != null) {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                if (jsonBody.optString("action") == "write" &&
+                    url.endsWith("/functions/v1/learning-progress")) {
+                    setRequestProperty("Content-Encoding", "gzip")
+                }
             }
         }
 
         try {
             if (jsonBody != null) {
+                val rawBody = jsonBody.toString().toByteArray(StandardCharsets.UTF_8)
+                val requestBody = if (
+                    jsonBody.optString("action") == "write" &&
+                    url.endsWith("/functions/v1/learning-progress")
+                ) {
+                    ByteArrayOutputStream().use { output ->
+                        GZIPOutputStream(output).use { gzip -> gzip.write(rawBody) }
+                        output.toByteArray()
+                    }
+                } else rawBody
+                connection.setFixedLengthStreamingMode(requestBody.size)
                 connection.outputStream.use { stream ->
-                    stream.write(jsonBody.toString().toByteArray(StandardCharsets.UTF_8))
+                    stream.write(requestBody)
                 }
             }
             val status = connection.responseCode
