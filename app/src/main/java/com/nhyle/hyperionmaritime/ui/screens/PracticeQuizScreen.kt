@@ -353,7 +353,7 @@ private fun IntensiveDrillScreen(
                             tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    QuestionSettingsMenu(viewModel = viewModel)
+                    QuestionSettingsMenu(viewModel = viewModel, showDrillAutomations = true)
                 }
             }
         }
