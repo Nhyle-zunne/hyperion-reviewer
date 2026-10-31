@@ -136,7 +136,7 @@ class MainActivity : ComponentActivity() {
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
         val request = PeriodicWorkRequestBuilder<LearningProgressSyncWorker>(
-            15, TimeUnit.MINUTES
+            1, TimeUnit.HOURS
         ).setConstraints(constraints).build()
         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
             "hyperion-account-learning-progress-sync",
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Queue a network-constrained upload after the study-time tracker has had
      * time to persist its asynchronous background writes. This supplements
-     * sign-in synchronization and the 15-minute periodic retry.
+     * sign-in synchronization and the hourly safety retry.
      */
     private fun scheduleImmediateLearningProgressSync() {
         val constraints = Constraints.Builder()
