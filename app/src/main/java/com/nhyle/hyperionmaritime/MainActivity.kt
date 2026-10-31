@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
         ).setConstraints(constraints).build()
         WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
             "hyperion-account-learning-progress-sync",
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
     }
