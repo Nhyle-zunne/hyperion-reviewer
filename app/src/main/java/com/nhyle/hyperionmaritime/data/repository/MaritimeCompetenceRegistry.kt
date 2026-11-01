@@ -246,14 +246,16 @@ object MaritimeCompetenceRegistry {
      * C2: 349 questions
      * Total: 2,260 questions.
      */
+    // Free GMDSS sample: 90 questions from each of 10 C1 parts,
+    // and 65 questions from each of 2 C2 parts.
     val CRP_GMDSS_DISTRIBUTION = mapOf(
-        "C1" to 1000,
-        "C2" to 150
+        "C1" to 900,
+        "C2" to 130
     )
 
     val CRP_GMDSS_PARTS_DISTRIBUTION = mapOf(
-        "C1" to mapOf(1 to 500, 2 to 500),
-        "C2" to mapOf(1 to 200)
+        "C1" to (1..10).associateWith { 90 },
+        "C2" to (1..2).associateWith { 65 }
     )
 
     val OFFICIAL_GMDSS_PERMIT_DISTRIBUTION = mapOf(
