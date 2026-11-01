@@ -54,6 +54,7 @@ fun QuickScanCompetenceSelectScreen(
 ) {
     val colors = LocalSpaghettiColors.current
     val currentSelectedTrack by viewModel.selectedTrack.collectAsState()
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
     val activeTrack = track ?: currentSelectedTrack
 
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(activeTrack)
@@ -180,7 +181,7 @@ fun QuickScanCompetenceSelectScreen(
             }
 
             items(competences) { comp ->
-                val totalQuestions = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, activeTrack, isProUnlocked = true).size
+                val totalQuestions = if (questionBankLoaded) MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, activeTrack, isProUnlocked = true).size else null
                 val savedIndex = viewModel.getQuickScanLastIndex(activeTrack, comp.competenceId)
 
                 MianRuleCard(
@@ -285,7 +286,7 @@ fun QuickScanCompetenceSelectScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "$totalQuestions Review Questions • ${comp.functionId}",
+                                text = if (totalQuestions == null) "… Review Questions • ${comp.functionId}" else "$totalQuestions Review Questions • ${comp.functionId}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = colors.muted,
                                 fontSize = 12.sp,
