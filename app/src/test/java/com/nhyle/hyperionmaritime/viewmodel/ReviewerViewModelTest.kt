@@ -66,6 +66,10 @@ class ReviewerViewModelTest {
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.setMasterProUnlocked(context, false)
+        // Clear encrypted account-linked entitlements as well so a prior test's
+        // signed-in user cannot unlock tracks in this test class.
+        LicenseManager.clearAccountEntitlements(context)
+        LicenseManager.setCurrentAccountUserId(context, null)
         LicenseManager.init(context)
 
         // Reset secure license prefs
