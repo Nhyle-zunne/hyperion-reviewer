@@ -243,8 +243,8 @@ data class ActivePlanInfo(
             )
 
     /**
-     * Actual subscription period remaining, used for user-facing expiry displays.
-     * This is deliberately independent from the shorter offline verification lease.
+     * Actual subscription period remaining, used for user-facing expiry displays
+     * and offline access. It is bounded only by the server-verified track expiry.
      */
     val subscriptionRemainingTimeMs: Long
         get() {
@@ -1231,8 +1231,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val hasEw = engineOicEwPlan != null && !engineOicEwPlan.isExpired
         val hasDm = deckMgtPlan != null && !deckMgtPlan.isExpired
         val hasEm = engineMgtPlan != null && !engineMgtPlan.isExpired
-        // Use raw owned-purchase presence for cache lifecycle. An expired offline lease
-        // must retain its old timestamp; clearing it would trigger the one-time legacy migration.
+        // Use raw owned-purchase presence for cache lifecycle. A locally expired subscription
+        // must retain its original verification metadata; clearing it could trigger migration.
 
         val signature = computeIntegrityChecksum(hasOic, hasGmdss, hasAll, hasEw, hasDm, hasEm)
         editor.putString(KEY_SIGNATURE_HASH, signature)
@@ -1260,7 +1260,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             }
         }
 
-        // Persist every observed clock advance, but advance the verification lease only
+        // Persist every observed clock advance, but update ownership-verification metadata only
         // when Android reports a validated internet connection and the clock is monotonic.
         editor.putLong(
             KEY_PLAY_HIGH_WATER_MARK,
