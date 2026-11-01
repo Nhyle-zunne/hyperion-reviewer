@@ -36,7 +36,8 @@ val releaseKeyAlias = configuredSigningValue("KEY_ALIAS") ?: "upload"
 val releaseKeyPassword = configuredSigningValue("KEY_PASSWORD")
 val releaseSigningConfigured = releaseKeystorePath != null &&
   releaseStorePassword != null &&
-  releaseKeyPassword != null
+  releaseKeyPassword != null &&
+  file(releaseKeystorePath).isFile
 
 android {
   namespace = "com.nhyle.hyperionmaritime"
@@ -49,7 +50,7 @@ android {
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
     minSdk = 24
     targetSdk = 36
-    versionCode = 67
+    versionCode = 68
     versionName = "2.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -72,7 +73,7 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else null
+      signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
       ndk {
         debugSymbolLevel = "FULL"
       }
