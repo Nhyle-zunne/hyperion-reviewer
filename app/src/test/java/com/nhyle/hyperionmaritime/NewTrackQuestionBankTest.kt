@@ -28,7 +28,7 @@ class NewTrackQuestionBankTest {
         )
 
         for ((track, folder, prefix) in tracksToVerify) {
-            val trackQuestions = newQuestions.filter { it.track == track }
+            val trackQuestions = allQuestions.filter { it.track == track }
             val questionsByComp = trackQuestions.groupBy { it.competenceId }
             val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
 
