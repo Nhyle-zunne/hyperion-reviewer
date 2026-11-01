@@ -173,7 +173,7 @@ internal fun subscriptionDisplayExpiry(
 
 /**
  * Consistent countdown formatter for dashboard and Store. Uses the actual supplied expiry,
- * not the 72-hour offline ownership-verification lease.
+ * not a shortened offline ownership-verification lease.
  */
 fun formatSubscriptionTimeRemaining(
     expiryEpochMs: Long,
@@ -223,7 +223,7 @@ data class ActivePlanInfo(
     val effectiveNow: Long
         get() = maxOf(System.currentTimeMillis(), highWaterMarkEpoch)
 
-    /** A local Play cache must be refreshed online within the bounded at-sea grace period. */
+    /** A cached Play grant needs a first successful ownership verification and clock-integrity check. */
     val requiresOnlineVerification: Boolean
         get() {
             if (isTerminalLicense) return false
@@ -231,12 +231,10 @@ data class ActivePlanInfo(
             val clockRolledBack = highWaterMarkEpoch > 0L &&
                 now < highWaterMarkEpoch - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
             val verificationMissing = lastVerifiedAtEpoch <= 0L
-            val verificationStale = !verificationMissing &&
-                effectiveNow - lastVerifiedAtEpoch > BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
-            return clockRolledBack || verificationMissing || verificationStale
+            return clockRolledBack || verificationMissing
         }
 
-    /** Cached access is rejected after either the server period estimate or offline lease ends. */
+    /** Cached access remains available until the locally verified subscription expiry. */
     val isExpired: Boolean
         get() = !isTerminalLicense && (
             requiresOnlineVerification ||
@@ -255,18 +253,9 @@ data class ActivePlanInfo(
             return (expiryTimestamp - effectiveNow).coerceAtLeast(0L)
         }
 
-    /**
-     * Remaining time in the locally cached ownership-verification lease.
-     * This is a security boundary for offline access, not the subscription's expiry.
-     */
+    /** Remaining time in the actual subscription period, independent of connectivity. */
     val remainingTimeMs: Long
-        get() {
-            if (isTerminalLicense) return Long.MAX_VALUE
-            if (requiresOnlineVerification) return 0L
-            val leaseRemaining = (lastVerifiedAtEpoch + BillingConstants.OFFLINE_VERIFICATION_GRACE_MS - effectiveNow)
-                .coerceAtLeast(0L)
-            return minOf(subscriptionRemainingTimeMs, leaseRemaining)
-        }
+        get() = subscriptionRemainingTimeMs
 
     fun getFormattedTimeRemaining(): String {
         if (isTerminalLicense) return "Active Plan"
@@ -314,9 +303,6 @@ internal fun shouldApplyPlayPurchaseSnapshot(hasValidatedInternet: Boolean): Boo
     hasValidatedInternet
 
 object BillingConstants {
-    // Match the account-linked license cache: allow up to 72 hours at sea after
-    // the last successful Google Play ownership query, then require online verification.
-    const val OFFLINE_VERIFICATION_GRACE_MS = 72L * 60L * 60L * 1000L
     const val CLOCK_ROLLBACK_TOLERANCE_MS = 5L * 60L * 1000L
 
     const val PRODUCT_OIC_NW_PASS = "hyperion_oic_nw_pass"
@@ -963,7 +949,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             savedHighWaterMarkEpochMs = savedHighWaterMark
         )
         // A local Play Store snapshot while offline is not a fresh server verification.
-        // It may preserve the existing lease, but must never renew its 72-hour deadline.
+        // It may preserve the cached ownership state, but cannot change the recorded purchase expiry.
         val verifiedAtEpoch = if (mayRefreshVerification) queryTimeEpoch else priorVerifiedAt
 
         val editor = securePrefs.edit()
