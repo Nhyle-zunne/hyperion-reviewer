@@ -580,6 +580,22 @@ class PlayBillingAndLicensingInvariantsTest {
             LicenseManager.accountEntitlementRevisionFlow.value > revisionBeforeSync
         )
 
+        // Simulate a device that has been offline for more than three days after
+        // a successful website-license sync. Access must be governed by the actual
+        // server expiry, not by the age of the last online verification.
+        context.getSharedPreferences("hyperion_account_entitlements_test", Context.MODE_PRIVATE)
+            .edit()
+            .putLong("account_entitlements_synced_at", now - 73L * 60L * 60L * 1000L)
+            .putLong("account_entitlements_last_verified_epoch", now - 73L * 60L * 60L * 1000L)
+            .commit()
+        LicenseManager.refreshAccountEntitlementFlows(context)
+        viewModel.refreshUnlockStates()
+        assertTrue(
+            "A website-paid track must remain unlocked offline beyond 72 hours while its actual expiry is in the future",
+            LicenseManager.isAccountEntitlementUnlocked(context, Track.DECK_OIC_NW) &&
+                viewModel.isTrackUnlocked(Track.DECK_OIC_NW)
+        )
+
         LicenseManager.setCurrentAccountUserId(context, "different-account")
         assertEquals(
             "A website entitlement must disappear from the store after switching accounts",
