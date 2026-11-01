@@ -130,7 +130,7 @@ object ProQuestionRepository {
                     break
                 }
             }
-            val startRow = if (headerIdx != -1) headerIdx + 1 else 1
+            val startRow = if (rows.size > 3) (if (headerIdx != -1) headerIdx + 1 else 1) else rows.size
             for (rowIndex in startRow until rows.size) {
                 val row = rows[rowIndex]
                 if (row.size >= 10 && row[0].isNotBlank() && !row[0].equals("Question", ignoreCase = true)) {
