@@ -60,6 +60,55 @@ class OfflineEntitlementLeaseTest {
     }
 
     @Test
+    fun verifiesAdministratorLeaseWithoutArtificialTrackExpiries() {
+        val keyPair = generateSigningKey()
+        val token = signedToken(
+            keyPair,
+            JSONObject()
+                .put("v", 1)
+                .put("userId", USER_ID)
+                .put("issuedAt", ISSUED_AT)
+                .put("admin", true)
+                .put("tracks", JSONObject())
+        )
+
+        val lease = OfflineEntitlementLease.verify(
+            token = token,
+            expectedUserId = USER_ID,
+            nowEpochMs = NOW,
+            verificationKey = keyPair.public
+        )
+
+        assertNotNull(lease)
+        assertEquals(true, lease?.isAdmin)
+        assertEquals(ISSUED_AT, lease?.issuedAtEpochMs)
+        assertEquals(0L, lease?.expiryByTrack?.get(Track.DECK_OIC_NW))
+    }
+
+    @Test
+    fun rejectsAdministratorLeaseWithSyntheticTrackExpiry() {
+        val keyPair = generateSigningKey()
+        val token = signedToken(
+            keyPair,
+            JSONObject()
+                .put("v", 1)
+                .put("userId", USER_ID)
+                .put("issuedAt", ISSUED_AT)
+                .put("admin", true)
+                .put("tracks", JSONObject().put("DECK_OIC_NW", DECK_EXPIRY))
+        )
+
+        assertNull(
+            OfflineEntitlementLease.verify(
+                token = token,
+                expectedUserId = USER_ID,
+                nowEpochMs = NOW,
+                verificationKey = keyPair.public
+            )
+        )
+    }
+
+    @Test
     fun rejectsLeaseIssuedForDifferentHyperionAccount() {
         val keyPair = generateSigningKey()
         val token = signedToken(
