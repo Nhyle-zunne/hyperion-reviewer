@@ -7,6 +7,7 @@ import com.nhyle.hyperionmaritime.data.local.HyperionDatabase
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.repository.ReviewerRepository
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
@@ -81,8 +82,17 @@ class DrillConfigurationAndRangeSliderTest {
         }
         assertEquals("Total Deck CRP question count must be exactly 2,065", 2065, sumDeckCrp)
 
+        // Load the actual bank first. The free pool may only count records that
+        // survived the same parsing/validation used by the reviewer.
+        val loadedQuestions = MaritimeQuestionBank.ALL_QUESTIONS
+        val expectedValidCrpTotal = MaritimeCompetenceRegistry.ALL_DECK_COMPETENCES.sumOf { competence ->
+            val available = loadedQuestions.count {
+                it.track == Track.DECK_OIC_NW && it.competenceId == competence.competenceId
+            }
+            minOf(available, MaritimeCompetenceRegistry.getOfficialCrpQuestionCount(competence.competenceId, Track.DECK_OIC_NW))
+        }
         val totalCrpTrack = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW, isCrpMode = true)
-        assertEquals("getTotalTrackQuestionCount in CRP mode must return 2,065", 2065, totalCrpTrack)
+        assertEquals("CRP total must reflect real parsed questions capped by the official distribution", expectedValidCrpTotal, totalCrpTrack)
     }
 
     @Test
