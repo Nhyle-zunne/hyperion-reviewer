@@ -15,9 +15,10 @@ class NewTrackQuestionBankTest {
     fun testNewTrackQuestionLoading() {
         val newQuestions = NewTrackQuestionBank.getQuestions()
 
-        val ewQuestions = newQuestions.filter { it.track == Track.ENGINE_OIC_EW }
-        val dmQuestions = newQuestions.filter { it.track == Track.DECK_MGT }
-        val emQuestions = newQuestions.filter { it.track == Track.ENGINE_MGT }
+        val allQuestions = MaritimeQuestionBank.ALL_QUESTIONS
+        val ewQuestions = allQuestions.filter { it.track == Track.ENGINE_OIC_EW }
+        val dmQuestions = allQuestions.filter { it.track == Track.DECK_MGT }
+        val emQuestions = allQuestions.filter { it.track == Track.ENGINE_MGT }
 
         // Dynamic CSV verification for ENGINE_OIC_EW, DECK_MGT, and ENGINE_MGT
         val tracksToVerify = listOf(
@@ -39,17 +40,27 @@ class NewTrackQuestionBankTest {
                 }
 
                 assertTrue("CSV file $relativePath must exist", csvFile.exists())
-                val csvDataRowCount = countCsvDataRows(csvFile)
+                val validQuestionCount = countValidQuestionRows(csvFile)
                 val loadedCount = questionsByComp[comp.competenceId]?.size ?: 0
 
                 assertTrue(
-                    "Competence ${comp.competenceId} in ${track.name} CSV row count ($csvDataRowCount) must be > 1",
-                    csvDataRowCount > 1
+                    "Competence ${comp.competenceId} in ${track.name} must contain more than one valid question",
+                    validQuestionCount > 1
                 )
                 assertEquals(
-                    "Competence ${comp.competenceId} in ${track.name} loaded question count must equal CSV data row count",
-                    csvDataRowCount,
+                    "Competence ${comp.competenceId} in ${track.name} must count only valid parsed questions",
+                    validQuestionCount,
                     loadedCount
+                )
+                assertEquals(
+                    "Track total for ${track.name} must equal the count of parsed question objects",
+                    trackQuestions.size,
+                    MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
+                )
+                assertEquals(
+                    "Competence ${comp.competenceId} count must equal the parsed question objects",
+                    loadedCount,
+                    MaritimeCompetenceRegistry.getDynamicQuestionCount(comp.competenceId, track, isProUnlocked = true)
                 )
             }
         }
@@ -66,7 +77,6 @@ class NewTrackQuestionBankTest {
         }
 
         // Assert every question ID in ALL_QUESTIONS is unique across all tracks
-        val allQuestions = MaritimeQuestionBank.ALL_QUESTIONS
         val allIds = allQuestions.map { it.id }
         val distinctIds = allIds.distinct()
         assertEquals("Every question ID in ALL_QUESTIONS must be unique across all tracks", allIds.size, distinctIds.size)
@@ -100,7 +110,7 @@ class NewTrackQuestionBankTest {
         assertEquals("GMDSS C2 count must match before count", 349, gmdssByComp["C2"]?.size ?: 0)
     }
 
-    private fun countCsvDataRows(file: File): Int {
+    private fun countValidQuestionRows(file: File): Int {
         val text = com.nhyle.hyperionmaritime.data.util.AssetCrypto.decrypt(file.readBytes()).toString(Charsets.UTF_8)
             .replace("&#39;", "'")
             .replace("/'", "'")
@@ -108,22 +118,35 @@ class NewTrackQuestionBankTest {
             .replace("\uFFFD", "'")
 
         val rows = parseCsvText(text)
-        if (rows.isEmpty()) return 0
-
-        var headerIndex = -1
-        for (idx in rows.indices) {
-            val r = rows[idx]
-            if (r.isNotEmpty() && r[0].trim().equals("No.", ignoreCase = true)) {
-                headerIndex = idx
-                break
-            }
+        val headerIndex = rows.indexOfFirst { row ->
+            row.isNotEmpty() && row[0].trim().equals("No.", ignoreCase = true)
         }
-        if (headerIndex == -1) return 0
+        if (headerIndex < 0) return 0
 
+        val seenNumbers = mutableSetOf<Int>()
         var count = 0
-        for (rowIdx in (headerIndex + 1) until rows.size) {
-            val row = rows[rowIdx]
+        for (row in rows.drop(headerIndex + 1)) {
             if (row.isEmpty() || row.all { it.isBlank() }) continue
+            val number = row.getOrNull(0)?.trim()?.toIntOrNull() ?: continue
+            if (number <= 0 || number in seenNumbers) continue
+
+            val question = row.getOrNull(1)?.trim().orEmpty()
+            if (question.isEmpty() || question.equals("Question", ignoreCase = true)) continue
+
+            val options = (2..5).map { row.getOrNull(it)?.trim().orEmpty() }
+            if (options.count { it.isNotEmpty() } < 2) continue
+            if (options == listOf("A", "B", "C", "D")) continue
+
+            val answerIndex = when (row.getOrNull(6)?.trim()?.uppercase()) {
+                "A", "1" -> 0
+                "B", "2" -> 1
+                "C", "3" -> 2
+                "D", "4" -> 3
+                else -> -1
+            }
+            if (answerIndex !in 0..3 || options[answerIndex].isEmpty()) continue
+
+            seenNumbers.add(number)
             count++
         }
         return count
