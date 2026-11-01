@@ -59,6 +59,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -115,6 +116,7 @@ fun TrackSelectionScreen(
 ) {
     val colors = LocalSpaghettiColors.current
     val context = LocalContext.current
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val examRecords by viewModel.examRecords.collectAsState()
     val isOicNwProUnlocked by viewModel.isOicNwProUnlocked.collectAsState()
@@ -283,8 +285,8 @@ fun TrackSelectionScreen(
 
             // 5. 2x2 Grid of Square Tiles
             item {
-                val deckTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW)
-                val gmdssTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC)
+                val deckTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW) else 0
+                val gmdssTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC) else 0
                 val deckSeenCount = viewModel.getSeenQuestionIds(Track.DECK_OIC_NW).size
                 val gmdssSeenCount = viewModel.getSeenQuestionIds(Track.GMDSS_GOC).size
                 val deckProgress = if (deckTotal > 0) ((deckSeenCount.toFloat() / deckTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
@@ -489,12 +491,13 @@ private fun DashboardGrid(
     onOpenWebsite: () -> Unit,
     onOpenDetails: (Track) -> Unit
 ) {
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        val deckTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW)
-        val gmdssTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC)
+        val deckTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_OIC_NW) else 0
+        val gmdssTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC) else 0
 
         // Row 1: Deck & GMDSS
         Row(
@@ -506,7 +509,7 @@ private fun DashboardGrid(
                     track = Track.DECK_OIC_NW,
                     title = "DECK OIC-NW",
                     regulation = "STCW REGULATION II/1",
-                    questionNumber = if (deckTotal >= 1000) "%,d".format(deckTotal) else deckTotal.toString(),
+                    questionNumber = if (!questionBankLoaded) "…" else if (deckTotal >= 1000) "%,d".format(deckTotal) else deckTotal.toString(),
                     competencyAndMock = "12 COMPETENCIES · 200-ITEM MOCK",
                     progressPercent = deckProgress,
                     isUnlocked = isOicNwProUnlocked,
@@ -522,7 +525,7 @@ private fun DashboardGrid(
                     track = Track.GMDSS_GOC,
                     title = "GMDSS RADIO (GOC)",
                     regulation = "STCW REGULATION IV/2",
-                    questionNumber = if (gmdssTotal >= 1000) "%,d".format(gmdssTotal) else gmdssTotal.toString(),
+                    questionNumber = if (!questionBankLoaded) "…" else if (gmdssTotal >= 1000) "%,d".format(gmdssTotal) else gmdssTotal.toString(),
                     competencyAndMock = "2 COMPETENCIES · 100-ITEM MOCK",
                     progressPercent = gmdssProgress,
                     isUnlocked = isGmdssProUnlocked,
@@ -534,15 +537,15 @@ private fun DashboardGrid(
             }
         }
 
-        val ewTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_OIC_EW)
+        val ewTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_OIC_EW) else 0
         val ewSeen = viewModel.getSeenQuestionIds(Track.ENGINE_OIC_EW).size
         val ewProgress = if (ewTotal > 0) ((ewSeen.toFloat() / ewTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
 
-        val emTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_MGT)
+        val emTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.ENGINE_MGT) else 0
         val emSeen = viewModel.getSeenQuestionIds(Track.ENGINE_MGT).size
         val emProgress = if (emTotal > 0) ((emSeen.toFloat() / emTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
 
-        val dmTotal = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_MGT)
+        val dmTotal = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.DECK_MGT) else 0
         val dmSeen = viewModel.getSeenQuestionIds(Track.DECK_MGT).size
         val dmProgress = if (dmTotal > 0) ((dmSeen.toFloat() / dmTotal.toFloat()) * 100).toInt().coerceIn(0, 100) else 0
 
@@ -556,7 +559,7 @@ private fun DashboardGrid(
                     track = Track.ENGINE_OIC_EW,
                     title = "ENGINE OIC-EW",
                     regulation = "STCW REGULATION III/1",
-                    questionNumber = if (ewTotal >= 1000) "%,d".format(ewTotal) else ewTotal.toString(),
+                    questionNumber = if (!questionBankLoaded) "…" else if (ewTotal >= 1000) "%,d".format(ewTotal) else ewTotal.toString(),
                     competencyAndMock = "13 COMPETENCIES · 200-ITEM MOCK",
                     progressPercent = ewProgress,
                     isUnlocked = isEwProUnlocked,
@@ -573,7 +576,7 @@ private fun DashboardGrid(
                     track = Track.ENGINE_MGT,
                     title = "ENGINE MANAGEMENT",
                     regulation = "STCW REGULATION III/2",
-                    questionNumber = if (emTotal >= 1000) "%,d".format(emTotal) else emTotal.toString(),
+                    questionNumber = if (!questionBankLoaded) "…" else if (emTotal >= 1000) "%,d".format(emTotal) else emTotal.toString(),
                     competencyAndMock = "14 COMPETENCIES · 200-ITEM MOCK",
                     progressPercent = emProgress,
                     isUnlocked = isEmProUnlocked,
@@ -596,7 +599,7 @@ private fun DashboardGrid(
                     track = Track.DECK_MGT,
                     title = "DECK MANAGEMENT",
                     regulation = "STCW REGULATION II/2",
-                    questionNumber = if (dmTotal >= 1000) "%,d".format(dmTotal) else dmTotal.toString(),
+                    questionNumber = if (!questionBankLoaded) "…" else if (dmTotal >= 1000) "%,d".format(dmTotal) else dmTotal.toString(),
                     competencyAndMock = "18 COMPETENCIES · 200-ITEM MOCK",
                     progressPercent = dmProgress,
                     isUnlocked = isDmProUnlocked,
@@ -1067,9 +1070,10 @@ private fun TrackDetailsPopup(
     onEnterReview: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
     val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
-    val count = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
-    val totalQuestions = if (count >= 1000) "%,d".format(count) else count.toString()
+    val count = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track) else 0
+    val totalQuestions = if (!questionBankLoaded) "…" else if (count >= 1000) "%,d".format(count) else count.toString()
     val mockSize = when (track) {
         Track.DECK_OIC_NW -> 200
         Track.GMDSS_GOC -> 100
@@ -1461,9 +1465,9 @@ private fun TrackDetailsPopup(
                                                             fontSize = 10.sp,
                                                             softWrap = true
                                                         )
-                                                        val loadedCount = MaritimeCompetenceRegistry.getDynamicQuestionCount(comp.competenceId, track, isProUnlocked = true)
+                                                        val loadedCount = if (questionBankLoaded) MaritimeCompetenceRegistry.getDynamicQuestionCount(comp.competenceId, track, isProUnlocked = true) else null
                                                         Text(
-                                                            text = "$loadedCount Qs",
+                                                            text = if (loadedCount == null) "…" else "$loadedCount Qs",
                                                             style = MaterialTheme.typography.labelSmall,
                                                             fontWeight = FontWeight.Bold,
                                                             color = colors.accent,
