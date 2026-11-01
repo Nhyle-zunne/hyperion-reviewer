@@ -264,6 +264,7 @@ object LicenseManager {
     private const val ACCOUNT_LAST_VERIFIED_EPOCH_KEY = "account_entitlements_last_verified_epoch"
     private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
     private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
+    private const val ACCOUNT_DEVELOPER_ADMIN_KEY = "account_developer_admin"
     private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
     @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
 
@@ -555,9 +556,13 @@ object LicenseManager {
         val now = clock.epochMillis
         val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
         val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
-        val allowed = isAccountEntitlementValid(
-            ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null),
-            currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null),
+        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
+        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        val isCachedDeveloperAdmin = prefs.getBoolean(ACCOUNT_DEVELOPER_ADMIN_KEY, false) &&
+            !ownerUserId.isNullOrBlank() && ownerUserId == currentUserId && syncedAt > 0L
+        val allowed = isCachedDeveloperAdmin || isAccountEntitlementValid(
+            ownerUserId = ownerUserId,
+            currentUserId = currentUserId,
             syncedAtEpochMs = syncedAt,
             lastVerifiedEpochMs = lastVerified,
             expiryEpochMs = prefs.getLong(accountExpiryKey(track), 0L),
@@ -573,7 +578,12 @@ object LicenseManager {
     }
 
     /** Stores active, server-read website entitlements for offline use until their real expiry. */
-    fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
+    fun saveAccountEntitlements(
+        context: Context,
+        userId: String,
+        expiryByTrack: Map<Track, Long>,
+        isDeveloperAdmin: Boolean = false
+    ): Boolean {
         if (userId.isBlank()) return false
         val prefs = accountEntitlementPreferences(context) ?: return false
         val previousVerifiedAt = prefs.getLong(
@@ -591,8 +601,12 @@ object LicenseManager {
             .putString(ACCOUNT_CURRENT_USER_ID_KEY, userId)
             .putLong(ACCOUNT_SYNCED_AT_KEY, syncedAt)
             .putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
+            .putBoolean(ACCOUNT_DEVELOPER_ADMIN_KEY, isDeveloperAdmin)
         Track.values().forEach { track ->
-            editor.putLong(accountExpiryKey(track), expiryByTrack[track] ?: 0L)
+            // Administrator access is role-based and has no subscription expiry.
+            // Keep its signed role marker separately instead of manufacturing a
+            // seven-day plan and countdown for every track.
+            editor.putLong(accountExpiryKey(track), if (isDeveloperAdmin) 0L else (expiryByTrack[track] ?: 0L))
         }
         editor.apply()
         refreshAccountEntitlementFlows(context)
@@ -634,10 +648,22 @@ object LicenseManager {
     }
 
     fun isDeveloperAdminAccessActive(context: Context): Boolean {
-        val verifiedUserId = verifiedDeveloperAdminUserId ?: return false
-        val currentUserId = accountEntitlementPreferences(context)
-            ?.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
-        return verifiedUserId == currentUserId
+        val prefs = accountEntitlementPreferences(context.applicationContext) ?: return false
+        val currentUserId = prefs.getString(ACCOUNT_CURRENT_USER_ID_KEY, null)
+        val verifiedUserId = verifiedDeveloperAdminUserId
+        if (!verifiedUserId.isNullOrBlank() && verifiedUserId == currentUserId) return true
+
+        // A signed admin claim is stored with the same encrypted, account-bound
+        // snapshot as paid grants. It survives app restarts and remains available
+        // offline; a successful later server sync can remove it if the account's
+        // administrator role has been revoked.
+        val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
+        val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
+        return prefs.getBoolean(ACCOUNT_DEVELOPER_ADMIN_KEY, false) &&
+            !currentUserId.isNullOrBlank() &&
+            ownerUserId == currentUserId &&
+            syncedAt > 0L &&
+            getOfflineTrustedTime(context.applicationContext).isTrusted
     }
 
     fun clearAccountEntitlements(context: Context) {
