@@ -27,6 +27,7 @@ import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import com.nhyle.hyperionmaritime.data.util.calculateOfflineTrustedTime
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 import kotlinx.coroutines.runBlocking
@@ -488,6 +489,59 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals("4 mins remaining", formatSubscriptionTimeRemaining(now + 4L * 60L * 1000L, now))
         assertEquals("< 1 min remaining", formatSubscriptionTimeRemaining(now + 10_000L, now))
         assertEquals("Subscription Expired", formatSubscriptionTimeRemaining(now - 1L, now))
+    }
+
+    @Test
+    fun deviceMonotonicClockKeepsOfflineLicenseTimeMovingWhenWallClockChangesDuringSameBoot() {
+        val savedEpoch = Instant.parse("2026-11-01T10:00:00Z").toEpochMilli()
+        val savedElapsed = 5L * 60L * 60L * 1000L
+        val elapsedAfterSleep = savedElapsed + 8L * 60L * 60L * 1000L
+
+        val reading = calculateOfflineTrustedTime(
+            wallEpochMillis = savedEpoch - 2L * 60L * 60L * 1000L,
+            elapsedRealtimeMillis = elapsedAfterSleep,
+            currentBootCount = 77,
+            savedEpochMillis = savedEpoch,
+            savedElapsedRealtimeMillis = savedElapsed,
+            savedBootCount = 77
+        )
+        assertTrue("A manual wall-clock rollback during the same boot must not lock an offline user", reading.isTrusted)
+        assertEquals(
+            "Elapsed realtime, which includes device sleep, advances license time independently of wall-clock edits",
+            savedEpoch + 8L * 60L * 60L * 1000L,
+            reading.epochMillis
+        )
+    }
+
+    @Test
+    fun deviceClockRollbackAfterRebootIsDetectedWithoutRequiringAnInternetCheck() {
+        val savedEpoch = Instant.parse("2026-11-01T10:00:00Z").toEpochMilli()
+        val reading = calculateOfflineTrustedTime(
+            wallEpochMillis = savedEpoch - 30L * 60L * 1000L,
+            elapsedRealtimeMillis = 3L * 60L * 1000L,
+            currentBootCount = 78,
+            savedEpochMillis = savedEpoch,
+            savedElapsedRealtimeMillis = 8L * 60L * 60L * 1000L,
+            savedBootCount = 77
+        )
+        assertFalse("After reboot, a device clock materially behind the saved trusted time must be flagged", reading.isTrusted)
+        assertEquals("The trusted high-water mark is preserved rather than rolled back", savedEpoch, reading.epochMillis)
+    }
+
+    @Test
+    fun correctDeviceRtcRestoresOfflineAccessAfterReboot() {
+        val savedEpoch = Instant.parse("2026-11-01T10:00:00Z").toEpochMilli()
+        val correctWallTime = savedEpoch + 18L * 60L * 60L * 1000L
+        val reading = calculateOfflineTrustedTime(
+            wallEpochMillis = correctWallTime,
+            elapsedRealtimeMillis = 4L * 60L * 1000L,
+            currentBootCount = 79,
+            savedEpochMillis = savedEpoch,
+            savedElapsedRealtimeMillis = 9L * 60L * 60L * 1000L,
+            savedBootCount = 77
+        )
+        assertTrue("A correct device RTC after reboot is sufficient; internet is not required", reading.isTrusted)
+        assertEquals(correctWallTime, reading.epochMillis)
     }
 
     @Test
