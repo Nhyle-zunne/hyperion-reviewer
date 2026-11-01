@@ -300,17 +300,27 @@ fun HomeScreen(
             }
 
             val freeReviewerSubtitle = when (selectedTrack) {
-                Track.DECK_OIC_NW -> "2,065 questions across 12 competencies (F1, F2, F3)."
+                Track.DECK_OIC_NW -> {
+                    if (questionBankLoaded) {
+                        val totalCount = MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
+                        "%,d valid questions across 12 competencies (F1, F2, F3).".format(totalCount)
+                    } else {
+                        "Loading verified question counts across 12 competencies…"
+                    }
+                }
                 Track.GMDSS_GOC -> {
-                    val c1 = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C1
-                    val c2 = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C2
-                    "%,d questions across 2 operational competencies.".format(c1 + c2)
+                    if (questionBankLoaded) {
+                        val totalCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isOperationalReview = true)
+                        "%,d valid questions across 2 operational competencies.".format(totalCount)
+                    } else {
+                        "Loading verified question counts across 2 operational competencies…"
+                    }
                 }
                 else -> {
                     val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
                     if (questionBankLoaded) {
                         val totalCount = MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
-                        "%,d questions across %d competencies.".format(totalCount, compCount)
+                        "%,d valid questions across %d competencies.".format(totalCount, compCount)
                     } else {
                         "Loading verified question counts across $compCount competencies…"
                     }
