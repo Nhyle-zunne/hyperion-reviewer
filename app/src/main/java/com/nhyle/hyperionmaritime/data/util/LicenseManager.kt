@@ -1209,7 +1209,9 @@ object LicenseManager {
     }
 
     fun formatRemainingTime(expiryEpoch: Long, context: Context? = null): String {
-        val now = System.currentTimeMillis()
+        val clock = context?.let { getOfflineTrustedTime(it) }
+        if (clock != null && !clock.isTrusted) return "Restore correct device date/time"
+        val now = clock?.epochMillis ?: System.currentTimeMillis()
         val effectiveNow = if (context != null) {
             val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
             val actEpoch = prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L)
@@ -1286,9 +1288,10 @@ object LicenseManager {
         val isUnlocked = prefs.getBoolean("is_oic_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
         if (!isUnlocked) return false
         val exp = getOfflineTrackExpiry(context, Track.DECK_OIC_NW)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
-        return exp > 0L && maxOf(now, highWater) < exp
+        return exp > 0L && maxOf(clock.epochMillis, highWater) < exp
     }
 
     fun isOfflineGmdssUnlocked(context: Context): Boolean {
@@ -1301,9 +1304,10 @@ object LicenseManager {
         val isUnlocked = prefs.getBoolean("is_gmdss_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
         if (!isUnlocked) return false
         val exp = getOfflineTrackExpiry(context, Track.GMDSS_GOC)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
-        return exp > 0L && maxOf(now, highWater) < exp
+        return exp > 0L && maxOf(clock.epochMillis, highWater) < exp
     }
 
     fun isOfflineEngineOicEwUnlocked(context: Context): Boolean {
@@ -1316,9 +1320,10 @@ object LicenseManager {
         val isUnlocked = prefs.getBoolean("is_engine_ew_unlocked", false) || prefs.getBoolean("is_ew_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
         if (!isUnlocked) return false
         val exp = getOfflineTrackExpiry(context, Track.ENGINE_OIC_EW)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
-        return exp > 0L && maxOf(now, highWater) < exp
+        return exp > 0L && maxOf(clock.epochMillis, highWater) < exp
     }
 
     fun isOfflineDeckMgtUnlocked(context: Context): Boolean {
@@ -1331,9 +1336,10 @@ object LicenseManager {
         val isUnlocked = prefs.getBoolean("is_deck_mgt_unlocked", false) || prefs.getBoolean("is_dm_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
         if (!isUnlocked) return false
         val exp = getOfflineTrackExpiry(context, Track.DECK_MGT)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
-        return exp > 0L && maxOf(now, highWater) < exp
+        return exp > 0L && maxOf(clock.epochMillis, highWater) < exp
     }
 
     fun isOfflineEngineMgtUnlocked(context: Context): Boolean {
@@ -1346,18 +1352,20 @@ object LicenseManager {
         val isUnlocked = prefs.getBoolean("is_engine_mgt_unlocked", false) || prefs.getBoolean("is_em_unlocked", false) || prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)
         if (!isUnlocked) return false
         val exp = getOfflineTrackExpiry(context, Track.ENGINE_MGT)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
-        return exp > 0L && maxOf(now, highWater) < exp
+        return exp > 0L && maxOf(clock.epochMillis, highWater) < exp
     }
 
     fun isOfflineHyperionUnlocked(context: Context): Boolean {
         val prefs = context.getSharedPreferences(SECURE_PREFS_NAME, Context.MODE_PRIVATE)
         val allExp = prefs.getLong("offline_expiry_all", 0L)
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val highWater = maxOf(prefs.getLong(KEY_OFFLINE_LAST_VERIFIED_EPOCH, 0L), prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L))
         val isAllAccessValid = (prefs.getBoolean("is_all_access_unlocked", false) || prefs.getBoolean("is_full_access_unlocked", false)) &&
-            allExp > 0L && maxOf(now, highWater) < allExp
+            allExp > 0L && maxOf(clock.epochMillis, highWater) < allExp
 
         return isAllAccessValid || (
             isOfflineOicNwUnlocked(context) &&
