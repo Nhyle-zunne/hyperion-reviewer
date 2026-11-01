@@ -96,6 +96,27 @@ class DrillConfigurationAndRangeSliderTest {
     }
 
     @Test
+    fun testEveryTrackCountMatchesLoadedQuestionObjects() {
+        val loadedQuestions = MaritimeQuestionBank.ALL_QUESTIONS
+        assertTrue("Question bank must be marked loaded before totals are read", MaritimeQuestionBank.isLoaded)
+
+        for (track in Track.values()) {
+            val actualTrackCount = loadedQuestions.count { it.track == track }
+            val summedCompetenceCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).sumOf { competence ->
+                loadedQuestions.count {
+                    it.track == track && it.competenceId.equals(competence.competenceId, ignoreCase = true)
+                }
+            }
+            val registryTrackCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(
+                track, isCrpMode = false, isProUnlocked = true
+            )
+
+            assertEquals("$track dashboard total must match parsed Question objects", actualTrackCount, registryTrackCount)
+            assertEquals("$track competence totals must sum to its parsed track total", actualTrackCount, summedCompetenceCount)
+        }
+    }
+
+    @Test
     fun testGmdssCompetenceCounts() {
         val c1Gmdss = MaritimeCompetenceRegistry.getDynamicQuestionCount("C1", Track.GMDSS_GOC, isCrpMode = false)
         assertEquals("GMDSS C1 must have 1,911 items", 1911, c1Gmdss)
