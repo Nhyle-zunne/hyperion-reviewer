@@ -181,7 +181,6 @@ object LicenseManager {
     private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
     private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
     private const val ACCOUNT_EXPIRY_PREFIX = "account_entitlement_expiry_"
-    private const val ACCOUNT_OFFLINE_GRACE_MS = 72L * 60L * 60L * 1000L
     @Volatile private var accountEntitlementPrefsCache: SharedPreferences? = null
 
     // Incremented whenever account grants are refreshed so screens such as Bond Store
@@ -387,16 +386,14 @@ object LicenseManager {
         if (ownerUserId.isNullOrBlank() || ownerUserId != currentUserId) return false
         if (syncedAtEpochMs <= 0L) return false
 
-        // Older installs do not have a high-water mark yet. Treat their last verified
-        // time as the original successful sync time, preserving the existing 72-hour lease.
+        // Account grants are stored only after a successful server sync. Keep the
+        // cached grant available offline until its real server-issued track expiry.
+        // The high-water mark still prevents an ordinary clock rollback from extending it.
         val highWaterMark = maxOf(syncedAtEpochMs, lastVerifiedEpochMs)
         val clockRollbackToleranceMs = 5L * 60L * 1000L
         if (nowEpochMs < highWaterMark - clockRollbackToleranceMs) return false
 
-        // Within the small clock-skew tolerance, never let a lower wall clock move the
-        // effective time backwards. Both the offline grace and server expiry use it.
         val effectiveNow = maxOf(nowEpochMs, highWaterMark)
-        if (effectiveNow - syncedAtEpochMs > ACCOUNT_OFFLINE_GRACE_MS) return false
         return expiryEpochMs > effectiveNow
     }
 
