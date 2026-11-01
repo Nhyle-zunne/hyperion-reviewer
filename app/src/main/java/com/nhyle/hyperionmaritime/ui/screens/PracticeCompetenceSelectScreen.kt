@@ -74,6 +74,7 @@ fun PracticeCompetenceSelectScreen(
     val colors = LocalSpaghettiColors.current
     val isDark = colors.isDark
     val selectedTrack by viewModel.selectedTrack.collectAsState()
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
 
     val infiniteTransition = rememberInfiniteTransition(label = "luminousTransition")
 
@@ -162,12 +163,12 @@ fun PracticeCompetenceSelectScreen(
             .background(colors.background)
     ) {
         val isGmdssOpReview = (selectedTrack == Track.GMDSS_GOC) && isOperationalReview
-        val totalTrackQuestions = if (isCrpMode) {
+        val totalTrackQuestions = if (!questionBankLoaded) 0 else if (isCrpMode) {
             MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
         } else {
             MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack, isCrpMode = false, isProUnlocked = isTrackLicensed, isOperationalReview = isOperationalReview)
         }
-        val formattedTotalQuestions = if (totalTrackQuestions >= 1000) "%,d".format(totalTrackQuestions) else totalTrackQuestions.toString()
+        val formattedTotalQuestions = if (!questionBankLoaded) "…" else if (totalTrackQuestions >= 1000) "%,d".format(totalTrackQuestions) else totalTrackQuestions.toString()
 
         val screenTitle = if (isGmdssOpReview) {
             "GMDSS OPERATIONAL REVIEW"
@@ -278,7 +279,7 @@ fun PracticeCompetenceSelectScreen(
 
             items(competences) { comp ->
                 val isProForCount = if (isCrpMode) false else isTrackLicensed
-                val formattedCount = MaritimeCompetenceRegistry.getFormattedQuestionCount(comp.id, selectedTrack, isCrpMode, isProUnlocked = isProForCount, isOperationalReview = isOperationalReview)
+                val formattedCount = if (questionBankLoaded) MaritimeCompetenceRegistry.getFormattedQuestionCount(comp.id, selectedTrack, isCrpMode, isProUnlocked = isProForCount, isOperationalReview = isOperationalReview) else "…"
 
                 MianRuleCard(
                     ruleColor = colors.border,
