@@ -7,6 +7,9 @@ import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.classifyQuestionDifficulty
 
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object MaritimeQuestionBank {
 
@@ -20,6 +23,9 @@ object MaritimeQuestionBank {
 
     @Volatile
     private var _cachedQuestions: List<Question>? = null
+
+    private val _isLoadedFlow = MutableStateFlow(false)
+    val isLoadedFlow: StateFlow<Boolean> = _isLoadedFlow.asStateFlow()
 
     val isLoaded: Boolean
         get() = _cachedQuestions != null
@@ -46,6 +52,7 @@ object MaritimeQuestionBank {
                     q.copy(difficulty = classifyQuestionDifficulty(q.questionText, q.options))
                 }
                 _cachedQuestions = result
+                _isLoadedFlow.value = true
                 result
             }
         }
