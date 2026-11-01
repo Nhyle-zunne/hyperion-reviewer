@@ -17,6 +17,7 @@ import java.util.Base64
 internal data class VerifiedOfflineEntitlementLease(
     val userId: String,
     val issuedAtEpochMs: Long,
+    val isAdmin: Boolean,
     val expiryByTrack: Map<Track, Long>
 )
 
@@ -65,10 +66,14 @@ internal object OfflineEntitlementLease {
             if (claims.optInt("v", -1) != 1 || claims.optString("userId") != expectedUserId) {
                 return null
             }
+            val adminClaim = claims.opt("admin")
+            if (adminClaim != null && adminClaim !is Boolean) return null
+            val isAdmin = adminClaim == true
             val issuedAtValue = claims.optDouble("issuedAt", Double.NaN)
             if (!issuedAtValue.isFinite() || issuedAtValue <= 0.0) return null
             val issuedAt = issuedAtValue.toLong()
             val rawTracks = claims.optJSONObject("tracks") ?: return null
+            if (isAdmin && rawTracks.length() != 0) return null
             val effectiveNow = maxOf(nowEpochMs, issuedAt)
             val expiryByTrack = Track.values().associateWith { 0L }.toMutableMap()
             val keys = rawTracks.keys()
@@ -90,6 +95,7 @@ internal object OfflineEntitlementLease {
             VerifiedOfflineEntitlementLease(
                 userId = expectedUserId,
                 issuedAtEpochMs = issuedAt,
+                isAdmin = isAdmin,
                 expiryByTrack = expiryByTrack
             )
         } catch (_: Exception) {
