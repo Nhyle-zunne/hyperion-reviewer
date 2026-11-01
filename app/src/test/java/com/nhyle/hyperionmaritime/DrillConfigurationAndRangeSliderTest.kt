@@ -125,6 +125,10 @@ class DrillConfigurationAndRangeSliderTest {
 
         assertEquals("Free GMDSS C1 must use 90 questions per part", expectedC1Free, freeC1.size)
         assertEquals("Free GMDSS C2 must use 65 questions per part", expectedC2Free, freeC2.size)
+        assertEquals(900, MaritimeCompetenceRegistry.getOfficialCrpQuestionCount("C1", Track.GMDSS_GOC))
+        assertEquals(130, MaritimeCompetenceRegistry.getOfficialCrpQuestionCount("C2", Track.GMDSS_GOC))
+        assertEquals((1..10).associateWith { 90 }, MaritimeCompetenceRegistry.CRP_GMDSS_PARTS_DISTRIBUTION["C1"])
+        assertEquals((1..2).associateWith { 65 }, MaritimeCompetenceRegistry.CRP_GMDSS_PARTS_DISTRIBUTION["C2"])
         assertEquals("GMDSS operational free pool must match the sampled questions", expectedC1Free + expectedC2Free,
             MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(Track.GMDSS_GOC, isProUnlocked = false))
 
