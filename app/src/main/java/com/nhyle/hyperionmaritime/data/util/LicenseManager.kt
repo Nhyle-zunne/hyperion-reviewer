@@ -175,8 +175,8 @@ object LicenseManager {
 
     private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
     private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
-    // Persist a high-water mark so changing the device clock backwards cannot extend
-    // the 72-hour offline lease after the app has observed a later time.
+    // Persist a high-water mark so changing the device clock backwards cannot
+    // extend a cached account grant beyond its real server-issued expiry.
     private const val ACCOUNT_LAST_VERIFIED_EPOCH_KEY = "account_entitlements_last_verified_epoch"
     private const val ACCOUNT_OWNER_USER_ID_KEY = "account_entitlements_owner_user_id"
     private const val ACCOUNT_CURRENT_USER_ID_KEY = "account_current_user_id"
@@ -333,7 +333,7 @@ object LicenseManager {
 
     /**
      * Returns the server-issued website/account expiry only while that grant is still
-     * valid for the current signed-in account and its bounded offline verification lease.
+     * valid for the current signed-in account and its actual server-issued expiry.
      * A zero result means the store must not display the website grant as active.
      */
     fun getAccountEntitlementExpiry(context: Context, track: Track): Long {
@@ -368,7 +368,7 @@ object LicenseManager {
         return effectiveAccountEntitlementDisplayNow(now, syncedAt, lastVerified)
     }
 
-    /** Keep the offline lease's verification timestamp monotonic across device-clock rollback. */
+    /** Keep the cached entitlement's clock high-water mark monotonic across device-clock rollback. */
     internal fun nextAccountEntitlementVerificationTime(
         nowEpochMs: Long,
         previousVerifiedEpochMs: Long
@@ -419,7 +419,7 @@ object LicenseManager {
         return allowed
     }
 
-    /** Stores active, server-read website entitlements with a bounded offline grace period. */
+    /** Stores active, server-read website entitlements for offline use until their real expiry. */
     fun saveAccountEntitlements(context: Context, userId: String, expiryByTrack: Map<Track, Long>): Boolean {
         if (userId.isBlank()) return false
         val prefs = accountEntitlementPreferences(context) ?: return false
