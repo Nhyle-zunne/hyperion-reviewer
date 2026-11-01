@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.SystemClock
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -218,20 +219,39 @@ data class ActivePlanInfo(
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
     val highWaterMarkEpoch: Long = 0L,
-    val lastVerifiedAtEpoch: Long = purchaseTimestamp
+    val lastVerifiedAtEpoch: Long = purchaseTimestamp,
+    /** Trusted time snapshot paired with elapsedRealtime at the last entitlement load. */
+    val trustedNowEpochMs: Long? = null,
+    val trustedElapsedRealtimeMs: Long? = null,
+    /** False only when the device rebooted with a wall clock behind its saved high-water mark. */
+    val localClockTrusted: Boolean = true
 ) {
     val effectiveNow: Long
-        get() = maxOf(System.currentTimeMillis(), highWaterMarkEpoch)
+        get() {
+            val trustedBase = trustedNowEpochMs
+            val elapsedBase = trustedElapsedRealtimeMs
+            if (localClockTrusted && trustedBase != null && elapsedBase != null) {
+                val elapsedNow = SystemClock.elapsedRealtime()
+                if (elapsedNow >= elapsedBase) {
+                    return maxOf(
+                        highWaterMarkEpoch,
+                        trustedBase + (elapsedNow - elapsedBase)
+                    )
+                }
+            }
+            return maxOf(System.currentTimeMillis(), highWaterMarkEpoch, trustedNowEpochMs ?: 0L)
+        }
 
-    /** A cached Play grant needs a first successful ownership verification and clock-integrity check. */
+    /** A cached Play grant needs one successful ownership check and a trustworthy local clock. */
     val requiresOnlineVerification: Boolean
         get() {
             if (isTerminalLicense) return false
-            val now = System.currentTimeMillis()
-            val clockRolledBack = highWaterMarkEpoch > 0L &&
-                now < highWaterMarkEpoch - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
+            val clockUnavailable = !localClockTrusted
+            val clockRolledBackWithoutMonotonicAnchor = trustedNowEpochMs == null &&
+                highWaterMarkEpoch > 0L &&
+                System.currentTimeMillis() < highWaterMarkEpoch - BillingConstants.CLOCK_ROLLBACK_TOLERANCE_MS
             val verificationMissing = lastVerifiedAtEpoch <= 0L
-            return clockRolledBack || verificationMissing
+            return clockUnavailable || clockRolledBackWithoutMonotonicAnchor || verificationMissing
         }
 
     /** Cached access remains available until the locally verified subscription expiry. */
@@ -259,6 +279,7 @@ data class ActivePlanInfo(
 
     fun getFormattedTimeRemaining(): String {
         if (isTerminalLicense) return "Active Plan"
+        if (!localClockTrusted) return "Restore correct device date/time"
         if (requiresOnlineVerification) return "Reconnect to verify subscription"
         if (isExpired) return "Subscription Expired"
         return formatSubscriptionTimeRemaining(expiryTimestamp, effectiveNow)
@@ -274,6 +295,7 @@ data class ActivePlanInfo(
 
     fun getFullExpiryBadge(): String {
         if (isTerminalLicense) return "ACTIVE PLAN"
+        if (!localClockTrusted) return "CHECK DEVICE TIME"
         if (requiresOnlineVerification) return "VERIFY ONLINE"
         if (isExpired) return "EXPIRED"
         return "${getFormattedTimeRemaining().uppercase()} • ${getFormattedExpiryDate().uppercase()}"
@@ -940,7 +962,12 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         var lastPurchaseTime = 0L
         var lastBasePlan: String? = null
 
-        val queryTimeEpoch = System.currentTimeMillis()
+        val localClock = LicenseManager.getOfflineTrustedTime(appContext)
+        if (!localClock.isTrusted) {
+            Log.w(TAG, "Skipping Play purchase-cache mutation until the device date/time is restored")
+            return@withContext false
+        }
+        val queryTimeEpoch = localClock.epochMillis
         val savedHighWaterMark = securePrefs.getLong(KEY_PLAY_HIGH_WATER_MARK, 0L)
         val priorVerifiedAt = securePrefs.getLong(KEY_PLAY_LAST_VERIFIED_AT, 0L)
         val mayRefreshVerification = canRefreshPlayVerification(
@@ -1063,7 +1090,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                             }
                             BillingConstants.PRODUCT_GMDSS_PASS -> {
@@ -1073,7 +1103,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
@@ -1083,7 +1116,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                             }
                             BillingConstants.PRODUCT_DECK_MGT_PASS -> {
@@ -1093,7 +1129,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                             }
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
@@ -1103,7 +1142,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                             }
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
@@ -1113,7 +1155,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
                                     highWaterMarkEpoch = currentWaterMark,
-                                    lastVerifiedAtEpoch = verifiedAtEpoch
+                                    lastVerifiedAtEpoch = verifiedAtEpoch,
+                                    trustedNowEpochMs = queryTimeEpoch,
+                                    trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+                                    localClockTrusted = localClock.isTrusted
                                 )
                                 allAccessPlan = plan
                                 oicPlan = plan
@@ -1360,7 +1405,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val deckMgtCycle = deckMgtCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
         val engineMgtCycle = engineMgtCycleName?.let { runCatching { BillingCycle.valueOf(it) }.getOrNull() } ?: BillingCycle.MONTHLY
 
-        val now = System.currentTimeMillis()
+        val localClock = LicenseManager.getOfflineTrustedTime(appContext)
+        val now = localClock.epochMillis
         val oicPurchase = securePrefs.getLong("play_purchase_time_oic", if (purchaseTime > 0L) purchaseTime else now)
         var oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicCycle.nextBillingPeriod(oicPurchase))
         if (oic && oicExpiry < oicCycle.nextBillingPeriod(oicPurchase)) {
@@ -1410,7 +1456,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = oicPurchase,
             expiryTimestamp = oicExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
@@ -1419,7 +1468,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = gmdssPurchase,
             expiryTimestamp = gmdssExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
@@ -1428,7 +1480,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = allAccessPurchase,
             expiryTimestamp = allAccessExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val hasEw = securePrefs.getBoolean(KEY_ENGINE_OIC_EW_UNLOCKED, false)
@@ -1440,7 +1495,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = ewPurchase,
             expiryTimestamp = ewExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val hasDm = securePrefs.getBoolean(KEY_DECK_MGT_UNLOCKED, false)
@@ -1452,7 +1510,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = dmPurchase,
             expiryTimestamp = dmExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val hasEm = securePrefs.getBoolean(KEY_ENGINE_MGT_UNLOCKED, false)
@@ -1464,7 +1525,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             purchaseTimestamp = emPurchase,
             expiryTimestamp = emExpiry,
             highWaterMarkEpoch = playHighWaterMark,
-            lastVerifiedAtEpoch = playLastVerifiedAt
+            lastVerifiedAtEpoch = playLastVerifiedAt,
+            trustedNowEpochMs = localClock.epochMillis,
+            trustedElapsedRealtimeMs = localClock.elapsedRealtimeMillis,
+            localClockTrusted = localClock.isTrusted
         ) else null
 
         val hasOicActive = oicPlan != null && !oicPlan.isExpired
