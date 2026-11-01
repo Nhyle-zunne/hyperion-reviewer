@@ -666,11 +666,11 @@ object SupabaseAccountManager {
         // The signed issuance timestamp is authoritative and repairs the trusted
         // local clock baseline before the entitlement snapshot is saved.
         LicenseManager.anchorOfflineTrustedTimeToServer(context, lease.issuedAtEpochMs)
-        if (!LicenseManager.saveAccountEntitlements(context, session.userId, lease.expiryByTrack)) {
+        if (!LicenseManager.saveAccountEntitlements(context, session.userId, lease.expiryByTrack, lease.isAdmin)) {
             throw IllegalStateException("Could not securely cache account licenses on this device.")
         }
         val trustedNow = LicenseManager.getOfflineTrustedTime(context).epochMillis
-        return lease.expiryByTrack.values.count { it > trustedNow }
+        return if (lease.isAdmin) Track.values().size else lease.expiryByTrack.values.count { it > trustedNow }
     }
 
 
