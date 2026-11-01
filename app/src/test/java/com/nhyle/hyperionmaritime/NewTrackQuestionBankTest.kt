@@ -13,7 +13,7 @@ class NewTrackQuestionBankTest {
 
     @Test
     fun testNewTrackQuestionLoading() {
-        val newQuestions = NewTrackQuestionBank.getQuestions()
+        NewTrackQuestionBank.getQuestions()
 
         val allQuestions = MaritimeQuestionBank.ALL_QUESTIONS
         val ewQuestions = allQuestions.filter { it.track == Track.ENGINE_OIC_EW }
