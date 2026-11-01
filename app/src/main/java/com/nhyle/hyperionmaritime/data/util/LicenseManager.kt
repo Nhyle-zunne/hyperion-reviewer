@@ -169,9 +169,75 @@ sealed class OfflineLicenseStatus {
     data class ClockTampered(val reason: String) : OfflineLicenseStatus()
 }
 
+internal data class OfflineTrustedTime(
+    val epochMillis: Long,
+    val elapsedRealtimeMillis: Long,
+    val bootCount: Int,
+    val isTrusted: Boolean
+)
+
+/**
+ * Pure clock resolver. Within one boot, elapsedRealtime is the authoritative
+ * elapsed-time source and is unaffected by manual wall-clock changes. After a
+ * reboot, the persisted wall-clock high-water mark is compared with the device
+ * RTC; a material rollback fails closed until the user restores the correct time.
+ */
+internal fun calculateOfflineTrustedTime(
+    wallEpochMillis: Long,
+    elapsedRealtimeMillis: Long,
+    currentBootCount: Int,
+    savedEpochMillis: Long,
+    savedElapsedRealtimeMillis: Long,
+    savedBootCount: Int,
+    rollbackToleranceMillis: Long = 5L * 60L * 1000L
+): OfflineTrustedTime {
+    if (savedEpochMillis <= 0L || savedElapsedRealtimeMillis < 0L) {
+        return OfflineTrustedTime(wallEpochMillis, elapsedRealtimeMillis, currentBootCount, wallEpochMillis > 0L)
+    }
+
+    val sameBoot = if (currentBootCount >= 0 && savedBootCount >= 0) {
+        currentBootCount == savedBootCount
+    } else {
+        elapsedRealtimeMillis >= savedElapsedRealtimeMillis
+    }
+
+    if (sameBoot && elapsedRealtimeMillis >= savedElapsedRealtimeMillis) {
+        val elapsedDelta = elapsedRealtimeMillis - savedElapsedRealtimeMillis
+        val monotonicEpoch = savedEpochMillis + elapsedDelta
+        return OfflineTrustedTime(
+            epochMillis = maxOf(savedEpochMillis, monotonicEpoch),
+            elapsedRealtimeMillis = elapsedRealtimeMillis,
+            bootCount = currentBootCount,
+            isTrusted = true
+        )
+    }
+
+    if (wallEpochMillis < savedEpochMillis - rollbackToleranceMillis) {
+        return OfflineTrustedTime(
+            epochMillis = savedEpochMillis,
+            elapsedRealtimeMillis = elapsedRealtimeMillis,
+            bootCount = currentBootCount,
+            isTrusted = false
+        )
+    }
+
+    return OfflineTrustedTime(
+        epochMillis = maxOf(wallEpochMillis, savedEpochMillis),
+        elapsedRealtimeMillis = elapsedRealtimeMillis,
+        bootCount = currentBootCount,
+        isTrusted = wallEpochMillis > 0L
+    )
+}
+
 object LicenseManager {
     const val PREFS_NAME = "hyperion_license_prefs"
     const val SECURE_PREFS_NAME = "secure_license_prefs"
+
+    private const val OFFLINE_TRUSTED_CLOCK_PREFS = "hyperion_offline_trusted_clock"
+    private const val CLOCK_EPOCH_KEY = "trusted_epoch_ms"
+    private const val CLOCK_ELAPSED_KEY = "trusted_elapsed_realtime_ms"
+    private const val CLOCK_BOOT_COUNT_KEY = "trusted_boot_count"
+    private const val CLOCK_PERSIST_INTERVAL_MS = 60L * 1000L
 
     private const val ACCOUNT_ENTITLEMENTS_PREFS = "hyperion_account_entitlements"
     private const val ACCOUNT_SYNCED_AT_KEY = "account_entitlements_synced_at"
@@ -326,6 +392,72 @@ object LicenseManager {
         }
     }
 
+    /**
+     * Returns an offline-capable trusted local timestamp. While the current boot
+     * remains active, Android's elapsedRealtime clock advances through sleep and is
+     * immune to manual date/time edits. After reboot, the device RTC is accepted only
+     * when it has not moved materially behind the last saved trusted time.
+     */
+    fun getOfflineTrustedTime(context: Context): OfflineTrustedTime {
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(OFFLINE_TRUSTED_CLOCK_PREFS, Context.MODE_PRIVATE)
+        val wallNow = System.currentTimeMillis()
+        val elapsedNow = SystemClock.elapsedRealtime()
+        val bootCount = try {
+            Settings.Global.getInt(appContext.contentResolver, Settings.Global.BOOT_COUNT, -1)
+        } catch (_: Exception) {
+            -1
+        }
+        val savedEpoch = prefs.getLong(CLOCK_EPOCH_KEY, 0L)
+        val savedElapsed = prefs.getLong(CLOCK_ELAPSED_KEY, -1L)
+        val savedBoot = prefs.getInt(CLOCK_BOOT_COUNT_KEY, -1)
+        val reading = calculateOfflineTrustedTime(
+            wallEpochMillis = wallNow,
+            elapsedRealtimeMillis = elapsedNow,
+            currentBootCount = bootCount,
+            savedEpochMillis = savedEpoch,
+            savedElapsedRealtimeMillis = savedElapsed,
+            savedBootCount = savedBoot
+        )
+        if (reading.isTrusted && (
+                savedEpoch <= 0L ||
+                    reading.epochMillis - savedEpoch >= CLOCK_PERSIST_INTERVAL_MS ||
+                    bootCount != savedBoot
+                )) {
+            // Synchronous commit is deliberate: this is a small security timestamp,
+            // and losing the latest high-water mark during process death is avoidable.
+            prefs.edit()
+                .putLong(CLOCK_EPOCH_KEY, reading.epochMillis)
+                .putLong(CLOCK_ELAPSED_KEY, elapsedNow)
+                .putInt(CLOCK_BOOT_COUNT_KEY, bootCount)
+                .commit()
+        }
+        return reading
+    }
+
+    /**
+     * A server Date header can re-anchor the local clock after a successful online
+     * verification. Never lower a previously persisted trusted timestamp.
+     */
+    fun anchorOfflineTrustedTimeToServer(context: Context, serverEpochMillis: Long) {
+        if (serverEpochMillis <= 0L) return
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(OFFLINE_TRUSTED_CLOCK_PREFS, Context.MODE_PRIVATE)
+        val previous = prefs.getLong(CLOCK_EPOCH_KEY, 0L)
+        val trusted = maxOf(previous, serverEpochMillis)
+        val elapsed = SystemClock.elapsedRealtime()
+        val bootCount = try {
+            Settings.Global.getInt(appContext.contentResolver, Settings.Global.BOOT_COUNT, -1)
+        } catch (_: Exception) {
+            -1
+        }
+        prefs.edit()
+            .putLong(CLOCK_EPOCH_KEY, trusted)
+            .putLong(CLOCK_ELAPSED_KEY, elapsed)
+            .putInt(CLOCK_BOOT_COUNT_KEY, bootCount)
+            .commit()
+    }
+
     private fun accountExpiryKey(track: Track): String = ACCOUNT_EXPIRY_PREFIX + track.name
 
     fun isAccountEntitlementUnlocked(context: Context, track: Track): Boolean =
@@ -355,7 +487,8 @@ object LicenseManager {
     ): Long = maxOf(nowEpochMs, syncedAtEpochMs, lastVerifiedEpochMs)
 
     fun getAccountEntitlementEffectiveNow(context: Context): Long {
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        val now = clock.epochMillis
         val prefs = accountEntitlementPreferences(context.applicationContext)
             ?: return now
         val ownerUserId = prefs.getString(ACCOUNT_OWNER_USER_ID_KEY, null)
@@ -399,7 +532,9 @@ object LicenseManager {
 
     private fun isAccountTrackUnlocked(context: Context, track: Track): Boolean {
         val prefs = accountEntitlementPreferences(context) ?: return false
-        val now = System.currentTimeMillis()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
+        val now = clock.epochMillis
         val syncedAt = prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
         val lastVerified = prefs.getLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, syncedAt)
         val allowed = isAccountEntitlementValid(
@@ -411,10 +546,10 @@ object LicenseManager {
             nowEpochMs = now
         )
 
-        // Advance the persisted high-water mark at most once per minute to avoid
-        // writing SharedPreferences on every question/access-gate check.
+        // Advance the account-specific audit mark alongside the shared monotonic
+        // clock; neither depends on a live internet connection.
         if (allowed && now > lastVerified + 60L * 1000L) {
-            prefs.edit().putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, now).apply()
+            prefs.edit().putLong(ACCOUNT_LAST_VERIFIED_EPOCH_KEY, now).commit()
         }
         return allowed
     }
@@ -427,8 +562,10 @@ object LicenseManager {
             ACCOUNT_LAST_VERIFIED_EPOCH_KEY,
             prefs.getLong(ACCOUNT_SYNCED_AT_KEY, 0L)
         )
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) return false
         val syncedAt = nextAccountEntitlementVerificationTime(
-            System.currentTimeMillis(),
+            clock.epochMillis,
             previousVerifiedAt
         )
         val editor = prefs.edit()
@@ -603,8 +740,13 @@ object LicenseManager {
         val duration = prefs.getString(KEY_OFFLINE_DURATION, "1M") ?: "1M"
         val activationEpoch = prefs.getLong(KEY_OFFLINE_ACTIVATION_EPOCH, 0L)
 
-        val now = System.currentTimeMillis()
-        val currentElapsed = SystemClock.elapsedRealtime()
+        val clock = getOfflineTrustedTime(context)
+        if (!clock.isTrusted) {
+            prefs.edit().putBoolean(KEY_OFFLINE_CLOCK_TAMPERED, true).apply()
+            return OfflineLicenseStatus.ClockTampered("Device time moved backwards after reboot. Restore the correct date and time to continue offline.")
+        }
+        val now = clock.epochMillis
+        val currentElapsed = clock.elapsedRealtimeMillis
 
         val timezoneGraceMs = 48L * 60L * 60L * 1000L
 
