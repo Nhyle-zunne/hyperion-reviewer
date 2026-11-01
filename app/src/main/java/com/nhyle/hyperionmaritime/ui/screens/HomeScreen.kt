@@ -84,6 +84,7 @@ import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -110,6 +111,7 @@ fun HomeScreen(
 ) {
     val colors = LocalSpaghettiColors.current
     val isDarkMode = colors.isDark
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
     val selectedTrack by viewModel.selectedTrack.collectAsState()
     val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
     val mistakeEntries by viewModel.mistakeEntries.collectAsState()
@@ -305,15 +307,19 @@ fun HomeScreen(
                     "%,d questions across 2 operational competencies.".format(c1 + c2)
                 }
                 else -> {
-                    val totalCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
-                    val compCount = com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
-                    "%,d questions across %d competencies.".format(totalCount, compCount)
+                    val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
+                    if (questionBankLoaded) {
+                        val totalCount = MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(selectedTrack, isProUnlocked = false)
+                        "%,d questions across %d competencies.".format(totalCount, compCount)
+                    } else {
+                        "Loading verified question counts across $compCount competencies…"
+                    }
                 }
             }
 
             val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(selectedTrack).size
-            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack)
-            val qCountStr = "%,d".format(qCount)
+            val qCount = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack) else 0
+            val qCountStr = if (questionBankLoaded) "%,d".format(qCount) else "…"
 
             // Row 1: Free Reviewer (Top-Left) + Practice All Questions (Top-Right)
             item {
