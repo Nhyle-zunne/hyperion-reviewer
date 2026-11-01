@@ -79,8 +79,8 @@ object NewTrackQuestionBank {
 
                 val noStr = row.getOrNull(0)?.trim() ?: ""
                 val no = noStr.toIntOrNull()
-                if (no == null) {
-                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: 'No.' is not an integer ('$noStr')")
+                if (no == null || no <= 0) {
+                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: 'No.' must be a positive integer ('$noStr')")
                     continue
                 }
 
