@@ -94,6 +94,7 @@ import com.nhyle.hyperionmaritime.data.local.ActiveSessionEntity
 import com.nhyle.hyperionmaritime.data.local.answeredQuestions
 import com.nhyle.hyperionmaritime.data.local.isCompleted
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -124,6 +125,7 @@ fun TrackSelectionScreen(
     val isEwProUnlocked by viewModel.isEngineOicEwProUnlocked.collectAsState()
     val isDmProUnlocked by viewModel.isDeckMgtProUnlocked.collectAsState()
     val isEmProUnlocked by viewModel.isEngineMgtProUnlocked.collectAsState()
+    val isDeveloperAdminAccess by LicenseManager.isDeveloperAdminAccessFlow.collectAsState()
     val regState by viewModel.registrationUiState.collectAsState()
     val rollingStreak by viewModel.rollingStreak.collectAsState()
     val marinaExamTargetMillis by viewModel.marinaExamTargetMillis.collectAsState()
@@ -299,6 +301,7 @@ fun TrackSelectionScreen(
                     isEwProUnlocked = isEwProUnlocked,
                     isDmProUnlocked = isDmProUnlocked,
                     isEmProUnlocked = isEmProUnlocked,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     regState = regState,
                     deckProgress = deckProgress,
                     gmdssProgress = gmdssProgress,
@@ -344,6 +347,7 @@ fun TrackSelectionScreen(
             track = track,
             isUnlocked = isUnlocked,
             timeLeft = timeLeft,
+            isDeveloperAdminAccess = isDeveloperAdminAccess,
             onDismiss = { selectedDetailsTrack = null },
             onEnterReview = {
                 viewModel.selectTrack(track)
@@ -484,6 +488,7 @@ private fun DashboardGrid(
     isEwProUnlocked: Boolean,
     isDmProUnlocked: Boolean,
     isEmProUnlocked: Boolean,
+    isDeveloperAdminAccess: Boolean,
     regState: ReviewerViewModel.DeviceRegistrationUiState,
     deckProgress: Int,
     gmdssProgress: Int,
@@ -514,6 +519,7 @@ private fun DashboardGrid(
                     progressPercent = deckProgress,
                     isUnlocked = isOicNwProUnlocked,
                     timeLeft = regState.oicTimeLeft,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     icon = Icons.Default.Explore,
                     onClickTile = { onOpenDetails(Track.DECK_OIC_NW) },
                     onClickEnter = { onSelectTrack(Track.DECK_OIC_NW) }
@@ -530,6 +536,7 @@ private fun DashboardGrid(
                     progressPercent = gmdssProgress,
                     isUnlocked = isGmdssProUnlocked,
                     timeLeft = regState.gmdssTimeLeft,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     icon = Icons.Default.CellTower,
                     onClickTile = { onOpenDetails(Track.GMDSS_GOC) },
                     onClickEnter = { onSelectTrack(Track.GMDSS_GOC) }
@@ -564,6 +571,7 @@ private fun DashboardGrid(
                     progressPercent = ewProgress,
                     isUnlocked = isEwProUnlocked,
                     timeLeft = regState.ewTimeLeft,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     badgeOverride = null,
                     icon = Icons.Default.Build,
                     onClickTile = { onOpenDetails(Track.ENGINE_OIC_EW) },
@@ -581,6 +589,7 @@ private fun DashboardGrid(
                     progressPercent = emProgress,
                     isUnlocked = isEmProUnlocked,
                     timeLeft = regState.emTimeLeft,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     badgeOverride = null,
                     icon = Icons.Default.Construction,
                     onClickTile = { onOpenDetails(Track.ENGINE_MGT) },
@@ -604,6 +613,7 @@ private fun DashboardGrid(
                     progressPercent = dmProgress,
                     isUnlocked = isDmProUnlocked,
                     timeLeft = regState.dmTimeLeft,
+                    isDeveloperAdminAccess = isDeveloperAdminAccess,
                     badgeOverride = null,
                     icon = Icons.Default.Navigation,
                     onClickTile = { onOpenDetails(Track.DECK_MGT) },
@@ -630,6 +640,7 @@ private fun ActiveTrackTile(
     timeLeft: String?,
     icon: ImageVector,
     badgeOverride: String? = null,
+    isDeveloperAdminAccess: Boolean = false,
     onClickTile: () -> Unit,
     onClickEnter: () -> Unit
 ) {
@@ -675,6 +686,7 @@ private fun ActiveTrackTile(
                 val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
                 val badgeText = when {
                     badgeOverride != null -> badgeOverride
+                    isDeveloperAdminAccess && isUnlocked -> "ADMIN · NO EXPIRY"
                     !isUnlocked -> "FREE TIER"
                     isExpiredFlag -> "EXPIRED"
                     days != null && days <= 7 -> "EXPIRING · ${days}D"
@@ -1066,6 +1078,7 @@ private fun TrackDetailsPopup(
     track: Track,
     isUnlocked: Boolean,
     timeLeft: String?,
+    isDeveloperAdminAccess: Boolean = false,
     onDismiss: () -> Unit,
     onEnterReview: () -> Unit
 ) {
@@ -1178,6 +1191,7 @@ private fun TrackDetailsPopup(
                                 val days = Regex("(\\d+)\\s+days?").find(timeLeft ?: "")?.groupValues?.get(1)?.toIntOrNull()
                                 val isExpiredFlag = timeLeft?.contains("Expired") == true || timeLeft?.contains("Tampered") == true || (days != null && days <= 0)
                                 val fullDetailsText = when {
+                                    isDeveloperAdminAccess && isUnlocked -> "ADMIN ACCESS · NO EXPIRY"
                                     !isUnlocked -> "FREE TIER"
                                     isExpiredFlag -> "EXPIRED"
                                     days != null && days <= 7 -> "EXPIRING · ${days}D"
