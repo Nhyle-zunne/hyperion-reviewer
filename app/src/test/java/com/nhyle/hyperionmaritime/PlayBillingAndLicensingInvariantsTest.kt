@@ -428,7 +428,7 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun displayedSubscriptionDurationUsesThePlanExpiryNotTheOfflineVerificationLease() {
+    fun displayedSubscriptionDurationUsesTheActualPlanExpiryForOfflineAccess() {
         BillingCycle.values().forEach { cycle ->
             val now = System.currentTimeMillis()
             val expiry = estimateNextSubscriptionExpiry(now, now, cycle)
@@ -442,8 +442,12 @@ class PlayBillingAndLicensingInvariantsTest {
 
             assertFalse("${cycle.label} plan should be active immediately after purchase", plan.isExpired)
             assertTrue(
-                "The offline ownership-verification lease must remain capped at 72 hours",
-                plan.remainingTimeMs in 0L..BillingConstants.OFFLINE_VERIFICATION_GRACE_MS
+                "Offline access must retain the full active subscription duration, not a 72-hour lease",
+                plan.remainingTimeMs > 3L * 24L * 60L * 60L * 1000L
+            )
+            assertTrue(
+                "The remaining duration must match the actual subscription expiry",
+                kotlin.math.abs(plan.remainingTimeMs - plan.subscriptionRemainingTimeMs) < 1_000L
             )
             assertEquals(
                 "${cycle.label} dashboard display must show the actual computed plan expiry",
@@ -511,7 +515,7 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun playSubscriptionCacheHasBoundedOfflineGraceAndRejectsClockRollback() {
+    fun playSubscriptionCacheRemainsUsableUntilActualExpiryAndRejectsClockRollback() {
         val now = System.currentTimeMillis()
         val expiry = now + 30L * 24L * 60L * 60L * 1000L
 
@@ -521,15 +525,15 @@ class PlayBillingAndLicensingInvariantsTest {
             highWaterMarkEpoch = now - 30L * 60L * 1000L,
             lastVerifiedAtEpoch = now - 71L * 60L * 60L * 1000L
         )
-        assertFalse("A recent Play query should remain usable during the 72-hour at-sea grace", recentlyVerified.isExpired)
-        assertTrue(recentlyVerified.remainingTimeMs in 0L..(60L * 60L * 1000L + 1L))
+        assertFalse("A recently verified Play purchase remains valid before its real expiry", recentlyVerified.isExpired)
+        assertTrue("The displayed remaining time follows the actual subscription expiry", recentlyVerified.remainingTimeMs > 29L * 24L * 60L * 60L * 1000L)
 
         val staleOfflineCache = recentlyVerified.copy(
             lastVerifiedAtEpoch = now - 73L * 60L * 60L * 1000L,
             highWaterMarkEpoch = now - 73L * 60L * 60L * 1000L
         )
-        assertTrue("A Play cache older than the bounded offline grace must require verification", staleOfflineCache.isExpired)
-        assertTrue(staleOfflineCache.requiresOnlineVerification)
+        assertFalse("A Play cache remains usable beyond 72 hours while the actual subscription is active", staleOfflineCache.isExpired)
+        assertFalse(staleOfflineCache.requiresOnlineVerification)
 
         val rolledBackClock = recentlyVerified.copy(
             highWaterMarkEpoch = now + 10L * 60L * 1000L,
@@ -616,7 +620,7 @@ class PlayBillingAndLicensingInvariantsTest {
     }
 
     @Test
-    fun accountLinkedLicenseExpiryOfflineGraceAndClockRollbackAreEnforced() {
+    fun accountLinkedLicenseExpiryUsesActualServerExpiryAndRejectsClockRollback() {
         val now = 1_800_000_000_000L
         val syncedAt = now - 60_000L
         val lastVerified = now - 30_000L
@@ -669,13 +673,13 @@ class PlayBillingAndLicensingInvariantsTest {
                 nowEpochMs = now
             )
         )
-        assertFalse(
-            "A cached account grant older than the 72-hour offline grace period must be rejected",
+        assertTrue(
+            "A successfully verified account grant remains usable beyond 72 hours while its real subscription has not expired",
             LicenseManager.isAccountEntitlementValid(
                 ownerUserId = "account-a",
                 currentUserId = "account-a",
                 syncedAtEpochMs = now - 73L * 60L * 60L * 1000L,
-                lastVerifiedEpochMs = now,
+                lastVerifiedEpochMs = now - 73L * 60L * 60L * 1000L,
                 expiryEpochMs = validExpiry,
                 nowEpochMs = now
             )
