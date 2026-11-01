@@ -138,7 +138,7 @@ object ProQuestionRepository {
                         val ansStr = row.getOrElse(9) { "1" }.trim()
                         val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
                         val id = "$normComp-P$part-${list.size + 1}"
-                        if (qText.isNotEmpty() && options.isNotEmpty()) {
+                        if (qText.isNotEmpty() && options.size >= 2) {
                             list.add(
                                 ProQuestion(
                                     id = id,
@@ -170,7 +170,7 @@ object ProQuestionRepository {
                         val ansStr = row[start + 9].trim()
                         val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
                         val id = "$normComp-P$part-${list.size + 1}"
-                        if (qText.isNotEmpty() && qText != "Question" && options.isNotEmpty()) {
+                        if (qText.isNotEmpty() && qText != "Question" && options.size >= 2) {
                             list.add(
                                 ProQuestion(
                                     id = id,
