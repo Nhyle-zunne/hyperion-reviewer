@@ -7,6 +7,7 @@ import com.nhyle.hyperionmaritime.data.local.HyperionDatabase
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
 import com.nhyle.hyperionmaritime.data.repository.ReviewerRepository
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
@@ -104,6 +105,43 @@ class DrillConfigurationAndRangeSliderTest {
 
         val totalGmdss = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(Track.GMDSS_GOC, isCrpMode = false)
         assertEquals("GMDSS Total must be 2,260 items", 2260, totalGmdss)
+    }
+
+    @Test
+    fun testGmdssFreePoolMatchesPwaPerPartSampling() {
+        val expectedC1Free = (1..10).sumOf { part ->
+            minOf(ProQuestionRepository.loadRawPartQuestions(context, "C1", part).size, 90)
+        }
+        val expectedC2Free = (1..2).sumOf { part ->
+            minOf(ProQuestionRepository.loadRawPartQuestions(context, "C2", part).size, 65)
+        }
+
+        val freeC1 = MaritimeQuestionBank.getMarinaCrpGmdssQuestions(
+            context, competenceId = "C1", isProUnlocked = false
+        )
+        val freeC2 = MaritimeQuestionBank.getMarinaCrpGmdssQuestions(
+            context, competenceId = "C2", isProUnlocked = false
+        )
+
+        assertEquals("Free GMDSS C1 must use 90 questions per part", expectedC1Free, freeC1.size)
+        assertEquals("Free GMDSS C2 must use 65 questions per part", expectedC2Free, freeC2.size)
+        assertEquals("GMDSS operational free pool must match the sampled questions", expectedC1Free + expectedC2Free,
+            MaritimeCompetenceRegistry.getTotalStandardReviewQuestionCount(Track.GMDSS_GOC, isProUnlocked = false))
+
+        for (part in 1..10) {
+            val expected = minOf(ProQuestionRepository.loadRawPartQuestions(context, "C1", part).size, 90)
+            val actual = MaritimeQuestionBank.getMarinaCrpGmdssQuestions(
+                context, competenceId = "C1", selectedPart = part, isProUnlocked = false
+            ).size
+            assertEquals("C1 part $part must match its free sample cap", expected, actual)
+        }
+        for (part in 1..2) {
+            val expected = minOf(ProQuestionRepository.loadRawPartQuestions(context, "C2", part).size, 65)
+            val actual = MaritimeQuestionBank.getMarinaCrpGmdssQuestions(
+                context, competenceId = "C2", selectedPart = part, isProUnlocked = false
+            ).size
+            assertEquals("C2 part $part must match its free sample cap", expected, actual)
+        }
     }
 
     @Test
