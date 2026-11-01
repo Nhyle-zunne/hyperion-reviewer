@@ -307,24 +307,36 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getDynamicQuestionCount(competenceId: String, track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
+        val parsedCount = MaritimeQuestionBank.getQuestionsByCompetence(
+            competenceId,
+            track,
+            isProUnlocked = true
+        ).size
+
         if (track == Track.GMDSS_GOC && isOperationalReview) {
-            return when (competenceId) {
+            val limit = when (competenceId) {
                 "C1" -> OPERATIONAL_REVIEW_LIMIT_C1
                 "C2" -> OPERATIONAL_REVIEW_LIMIT_C2
                 else -> OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
             }
+            return minOf(parsedCount, limit)
         }
         if (isCrpMode && track == Track.DECK_OIC_NW) {
-            return getOfficialCrpQuestionCount(competenceId, track)
+            return minOf(parsedCount, getOfficialCrpQuestionCount(competenceId, track))
         }
 
-        // Display counts from the same fully parsed Question objects used by the reviewer.
-        // Free-tier selection limits are applied only when explicitly requested by the caller.
-        return MaritimeQuestionBank.getQuestionsByCompetence(
-            competenceId,
-            track,
-            isProUnlocked = isProUnlocked
-        ).size
+        // Counts are based on the fully parsed Question objects. Apply the same
+        // free-tier selection size used by the reviewer when a free pool is requested.
+        if (!isProUnlocked && track in listOf(Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT)) {
+            return (parsedCount * 0.40).roundToInt().coerceAtLeast(if (parsedCount > 0) 1 else 0)
+        }
+        if (!isProUnlocked && track == Track.GMDSS_GOC) {
+            return minOf(parsedCount, if (competenceId == "C1") OPERATIONAL_REVIEW_LIMIT_C1 else OPERATIONAL_REVIEW_LIMIT_C2)
+        }
+        if (!isProUnlocked && track == Track.DECK_OIC_NW) {
+            return minOf(parsedCount, getOfficialCrpQuestionCount(competenceId, track))
+        }
+        return parsedCount
     }
 
     fun getFormattedQuestionCount(competenceId: String, track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): String {
@@ -333,26 +345,30 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getTotalTrackQuestionCount(track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
-        if (isCrpMode) {
-            return if (track == Track.DECK_OIC_NW) 2065 else 1150
-        }
+        if (!MaritimeQuestionBank.isLoaded) return 0
+        if (isCrpMode) return getTotalStandardReviewQuestionCount(track, isProUnlocked = false)
         if (track == Track.GMDSS_GOC && isOperationalReview) {
-            return OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
+            return getTotalStandardReviewQuestionCount(track, isProUnlocked = false)
         }
 
         // Full-bank dashboard and track-page totals always reflect the complete parsed bank,
-        // regardless of the current user's license tier. The UI observes isLoadedFlow and
-        // renders a loading placeholder until this data is ready.
-        if (!MaritimeQuestionBank.isLoaded) return 0
+        // regardless of the current user's license tier.
         return MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
     }
 
     fun getTotalStandardReviewQuestionCount(track: Track, isProUnlocked: Boolean): Int {
-        if (track == Track.DECK_OIC_NW) return 2065
-        if (track == Track.GMDSS_GOC) return if (isProUnlocked) 2260 else 1150
-        
-        return getCompetencesForTrack(track).sumOf { 
-            getDynamicQuestionCount(it.competenceId, track, isCrpMode = true, isProUnlocked = isProUnlocked) 
+        if (!MaritimeQuestionBank.isLoaded) return 0
+        if (track == Track.GMDSS_GOC && isProUnlocked) {
+            return MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
+        }
+        return getCompetencesForTrack(track).sumOf { competence ->
+            getDynamicQuestionCount(
+                competence.competenceId,
+                track,
+                isCrpMode = track == Track.DECK_OIC_NW,
+                isProUnlocked = isProUnlocked,
+                isOperationalReview = track == Track.GMDSS_GOC
+            )
         }
     }
 }
