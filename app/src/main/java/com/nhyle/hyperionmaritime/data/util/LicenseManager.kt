@@ -104,10 +104,28 @@ data class OfflineLicenseInfo(
     val expiryEpoch: Long,
     val isTampered: Boolean = false,
     val tamperReason: String? = null,
-    val highWaterMarkEpoch: Long = 0L
+    val highWaterMarkEpoch: Long = 0L,
+    val trustedNowEpochMs: Long? = null,
+    val trustedElapsedRealtimeMs: Long? = null,
+    val localClockTrusted: Boolean = true
 ) {
     val effectiveNow: Long
-        get() = maxOf(System.currentTimeMillis(), activationEpoch, issueEpoch, highWaterMarkEpoch)
+        get() {
+            val trustedBase = trustedNowEpochMs
+            val elapsedBase = trustedElapsedRealtimeMs
+            if (localClockTrusted && trustedBase != null && elapsedBase != null) {
+                val elapsedNow = SystemClock.elapsedRealtime()
+                if (elapsedNow >= elapsedBase) {
+                    return maxOf(
+                        activationEpoch,
+                        issueEpoch,
+                        highWaterMarkEpoch,
+                        trustedBase + (elapsedNow - elapsedBase)
+                    )
+                }
+            }
+            return maxOf(System.currentTimeMillis(), activationEpoch, issueEpoch, highWaterMarkEpoch)
+        }
 
     val isExpired: Boolean
         get() = expiryEpoch > 0L && effectiveNow >= expiryEpoch
@@ -813,7 +831,10 @@ object LicenseManager {
             expiryEpoch = expiryEpoch,
             isTampered = false,
             tamperReason = null,
-            highWaterMarkEpoch = healedHighWaterMark
+            highWaterMarkEpoch = healedHighWaterMark,
+            trustedNowEpochMs = now,
+            trustedElapsedRealtimeMs = currentElapsed,
+            localClockTrusted = clock.isTrusted
         )
         return OfflineLicenseStatus.Active(info)
     }
