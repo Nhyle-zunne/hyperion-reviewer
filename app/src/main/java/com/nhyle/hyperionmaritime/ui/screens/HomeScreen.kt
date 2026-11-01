@@ -851,6 +851,7 @@ fun HomeScreen(
 @Composable
 private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = null) {
     val colors = LocalSpaghettiColors.current
+    val questionBankLoaded by MaritimeQuestionBank.isLoadedFlow.collectAsState()
 
     MianRuleCard(
         ruleColor = colors.accent,
@@ -944,8 +945,8 @@ private fun HeroBanner(track: Track, isUnlocked: Boolean, timeLeft: String? = nu
             Spacer(modifier = Modifier.height(10.dp))
 
             // Tier 3: Structured Metadata Chips
-            val qCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
-            val qCountStr = "%,d".format(qCount)
+            val qCount = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track) else 0
+            val qCountStr = if (questionBankLoaded) "%,d".format(qCount) else "…"
             val compCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).size
             val functionsStr = when (track) {
                 Track.DECK_OIC_NW -> "FUNCTIONS 1-3"
