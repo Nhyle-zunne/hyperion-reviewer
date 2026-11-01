@@ -307,46 +307,24 @@ object MaritimeCompetenceRegistry {
     }
 
     fun getDynamicQuestionCount(competenceId: String, track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): Int {
-        if (track == Track.ENGINE_OIC_EW || track == Track.DECK_MGT || track == Track.ENGINE_MGT) {
-            return MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
-        }
-        if (track == Track.GMDSS_GOC) {
-            if (isOperationalReview) {
-                return when (competenceId) {
-                    "C1" -> OPERATIONAL_REVIEW_LIMIT_C1
-                    "C2" -> OPERATIONAL_REVIEW_LIMIT_C2
-                    else -> OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
-                }
-            }
-            val dynamicGmdssCount = MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
-            if (dynamicGmdssCount > 0) return dynamicGmdssCount
+        if (track == Track.GMDSS_GOC && isOperationalReview) {
             return when (competenceId) {
-                "C1" -> 1911
-                "C2" -> 349
-                else -> 2260
+                "C1" -> OPERATIONAL_REVIEW_LIMIT_C1
+                "C2" -> OPERATIONAL_REVIEW_LIMIT_C2
+                else -> OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
             }
         }
-        if (isCrpMode) {
+        if (isCrpMode && track == Track.DECK_OIC_NW) {
             return getOfficialCrpQuestionCount(competenceId, track)
         }
-        val dynamicDeckCount = MaritimeQuestionBank.getQuestionsByCompetence(competenceId, track, isProUnlocked = isProUnlocked).size
-        if (dynamicDeckCount > 0) return dynamicDeckCount
 
-        return when (competenceId) {
-            "C1" -> 831
-            "C2" -> 570
-            "C3" -> 442
-            "C4" -> 307
-            "C5" -> 356
-            "C7" -> 533
-            "C9" -> 508
-            "C10" -> 610
-            "C11" -> 421
-            "C12" -> 351
-            "C13" -> 888
-            "C17" -> 628
-            else -> CRP_DECK_DISTRIBUTION[competenceId] ?: 100
-        }
+        // Display counts from the same fully parsed Question objects used by the reviewer.
+        // Free-tier selection limits are applied only when explicitly requested by the caller.
+        return MaritimeQuestionBank.getQuestionsByCompetence(
+            competenceId,
+            track,
+            isProUnlocked = isProUnlocked
+        ).size
     }
 
     fun getFormattedQuestionCount(competenceId: String, track: Track, isCrpMode: Boolean = false, isProUnlocked: Boolean = true, isOperationalReview: Boolean = false): String {
@@ -361,28 +339,12 @@ object MaritimeCompetenceRegistry {
         if (track == Track.GMDSS_GOC && isOperationalReview) {
             return OPERATIONAL_REVIEW_LIMIT_C1 + OPERATIONAL_REVIEW_LIMIT_C2
         }
-        // If question bank is still warming up on background I/O thread, return static counts instantly
-        // to prevent blocking the Main UI thread during initial app launch / splash screen.
-        if (!MaritimeQuestionBank.isLoaded) {
-            return when (track) {
-                Track.DECK_OIC_NW -> 6448
-                Track.GMDSS_GOC -> if (isProUnlocked) 2260 else 1150
-                Track.ENGINE_OIC_EW -> 5440
-                Track.DECK_MGT -> 6301
-                Track.ENGINE_MGT -> 6087
-            }
-        }
-        val dynamicCount = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = isProUnlocked).size
-        if (dynamicCount > 0) {
-            return dynamicCount
-        }
-        return when (track) {
-            Track.DECK_OIC_NW -> 6448
-            Track.GMDSS_GOC -> if (isProUnlocked) 2260 else 1150
-            Track.ENGINE_OIC_EW -> 5440
-            Track.DECK_MGT -> 6301
-            Track.ENGINE_MGT -> 6087
-        }
+
+        // Full-bank dashboard and track-page totals always reflect the complete parsed bank,
+        // regardless of the current user's license tier. The UI observes isLoadedFlow and
+        // renders a loading placeholder until this data is ready.
+        if (!MaritimeQuestionBank.isLoaded) return 0
+        return MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
     }
 
     fun getTotalStandardReviewQuestionCount(track: Track, isProUnlocked: Boolean): Int {
