@@ -118,71 +118,66 @@ object ProQuestionRepository {
             val rows = parseCsvText(content)
             val list = mutableListOf<ProQuestion>()
 
-            if (rows.size > 10) {
-                var headerIdx = -1
-                for (idx in rows.indices) {
-                    val r0 = rows[idx].getOrNull(0)?.trim() ?: ""
-                    val r1 = rows[idx].getOrNull(1)?.trim() ?: ""
-                    if (r0.equals("Question", ignoreCase = true) || r1.equals("Type", ignoreCase = true)) {
-                        headerIdx = idx
-                        break
-                    }
+            // Match the PWA parser: attempt normal row records first, then
+            // flatten the complete CSV and parse 10-column records only when
+            // no valid normal records were found.
+            var headerIdx = -1
+            for (idx in rows.indices) {
+                val r0 = rows[idx].getOrNull(0)?.trim() ?: ""
+                val r1 = rows[idx].getOrNull(1)?.trim() ?: ""
+                if (r0.equals("Question", ignoreCase = true) || r1.equals("Type", ignoreCase = true)) {
+                    headerIdx = idx
+                    break
                 }
-                val start = if (headerIdx != -1) headerIdx + 1 else 1
-                for (i in start until rows.size) {
-                    val row = rows[i]
-                    if (row.size >= 10 && row[0].isNotBlank() && !row[0].equals("Question", ignoreCase = true)) {
-                        val qText = row[0].trim()
-                        val options = row.subList(2, 8).map { it.trim() }.filter { it.isNotEmpty() }
-                        val explanation = row.getOrElse(8) { "" }.trim()
-                        val ansStr = row.getOrElse(9) { "1" }.trim()
-                        val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
-                        val id = "$normComp-P$part-${list.size + 1}"
-                        if (qText.isNotEmpty() && options.size >= 2) {
-                            list.add(
-                                ProQuestion(
-                                    id = id,
-                                    competence = normComp,
-                                    part = part,
-                                    questionText = qText,
-                                    options = options,
-                                    correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
-                                    explanation = explanation
-                                )
+            }
+            val startRow = if (headerIdx != -1) headerIdx + 1 else 1
+            for (rowIndex in startRow until rows.size) {
+                val row = rows[rowIndex]
+                if (row.size >= 10 && row[0].isNotBlank() && !row[0].equals("Question", ignoreCase = true)) {
+                    val qText = row[0].trim()
+                    val options = row.subList(2, 8).map { it.trim() }.filter { it.isNotEmpty() }
+                    val explanation = row.getOrElse(8) { "" }.trim()
+                    val ansStr = row.getOrElse(9) { "1" }.trim()
+                    val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
+                    if (qText.isNotEmpty() && options.size >= 2) {
+                        list.add(
+                            ProQuestion(
+                                id = "$normComp-P$part-${list.size + 1}",
+                                competence = normComp,
+                                part = part,
+                                questionText = qText,
+                                options = options,
+                                correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
+                                explanation = explanation
                             )
-                        }
+                        )
                     }
                 }
-            } else if (rows.isNotEmpty()) {
-                val row = rows[0]
-                val choiceIndices = mutableListOf<Int>()
-                for (i in row.indices) {
-                    if (row[i].equals("Choice", ignoreCase = true)) {
-                        choiceIndices.add(i)
-                    }
-                }
-                for (cIdx in choiceIndices) {
-                    val start = cIdx - 1
-                    if (start >= 0 && start + 11 < row.size) {
-                        val qText = row[start].trim()
-                        val options = (start + 2 until start + 8).map { row[it].trim() }.filter { it.isNotEmpty() }
-                        val explanation = row[start + 8].trim()
-                        val ansStr = row[start + 9].trim()
-                        val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
-                        val id = "$normComp-P$part-${list.size + 1}"
-                        if (qText.isNotEmpty() && qText != "Question" && options.size >= 2) {
-                            list.add(
-                                ProQuestion(
-                                    id = id,
-                                    competence = normComp,
-                                    part = part,
-                                    questionText = qText,
-                                    options = options,
-                                    correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
-                                    explanation = explanation
-                                )
+            }
+            if (list.isEmpty()) {
+                val flat = rows.flatten()
+                for (cellIndex in flat.indices) {
+                    if (!flat[cellIndex].equals("Choice", ignoreCase = true)) continue
+                    val recordStart = cellIndex - 1
+                    if (recordStart < 0 || recordStart + 9 >= flat.size) continue
+                    val qText = flat[recordStart].trim()
+                    val options = (recordStart + 2 until recordStart + 8)
+                        .map { flat[it].trim() }.filter { it.isNotEmpty() }
+                    val explanation = flat[recordStart + 8].trim()
+                    val ansStr = flat[recordStart + 9].trim()
+                    val ansIndex = (ansStr.toIntOrNull() ?: 1) - 1
+                    if (qText.isNotEmpty() && !qText.equals("Question", ignoreCase = true) && options.size >= 2) {
+                        list.add(
+                            ProQuestion(
+                                id = "$normComp-P$part-${list.size + 1}",
+                                competence = normComp,
+                                part = part,
+                                questionText = qText,
+                                options = options,
+                                correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
+                                explanation = explanation
                             )
-                        }
+                        )
                     }
                 }
             }
