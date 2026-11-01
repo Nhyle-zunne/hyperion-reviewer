@@ -37,10 +37,8 @@ import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.time.Instant
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
-import java.time.OffsetDateTime
 
 data class SupabaseAccountState(
     val email: String? = null,
@@ -197,8 +195,16 @@ object SupabaseAccountManager {
             null
         }
         if (saved == null) {
-            LicenseManager.setCurrentAccountUserId(appContext, null)
-            _state.value = SupabaseAccountState()
+            // A missing/expired Supabase session is not a user-requested sign-out.
+            // Keep the last authenticated owner binding so its signed offline
+            // entitlements remain usable until their actual subscription expiry.
+            val cachedUserId = LicenseManager.getCurrentAccountUserId(appContext)
+            LicenseManager.refreshAccountEntitlementFlows(appContext)
+            _state.value = SupabaseAccountState(
+                message = if (!cachedUserId.isNullOrBlank()) {
+                    "Your previously synchronized offline licenses remain available until their expiry. Sign in while online to refresh your account."
+                } else null
+            )
             return
         }
 
@@ -640,61 +646,33 @@ object SupabaseAccountManager {
     }
 
     private fun syncEntitlements(context: Context, session: SupabaseSession): Int {
-        val baseUrl = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/"
-        val websiteRows = JSONArray(requestText(
-            method = "GET",
-            url = baseUrl + "entitlements?select=track_id,expires_at,status&status=eq.active",
-            accessToken = session.accessToken
-        ))
-        val playRows = try {
-            JSONArray(requestText(
-                method = "GET",
-                url = baseUrl + "google_play_entitlements?select=track_id,expires_at,status&status=eq.active",
-                accessToken = session.accessToken
-            ))
-        } catch (error: IOException) {
-            // Older production schemas won't have this optional table before the linking
-            // migration is released. Keep ordinary website-license sync working while the
-            // optional Google Play-linking backend is unavailable.
-            if (isMissingGooglePlayEntitlementsTable(error)) JSONArray() else throw error
-        }
-        val now = System.currentTimeMillis()
-        val expiryByTrack = Track.values().associateWith { 0L }.toMutableMap()
+        // This signed endpoint is the single entitlement source for both clients.
+        // It merges website and linked Google Play grants server-side, avoiding
+        // client-side differences in RLS visibility or optional table migrations.
+        val responseBody = requestText(
+            method = "POST",
+            url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/question-bank",
+            accessToken = session.accessToken,
+            jsonBody = JSONObject().put("action", "offline-license")
+        )
+        val response = JSONObject(responseBody)
+        val token = response.optString("token")
+        val lease = OfflineEntitlementLease.verify(
+            token = token,
+            expectedUserId = session.userId,
+            nowEpochMs = System.currentTimeMillis()
+        ) ?: throw IOException("The server returned an invalid or account-mismatched offline license.")
 
-        fun applyRows(rows: JSONArray) {
-            for (index in 0 until rows.length()) {
-                val row = rows.optJSONObject(index) ?: continue
-                if (row.optString("status") != "active") continue
-                val track = when (row.optString("track_id")) {
-                    "DECK_OIC_NW" -> Track.DECK_OIC_NW
-                    "GMDSS_GOC" -> Track.GMDSS_GOC
-                    "ENGINE_OIC_EW" -> Track.ENGINE_OIC_EW
-                    "DECK_MGT" -> Track.DECK_MGT
-                    "ENGINE_MGT" -> Track.ENGINE_MGT
-                    else -> null
-                } ?: continue
-                val expiryText = row.optString("expires_at")
-                if (expiryText.isBlank() || expiryText == "null") continue
-                val expiry = try { parseEpochMillis(expiryText) } catch (_: Exception) { continue }
-                if (expiry > now) expiryByTrack[track] = maxOf(expiryByTrack[track] ?: 0L, expiry)
-            }
-        }
-        applyRows(websiteRows)
-        applyRows(playRows)
-
-        if (!LicenseManager.saveAccountEntitlements(context, session.userId, expiryByTrack)) {
+        // The signed issuance timestamp is authoritative and repairs the trusted
+        // local clock baseline before the entitlement snapshot is saved.
+        LicenseManager.anchorOfflineTrustedTimeToServer(context, lease.issuedAtEpochMs)
+        if (!LicenseManager.saveAccountEntitlements(context, session.userId, lease.expiryByTrack)) {
             throw IllegalStateException("Could not securely cache account licenses on this device.")
         }
-        return expiryByTrack.values.count { it > now }
+        val trustedNow = LicenseManager.getOfflineTrustedTime(context).epochMillis
+        return lease.expiryByTrack.values.count { it > trustedNow }
     }
 
-    private fun parseEpochMillis(value: String): Long {
-        return try {
-            Instant.parse(value).toEpochMilli()
-        } catch (_: Exception) {
-            OffsetDateTime.parse(value).toInstant().toEpochMilli()
-        }
-    }
 
     private fun parseSession(json: JSONObject, fallback: SupabaseSession?): SupabaseSession {
         val user = json.optJSONObject("user")
