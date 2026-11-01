@@ -416,7 +416,7 @@ object LicenseManager {
      * immune to manual date/time edits. After reboot, the device RTC is accepted only
      * when it has not moved materially behind the last saved trusted time.
      */
-    fun getOfflineTrustedTime(context: Context): OfflineTrustedTime {
+    internal fun getOfflineTrustedTime(context: Context): OfflineTrustedTime {
         val appContext = context.applicationContext
         val prefs = appContext.getSharedPreferences(OFFLINE_TRUSTED_CLOCK_PREFS, Context.MODE_PRIVATE)
         val wallNow = System.currentTimeMillis()
