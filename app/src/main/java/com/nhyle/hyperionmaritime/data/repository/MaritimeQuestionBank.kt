@@ -239,11 +239,28 @@ object MaritimeQuestionBank {
         selectedPart: Int? = null,
         isProUnlocked: Boolean = true
     ): List<Question> {
+        // Keep the Android free GMDSS pool identical to the PWA's per-file
+        // sampling: 90 valid questions from each of the 10 C1 parts and 65
+        // valid questions from each of the 2 C2 parts (900 + 130 total).
+        // Sampling per part matters: taking the first 900/130 from the
+        // competence-wide list can overrepresent early parts.
         val rawC1 = ProQuestionRepository.loadAllRawCompetenceQuestions(context, "C1").map { it.toQuestion() }
-        val allC1 = if (isProUnlocked) rawC1 else rawC1.take(1000)
+        val allC1 = if (isProUnlocked) rawC1 else {
+            (1..10).flatMap { part ->
+                ProQuestionRepository.loadRawPartQuestions(context, "C1", part)
+                    .map { it.toQuestion() }
+                    .take(MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C1 / 10)
+            }
+        }
 
         val rawC2 = ProQuestionRepository.loadAllRawCompetenceQuestions(context, "C2").map { it.toQuestion() }
-        val allC2 = if (isProUnlocked) rawC2 else rawC2.take(150)
+        val allC2 = if (isProUnlocked) rawC2 else {
+            (1..2).flatMap { part ->
+                ProQuestionRepository.loadRawPartQuestions(context, "C2", part)
+                    .map { it.toQuestion() }
+                    .take(MaritimeCompetenceRegistry.OPERATIONAL_REVIEW_LIMIT_C2 / 2)
+            }
+        }
 
         return when (competenceId) {
             "C1" -> if (selectedPart != null) {
