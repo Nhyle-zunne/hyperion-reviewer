@@ -115,7 +115,7 @@ class OfflineEntitlementLeaseTest {
     @Test
     fun expiredTrackIsNotRestoredEvenWhenSignatureIsValid() {
         val keyPair = generateSigningKey()
-        val expired = NOW - 1L
+        val expired = ISSUED_AT + 500L
         val token = signedToken(
             keyPair,
             JSONObject()
