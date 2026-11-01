@@ -6,6 +6,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.nio.charset.StandardCharsets
 import java.security.KeyPair
 import java.security.KeyPairGenerator
@@ -13,6 +16,8 @@ import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], manifest = Config.NONE)
 class OfflineEntitlementLeaseTest {
     private companion object {
         const val ISSUED_AT = 1_798_000_000_000L
