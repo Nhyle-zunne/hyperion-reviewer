@@ -662,7 +662,8 @@ object MaritimeQuestionBankDeckF1 {
                 val ansStr = row[6].trim().uppercase()
 
                 val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
-                if (qText.isNotEmpty() && options.size >= 2) {
+                val qNoInt = qNo.toIntOrNull()
+                if (qNoInt != null && qNoInt > 0 && qText.isNotEmpty() && options.size >= 2) {
                     val ansIdx = when (ansStr) {
                         "A", "1" -> 0
                         "B", "2" -> 1
