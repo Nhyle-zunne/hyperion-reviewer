@@ -1679,6 +1679,14 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         prefs.edit().putBoolean("is_dark_mode", enabled).apply()
     }
 
+    private val _highlightKeywords = MutableStateFlow(prefs.getBoolean("highlight_keywords", false))
+    val highlightKeywords: StateFlow<Boolean> = _highlightKeywords.asStateFlow()
+
+    fun setHighlightKeywords(enabled: Boolean) {
+        prefs.edit().putBoolean("highlight_keywords", enabled).apply()
+        _highlightKeywords.value = enabled
+    }
+
     // Question Text Scaling State (0.85x, 1.0x, 1.15x, 1.30x)
     private val _questionTextScale = MutableStateFlow(prefs.getFloat("question_text_scale", 1.0f))
     val questionTextScale: StateFlow<Float> = _questionTextScale.asStateFlow()

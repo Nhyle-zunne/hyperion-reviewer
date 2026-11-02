@@ -78,6 +78,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
+import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
 import com.nhyle.hyperionmaritime.ui.components.QuestionAttemptStatsCard
@@ -472,12 +473,16 @@ private fun IntensiveDrillScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
+                    KeywordQuestionText(
+                        viewModel = viewModel,
+                        track = currentQuestion.track.name,
+                        questionId = currentQuestion.id,
                         text = currentQuestion.questionText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 24.sp,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     )
                 }
             }
@@ -900,12 +905,16 @@ private fun StandardDrillScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
+                    KeywordQuestionText(
+                        viewModel = viewModel,
+                        track = question.track.name,
+                        questionId = question.id,
                         text = question.questionText,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 24.sp,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 24.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     )
                 }
             }

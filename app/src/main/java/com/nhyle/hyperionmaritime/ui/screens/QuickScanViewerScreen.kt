@@ -64,6 +64,8 @@ import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
+import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.SessionTimerBox
@@ -84,6 +86,7 @@ fun QuickScanViewerScreen(
     track: Track? = null,
     modifier: Modifier = Modifier
 ) {
+    val textScale by viewModel.questionTextScale.collectAsState()
     val colors = LocalSpaghettiColors.current
     val currentSelectedTrack by viewModel.selectedTrack.collectAsState()
     val activeTrack = track ?: currentSelectedTrack
@@ -155,6 +158,7 @@ fun QuickScanViewerScreen(
         MaritimeTopBar(
             title = "QUICK SCAN • ${competenceId.uppercase()}",
             subtitle = competenceInfo?.title?.uppercase() ?: "COMPETENCE REFERENCE REVIEW",
+            settingsMenu = { QuestionSettingsMenu(viewModel = viewModel) },
             showBackButton = true,
             onBackClick = {
                 viewModel.pauseQuickScanStudyTracking()
@@ -308,12 +312,17 @@ fun QuickScanViewerScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Question Stem Text
-                            Text(
+                            KeywordQuestionText(
+                                viewModel = viewModel,
+                                track = currentQuestion.track.name,
+                                questionId = currentQuestion.id,
                                 text = currentQuestion.questionText,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.foreground,
-                                lineHeight = 24.sp
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = MaterialTheme.typography.titleMedium.fontSize * textScale,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.foreground,
+                                    lineHeight = 24.sp * textScale
+                                )
                             )
                         }
                     }

@@ -58,6 +58,7 @@ fun QuestionSettingsMenu(
     val isDirectAnswer by viewModel.isDirectAnswer.collectAsState()
     val isAutoNextCorrect by viewModel.isAutoNextCorrect.collectAsState()
     val isAutoNextWrong by viewModel.isAutoNextWrong.collectAsState()
+    val highlightKeywords by viewModel.highlightKeywords.collectAsState()
     val colors = LocalSpaghettiColors.current
 
     Box(modifier = modifier) {
@@ -130,6 +131,14 @@ fun QuestionSettingsMenu(
 
                 HorizontalDivider(color = colors.border, thickness = 0.5.dp)
             }
+
+            DropdownMenuItem(
+                text = { Text("Highlight Keywords", color = colors.foreground) },
+                trailingIcon = {
+                    Switch(checked = highlightKeywords, onCheckedChange = viewModel::setHighlightKeywords)
+                },
+                onClick = { viewModel.setHighlightKeywords(!highlightKeywords) }
+            )
 
             // 2. Text Size Controls
             Column(
