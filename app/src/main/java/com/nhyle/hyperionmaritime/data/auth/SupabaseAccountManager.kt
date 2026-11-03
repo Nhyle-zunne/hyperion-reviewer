@@ -17,6 +17,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.nhyle.hyperionmaritime.BuildConfig
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.sync.LearningProgressReadCache
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncAdapter
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +111,7 @@ object SupabaseAccountManager {
     private val _state = MutableStateFlow(SupabaseAccountState())
     val state: StateFlow<SupabaseAccountState> = _state.asStateFlow()
     private val learningProgressSyncMutex = Mutex()
+    private val learningProgressReadCache = LearningProgressReadCache()
     private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 5 * 60 * 1000L
     private const val LEARNING_PROGRESS_LAST_SUCCESS_KEY = "last_successful_sync_at"
 
@@ -257,6 +259,7 @@ object SupabaseAccountManager {
     }
 
     fun signOut(context: Context) {
+        learningProgressReadCache.clear()
         try {
             sessionPreferences(context.applicationContext).edit().clear().apply()
         } catch (_: Exception) {
@@ -373,6 +376,26 @@ object SupabaseAccountManager {
         result
     }
 
+    private fun readLearningProgress(session: SupabaseSession, allowCached: Boolean = true): JSONObject {
+        if (!allowCached) learningProgressReadCache.clear()
+        fun read(body: JSONObject) = JSONObject(requestText(
+            method = "POST",
+            url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/learning-progress",
+            accessToken = session.accessToken,
+            jsonBody = body
+        ))
+        val response = read(learningProgressReadCache.request(session.userId))
+        return try {
+            learningProgressReadCache.resolve(session.userId, response)
+        } catch (error: IOException) {
+            // A cache lost during sign-out or a mismatched confirmation is not
+            // an empty cloud snapshot. Retry once without a fingerprint.
+            if (!response.optBoolean("not_modified")) throw error
+            learningProgressReadCache.clear()
+            learningProgressReadCache.resolve(session.userId, read(JSONObject().put("action", "read")))
+        }
+    }
+
     private suspend fun syncLearningProgressUnlocked(context: Context, session: SupabaseSession): String {
         val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
         if (!claimLearningProgressOwner(prefs, session.userId)) {
@@ -382,12 +405,7 @@ object SupabaseAccountManager {
         }
 
         val endpoint = BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/learning-progress"
-        var readResponse = JSONObject(requestText(
-            method = "POST",
-            url = endpoint,
-            accessToken = session.accessToken,
-            jsonBody = JSONObject().put("action", "read")
-        ))
+        var readResponse = readLearningProgress(session)
         var remoteSnapshot = readResponse.optJSONObject("data")
         var expectedUpdatedAt: Any? = readResponse.opt("updated_at")
             ?.takeUnless { it == JSONObject.NULL }
@@ -422,6 +440,9 @@ object SupabaseAccountManager {
                     remoteSnapshot?.let { JSONObject(it.toString()) }
                 )
             }
+            // A write or conflict may change the cloud copy; never confirm against
+            // a cached pre-write snapshot on the next sync.
+            learningProgressReadCache.clear()
             val writeBody = JSONObject()
                 .put("action", "write")
                 .put("data", mergedSnapshot)
@@ -452,12 +473,7 @@ object SupabaseAccountManager {
                 )
                 if (!isVersionConflict || attempt == 2) throw error
 
-                readResponse = JSONObject(requestText(
-                    method = "POST",
-                    url = endpoint,
-                    accessToken = session.accessToken,
-                    jsonBody = JSONObject().put("action", "read")
-                ))
+                readResponse = readLearningProgress(session, allowCached = false)
                 remoteSnapshot = readResponse.optJSONObject("data")
                 expectedUpdatedAt = readResponse.opt("updated_at")
                     ?.takeUnless { it == JSONObject.NULL }
@@ -470,12 +486,7 @@ object SupabaseAccountManager {
         // Updated servers return the already-sanitized snapshot with successful writes.
         // Keep the authenticated read-back fallback for older server deployments.
         if (!cloudSnapshotApplied) {
-            val verifiedResponse = JSONObject(requestText(
-                method = "POST",
-                url = endpoint,
-                accessToken = session.accessToken,
-                jsonBody = JSONObject().put("action", "read")
-            ))
+            val verifiedResponse = readLearningProgress(session, allowCached = false)
             LearningProgressSyncAdapter.applyCloudSnapshot(context, verifiedResponse.optJSONObject("data"))
         }
         return "Study progress synchronized across your signed-in devices."
