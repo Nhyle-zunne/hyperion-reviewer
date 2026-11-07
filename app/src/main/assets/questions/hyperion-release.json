@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "f6097f860a81fb64584f979643022d0a5d35923b",
-  "manifestSha256": "6dc2ba1ede02e204e632cafde248da55957269383d8337722db775e5f5468647",
-  "publishedAt": "2026-11-03T08:56:25.163899Z",
-  "publicationId": "android-shared-source-bootstrap",
-  "inputDigest": "67ff9da63527aeff7903a8a465e0777148b2394599897b8b53a4d6bfede2c2f9",
-  "previousRevision": "91677156579dfea6f092097f324bec96c7c13e5b"
+  "revision": "0deb5d06e2a6b8fa2977379148f7632acddf019d",
+  "manifestSha256": "1d167a76d81627c08973b92fa964b4ed92ac01ce4b5ed6feb38bbc0f257533ef",
+  "publishedAt": "2026-11-07T06:04:33.153Z",
+  "publicationId": "bbf7f5c9-c6bf-41b2-9073-c1d762470922",
+  "inputDigest": "1000fb01959fa4f7f09623106c6499624ee007f1289a6309695780439d432fb4",
+  "previousRevision": "f6097f860a81fb64584f979643022d0a5d35923b"
 }
