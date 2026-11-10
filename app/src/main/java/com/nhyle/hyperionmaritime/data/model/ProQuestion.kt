@@ -11,7 +11,8 @@ data class ProQuestion(
     val questionText: String,
     val options: List<String>,
     val correctAnswerIndex: Int,
-    val explanation: String
+    val explanation: String,
+    val isRetired: Boolean = false
 ) {
     fun toQuestion(): Question {
         return Question(
@@ -24,6 +25,7 @@ data class ProQuestion(
             options = this.options,
             correctAnswerIndex = this.correctAnswerIndex,
             explanation = this.explanation,
+            isRetired = this.isRetired,
             difficulty = classifyQuestionDifficulty(this.questionText, this.options)
         )
     }
