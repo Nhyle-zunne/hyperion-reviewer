@@ -157,7 +157,8 @@ object MaritimeQuestionBankDeckF1 {
                                 options = options,
                                 correctAnswerIndex = ansIdx,
                                 explanation = "",
-                                difficulty = diff
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                             )
                         )
                         validIndex++
@@ -326,7 +327,8 @@ object MaritimeQuestionBankDeckF1 {
                                 options = options,
                                 correctAnswerIndex = ansIdx,
                                 explanation = "",
-                                difficulty = diff
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                             )
                         )
                         validIndex++
@@ -446,7 +448,8 @@ object MaritimeQuestionBankDeckF1 {
                                 options = options,
                                 correctAnswerIndex = ansIdx,
                                 explanation = "",
-                                difficulty = diff
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                             )
                         )
                         validIndex++
@@ -566,7 +569,8 @@ object MaritimeQuestionBankDeckF1 {
                                 options = options,
                                 correctAnswerIndex = ansIdx,
                                 explanation = "",
-                                difficulty = diff
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                             )
                         )
                         validIndex++
@@ -690,6 +694,7 @@ object MaritimeQuestionBankDeckF1 {
                             options = options,
                             correctAnswerIndex = ansIdx,
                             explanation = "",
+                            isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
                             difficulty = diff
                         )
                     )
@@ -828,7 +833,8 @@ object MaritimeQuestionBankDeckF1 {
                         options = options,
                         correctAnswerIndex = ansIdx,
                         explanation = "",
-                        difficulty = diff
+                        isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                     )
                 }
             }
@@ -993,7 +999,8 @@ object MaritimeQuestionBankDeckF1 {
                         options = options,
                         correctAnswerIndex = ansIdx,
                         explanation = "",
-                        difficulty = diff
+                        isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                     )
                 }
             }
