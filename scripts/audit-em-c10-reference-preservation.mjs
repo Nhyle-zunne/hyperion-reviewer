@@ -56,7 +56,7 @@ const fnv=value=>{
   for(let i=0;i<value.length;i++){hash=Math.imul(hash^value.charCodeAt(i),16777619);}
   return (hash>>>0).toString(16).padStart(8,'0');
 };
-const normalized=value=>String(value||'').trim().toLowerCase().replace(/\\s+/g,' ');
+const normalized=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
 const matchMap=originals.map(row=>[
   Number(row[0]),fnv(normalized(row[1])),
   fnv(row.slice(2,6).map(normalized).join('|')),
