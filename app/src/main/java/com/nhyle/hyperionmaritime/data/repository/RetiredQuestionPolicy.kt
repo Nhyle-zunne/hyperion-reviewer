@@ -18,9 +18,9 @@ object RetiredQuestionPolicy {
         engineManagementC10Numbers.map { "EM-C10-%04d".format(it) }.toSet()
 
     fun isRetired(question: Question): Boolean =
-        question.track == Track.ENGINE_MGT &&
+        question.isRetired || (question.track == Track.ENGINE_MGT &&
             question.competenceId == "C10" &&
-            question.id in engineManagementC10Ids
+            question.id in engineManagementC10Ids)
 
     fun active(questions: List<Question>): List<Question> =
         questions.filterNot(::isRetired)
