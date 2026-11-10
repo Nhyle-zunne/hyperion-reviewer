@@ -52,16 +52,24 @@ class NewTrackQuestionBankTest {
                     validQuestionCount,
                     loadedCount
                 )
+                val activeTrack = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true)
+                val activeCompetence = MaritimeQuestionBank.getQuestionsByCompetence(
+                    comp.competenceId, track, isProUnlocked = true
+                )
                 assertEquals(
-                    "Track total for ${track.name} must equal the count of parsed question objects",
-                    trackQuestions.size,
+                    "Track total counts active questions and excludes retired items",
+                    activeTrack.size,
                     MaritimeCompetenceRegistry.getTotalTrackQuestionCount(track)
                 )
                 assertEquals(
-                    "Competence ${comp.competenceId} count must equal the parsed question objects",
-                    loadedCount,
+                    "Competence count excludes retired items while preserving all raw rows",
+                    activeCompetence.size,
                     MaritimeCompetenceRegistry.getDynamicQuestionCount(comp.competenceId, track, isProUnlocked = true)
                 )
+                if (track == Track.ENGINE_MGT && comp.competenceId == "C10") {
+                    assertEquals("Retirement preserves all original CSV records", 416, loadedCount)
+                    assertEquals("Only 413 C10 questions remain active", 413, activeCompetence.size)
+                }
             }
         }
 
