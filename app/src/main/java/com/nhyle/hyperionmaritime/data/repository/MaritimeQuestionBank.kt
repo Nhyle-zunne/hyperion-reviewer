@@ -58,12 +58,12 @@ object MaritimeQuestionBank {
         }
 
     fun getQuestionsByTrack(track: Track, isProUnlocked: Boolean = true): List<Question> {
-        val list = ALL_QUESTIONS.filter { it.track == track }
+        val list = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { it.track == track })
         return if (isProUnlocked) list else list.take(5)
     }
 
     fun getQuestionsByCompetence(competenceId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
-        val list = ALL_QUESTIONS.filter { (track == null || it.track == track) && it.competenceId == competenceId }
+        val list = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { (track == null || it.track == track) && it.competenceId == competenceId })
         if (isProUnlocked) return list
         
         // Unlicensed Quota
@@ -77,7 +77,7 @@ object MaritimeQuestionBank {
     }
 
     fun getQuestionsByFunction(functionId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
-        val list = ALL_QUESTIONS.filter { (track == null || it.track == track) && it.functionId == functionId }
+        val list = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { (track == null || it.track == track) && it.functionId == functionId })
         return if (isProUnlocked) list else list.take(5)
     }
 
@@ -286,7 +286,7 @@ object MaritimeQuestionBank {
     }
 
     fun getNewTrackStandardReviewQuestions(track: Track, isProUnlocked: Boolean): List<Question> {
-        val allTrackQuestions = ALL_QUESTIONS.filter { it.track == track }
+        val allTrackQuestions = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { it.track == track })
         if (isProUnlocked) return allTrackQuestions
         
         val result = mutableListOf<Question>()
@@ -301,7 +301,7 @@ object MaritimeQuestionBank {
     fun searchQuestions(query: String, track: Track? = null, isProUnlocked: Boolean = true, competenceId: String? = null): List<Question> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return emptyList()
-        val list = ALL_QUESTIONS.filter { item ->
+        val list = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { item ->
             (track == null || item.track == track) &&
             (competenceId == null || competenceId == "ALL" || item.competenceId.equals(competenceId, ignoreCase = true)) &&
             (
@@ -312,7 +312,7 @@ object MaritimeQuestionBank {
                 item.competenceId.lowercase().contains(q) ||
                 item.id.lowercase().contains(q)
             )
-        }
+        })
         return if (isProUnlocked) list else list.take(5)
     }
 }
