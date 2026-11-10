@@ -1,0 +1,19 @@
+name: Audit Engine Management C10 saved references
+on:
+  push:
+    branches:
+      - audit/em-c10-reference-preservation
+    paths:
+      - 'scripts/audit-em-c10-reference-preservation.mjs'
+      - '.github/workflows/audit-em-c10-references.yml'
+jobs:
+  inspect-only:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/audit-em-c10-reference-preservation.mjs
