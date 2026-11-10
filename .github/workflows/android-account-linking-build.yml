@@ -24,6 +24,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Block plaintext question banks and verify encrypted manifest
+        run: python3 scripts/tests/question-bank-asset-safety.py
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:

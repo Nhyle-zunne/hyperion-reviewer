@@ -47,3 +47,8 @@ google-services.json
 # Generated install and Play upload artifacts
 *.apk
 *.aab
+
+# Never commit plaintext question sources or temporary generation material.
+# Valid packaged banks use app/src/main/assets/questions/**/*.csv.enc.
+tmp/
+*.csv

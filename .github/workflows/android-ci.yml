@@ -55,6 +55,9 @@ jobs:
         with:
           gradle-version: '8.14.4'
 
+      - name: Block plaintext question banks and verify encrypted manifest
+        run: python3 scripts/tests/question-bank-asset-safety.py
+
       - name: Run Android unit tests
         run: gradle --no-daemon :app:testDebugUnitTest
 
@@ -63,4 +66,7 @@ jobs:
 
       - name: Assemble debug app (no artifact upload)
         run: gradle --no-daemon :app:assembleDebug
+
+      - name: Verify APK contains only encrypted question banks
+        run: python3 scripts/tests/question-bank-asset-safety.py --artifact app/build/outputs/apk/debug/app-debug.apk
 
