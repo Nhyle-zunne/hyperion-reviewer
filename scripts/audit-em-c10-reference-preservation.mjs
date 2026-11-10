@@ -37,7 +37,7 @@ console.log('ORIGINAL_COUNT='+originals.length);
 console.log('ORIGINAL_NUMBER_RANGE='+Math.min(...numbers)+'-'+Math.max(...numbers));
 console.log('DUPLICATE_NOS='+JSON.stringify(Object.entries(counts).filter(([_,v])=>v>1)));
 console.log('MISSING_ORIGINAL_NOS='+JSON.stringify(Array.from({length:Math.max(...numbers)},(_,i)=>i+1).filter(n=>!counts[n])));
-const missingInUser=[182,373,406];
+const missingInUser=[182,226,251,322,373,405,406];
 const saved=missingInUser.map(no=>{
   const row=originals.find(x=>Number(x[0])===no);
   if(!row)throw new Error('Missing original question '+no);
