@@ -138,7 +138,7 @@ object ProQuestionRepository {
                     val options = row.subList(2, 8).map { it.trim() }.filter { it.isNotEmpty() }
                     val explanation = row.getOrElse(8) { "" }.trim()
                     val ansStr = row.getOrElse(9) { "1" }.trim()
-                    val ansIndex = (ansStr.toIntOrNull() ?: ('A'..'F').indexOf(ansStr.trim().uppercase().firstOrNull()) + 1) - 1
+                    val ansIndex = ansStr.toIntOrNull()?.minus(1) ?: "ABCDEF".indexOf(ansStr.trim().uppercase().firstOrNull() ?: ' ')
                     if (qText.isNotEmpty() && options.size >= 2) {
                         list.add(
                             ProQuestion(
@@ -166,7 +166,7 @@ object ProQuestionRepository {
                         .map { flat[it].trim() }.filter { it.isNotEmpty() }
                     val explanation = flat[recordStart + 8].trim()
                     val ansStr = flat[recordStart + 9].trim()
-                    val ansIndex = (ansStr.toIntOrNull() ?: (('A'..'F').indexOf(ansStr.trim().uppercase().firstOrNull()) + 1)) - 1
+                    val ansIndex = ansStr.toIntOrNull()?.minus(1) ?: "ABCDEF".indexOf(ansStr.trim().uppercase().firstOrNull() ?: ' ')
                     if (qText.isNotEmpty() && !qText.equals("Question", ignoreCase = true) && options.size >= 2) {
                         list.add(
                             ProQuestion(
