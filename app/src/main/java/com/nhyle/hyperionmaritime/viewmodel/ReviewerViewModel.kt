@@ -35,6 +35,7 @@ import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.UserQuestionState
 import com.nhyle.hyperionmaritime.data.repository.MarinaScoringEngine
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.data.repository.RetiredQuestionPolicy
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBankGmdss
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
@@ -2597,7 +2598,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val isPro = isTrackUnlocked(_selectedTrack.value)
         val bookmarked = bookmarkedIds.value
-        var questions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked }
+        var questions = RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked })
         if (competenceId != null && competenceId != "ALL" && competenceId != "BOOKMARKS") {
             val currentTrack = _selectedTrack.value
             questions = questions.filter { q ->
@@ -4887,7 +4888,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }.map { it.id }.toSet()
 
         if (missedQuestionIds.isNotEmpty()) {
-            val missedQuestions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in missedQuestionIds }
+            val missedQuestions = RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in missedQuestionIds })
             _activeQuestions.value = missedQuestions.shuffled()
             _activeQuizMode.value = QuizMode.PRACTICE
             _currentQuestionIndex.value = 0
