@@ -58,26 +58,21 @@ object MaritimeQuestionBank {
         }
 
     fun getQuestionsByTrack(track: Track, isProUnlocked: Boolean = true): List<Question> {
-        val list = RetiredQuestionPolicy.active(ALL_QUESTIONS.filter { it.track == track })
-        return if (isProUnlocked) list else list.take(5)
+        val original = ALL_QUESTIONS.filter { it.track == track }
+        return RetiredQuestionPolicy.active(if (isProUnlocked) original else original.take(5))
     }
 
     fun getQuestionsByCompetence(competenceId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
         val original = ALL_QUESTIONS.filter { (track == null || it.track == track) && it.competenceId == competenceId }
-        val list = RetiredQuestionPolicy.active(original)
-        if (isProUnlocked) return list
+        if (isProUnlocked) return RetiredQuestionPolicy.active(original)
 
-        // Preserve the original free-pool quota when retiring later questions.
-        // Engine Management C10's first retired item (182) is beyond its
-        // 166-question free sample, so existing free users keep 166 items.
-        // Unlicensed Quota
-        val resolvedTrack = track ?: list.firstOrNull()?.track
-        return if (resolvedTrack == Track.ENGINE_OIC_EW || resolvedTrack == Track.DECK_MGT || resolvedTrack == Track.ENGINE_MGT) {
-            val quota = (original.size * 0.40).roundToInt().coerceAtLeast(1)
-            list.take(quota)
-        } else {
-            list.take(5)
-        }
+        // Fix the free sample to its ORIGINAL published positions. If a future
+        // retirement affects a free question, do not replace it with a paid
+        // question from after the free boundary. PWA uses this same rule.
+        val resolvedTrack = track ?: original.firstOrNull()?.track
+        val quota = if (resolvedTrack == Track.ENGINE_OIC_EW || resolvedTrack == Track.DECK_MGT || resolvedTrack == Track.ENGINE_MGT)
+            (original.size * 0.40).roundToInt().coerceAtLeast(1) else 5
+        return RetiredQuestionPolicy.active(original.take(quota))
     }
 
     fun getQuestionsByFunction(functionId: String, track: Track? = null, isProUnlocked: Boolean = true): List<Question> {
