@@ -51,4 +51,16 @@ console.log('RESTORABLE_DELETED_ROWS='+Buffer.concat([iv,encrypted,enc.getAuthTa
 const digest=value=>createHash('sha256').update(value).digest('hex').slice(0,16);
 const summary=originals.map(row=>[Number(row[0]),digest(row[1].trim().toLowerCase().replace(/\s+/g,' ')), digest(row.slice(2,6).map(x=>x.trim()).join('|'))]);
 console.log('ORIGINAL_DIGEST_MAP='+Buffer.from(JSON.stringify(summary),'utf8').toString('base64'));
+const fnv=value=>{
+  let hash=2166136261;
+  for(let i=0;i<value.length;i++){hash=Math.imul(hash^value.charCodeAt(i),16777619);}
+  return (hash>>>0).toString(16).padStart(8,'0');
+};
+const normalized=value=>String(value||'').trim().toLowerCase().replace(/\\s+/g,' ');
+const matchMap=originals.map(row=>[
+  Number(row[0]),fnv(normalized(row[1])),
+  fnv(row.slice(2,6).map(normalized).join('|')),
+  String(row[6]||'').trim().toUpperCase()
+]);
+console.log('ORIGINAL_MATCH_MAP='+Buffer.from(JSON.stringify(matchMap),'utf8').toString('base64'));
 console.log('AUDIT_COMPLETE');
