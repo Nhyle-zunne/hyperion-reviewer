@@ -218,11 +218,13 @@ object MaritimeQuestionBank {
      * Bypasses Pro license requirements.
      */
     fun getMarinaCrpQuestions(competenceId: String? = null): List<Question> {
-        return if (competenceId != null) {
+        val originalSample = if (competenceId != null) {
             MARINA_CRP_POOLS_BY_COMPETENCE[competenceId] ?: emptyList()
         } else {
             MARINA_CRP_ALL_QUESTIONS
         }
+        // Filter only the new study view, not the saved full bank or old audits.
+        return RetiredQuestionPolicy.active(originalSample)
     }
 
     /**
@@ -261,7 +263,7 @@ object MaritimeQuestionBank {
             }
         }
 
-        return when (competenceId) {
+        return RetiredQuestionPolicy.active(when (competenceId) {
             "C1" -> if (selectedPart != null) {
                 val partQuestions = ProQuestionRepository.loadRawPartQuestions(context, "C1", selectedPart).map { it.toQuestion() }
                 if (isProUnlocked) partQuestions else {
@@ -281,7 +283,7 @@ object MaritimeQuestionBank {
                 allC2
             }
             else -> allC1 + allC2
-        }
+        })
     }
 
     fun getNewTrackStandardReviewQuestions(track: Track, isProUnlocked: Boolean): List<Question> {
