@@ -36,7 +36,7 @@ class RetiredC10QuestionsTest {
     @Test
     fun freeQuotasFunctionPoolsAndSearchDoNotReintroduceRetiredItems() {
         val free = MaritimeQuestionBank.getQuestionsByCompetence("C10", track, isProUnlocked = false)
-        assertTrue(free.isNotEmpty())
+        assertEquals("Free C10 quota remains unchanged", 166, free.size)
         assertTrue(free.none(RetiredQuestionPolicy::isRetired))
         val fullTrack = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true)
         assertTrue(fullTrack.none(RetiredQuestionPolicy::isRetired))
