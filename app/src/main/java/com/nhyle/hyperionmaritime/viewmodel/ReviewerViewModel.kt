@@ -2531,7 +2531,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val currentTrack = _selectedTrack.value
         val vaultEntries = MistakesVaultManager.getEntriesForTrack(getApplication(), currentTrack.name)
-        val questions = vaultEntries.map { it.question }
+        val questions = RetiredQuestionPolicy.active(vaultEntries.map { it.question })
 
         if (questions.isEmpty()) return
 
@@ -2542,6 +2542,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startMistakesVaultPractice(questions: List<Question>) {
+        val activeQuestions = RetiredQuestionPolicy.active(questions)
+        if (activeQuestions.isEmpty()) return
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
@@ -2559,8 +2561,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _isShuffled.value = false
         activeEvaluationAttemptCommittedId = null
 
-        _activeQuestions.value = questions
-        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _activeQuestions.value = activeQuestions
+        _userQuestionStates.value = activeQuestions.associate { it.id to UserQuestionState(questionId = it.id) }
         _firstAttemptStatus.value = emptyMap()
         _timeRemainingSeconds.value = 0
         _selectedChoiceIndex.value = null
@@ -2702,9 +2704,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        var questions = trackMistakes.map { entry ->
+        var questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }
+        })
 
         if (endItem != null && endItem >= startItem && questions.isNotEmpty()) {
             val fromIndex = (startItem - 1).coerceIn(0, questions.size - 1)
@@ -2786,9 +2788,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        val questions = trackMistakes.map { entry ->
+        val questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }.shuffled()
+        }).shuffled()
 
         if (questions.isEmpty()) return
 
@@ -2825,9 +2827,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        val questions = trackMistakes.map { entry ->
+        val questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }
+        })
 
         if (questions.isEmpty()) return
 
