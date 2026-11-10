@@ -33,8 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Autorenew
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Flag
@@ -79,6 +77,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
 import com.nhyle.hyperionmaritime.ui.components.QuestionAttemptStatsCard
@@ -347,13 +346,10 @@ private fun IntensiveDrillScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = { viewModel.toggleBookmark(currentQuestion.id) }) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Bookmark",
-                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    QuestionBookmarkButton(
+                        isBookmarked = isBookmarked,
+                        onClick = { viewModel.toggleBookmark(currentQuestion.id) }
+                    )
                     QuestionSettingsMenu(viewModel = viewModel, showDrillAutomations = true)
                 }
             }
@@ -808,13 +804,10 @@ private fun StandardDrillScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = { viewModel.toggleBookmark(question.id) }) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Bookmark",
-                            tint = if (isBookmarked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    QuestionBookmarkButton(
+                        isBookmarked = isBookmarked,
+                        onClick = { viewModel.toggleBookmark(question.id) }
+                    )
                     QuestionSettingsMenu(viewModel = viewModel, showDrillAutomations = true)
                 }
             }

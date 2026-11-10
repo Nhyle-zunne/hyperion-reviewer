@@ -65,6 +65,7 @@ import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
@@ -87,6 +88,8 @@ fun QuickScanViewerScreen(
     modifier: Modifier = Modifier
 ) {
     val textScale by viewModel.questionTextScale.collectAsState()
+    // Same Room-backed bookmark IDs as Practice All Questions and Bookmarks.
+    val bookmarkedIds by viewModel.bookmarkedIds.collectAsState()
     val colors = LocalSpaghettiColors.current
     val currentSelectedTrack by viewModel.selectedTrack.collectAsState()
     val activeTrack = track ?: currentSelectedTrack
@@ -158,6 +161,14 @@ fun QuickScanViewerScreen(
         MaritimeTopBar(
             title = "QUICK SCAN • ${competenceId.uppercase()}",
             subtitle = competenceInfo?.title?.uppercase() ?: "COMPETENCE REFERENCE REVIEW",
+            questionBookmarkAction = {
+                currentQuestion?.let { question ->
+                    QuestionBookmarkButton(
+                        isBookmarked = question.id in bookmarkedIds,
+                        onClick = { viewModel.toggleBookmark(question.id) }
+                    )
+                }
+            },
             settingsMenu = { QuestionSettingsMenu(viewModel = viewModel) },
             showBackButton = true,
             onBackClick = {
