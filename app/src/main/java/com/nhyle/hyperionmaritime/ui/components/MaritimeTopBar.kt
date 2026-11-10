@@ -64,6 +64,7 @@ fun MaritimeTopBar(
     bookmarkCount: Int = 0,
     vaultCount: Int = 0,
     onClearAllClick: (() -> Unit)? = null,
+    questionBookmarkAction: (@Composable () -> Unit)? = null,
     settingsMenu: (@Composable () -> Unit)? = null
 ) {
     val colors = LocalSpaghettiColors.current
@@ -227,6 +228,11 @@ fun MaritimeTopBar(
                     }
                 }
 
+                // Question bookmark precedes Settings (Quick Scan only).
+                // Practice retains its existing question-screen actions.
+                if (questionBookmarkAction != null) {
+                    questionBookmarkAction()
+                }
                 if (settingsMenu != null) {
                     settingsMenu()
                 }
