@@ -101,11 +101,13 @@ class DrillConfigurationAndRangeSliderTest {
         assertTrue("Question bank must be marked loaded before totals are read", MaritimeQuestionBank.isLoaded)
 
         for (track in Track.values()) {
-            val actualTrackCount = loadedQuestions.count { it.track == track }
+            // ALL_QUESTIONS retains retired rows for saved history, but the
+            // dashboard and competence selection count only active questions.
+            val actualTrackCount = MaritimeQuestionBank.getQuestionsByTrack(track, isProUnlocked = true).size
             val summedCompetenceCount = MaritimeCompetenceRegistry.getCompetencesForTrack(track).sumOf { competence ->
-                loadedQuestions.count {
-                    it.track == track && it.competenceId.equals(competence.competenceId, ignoreCase = true)
-                }
+                MaritimeQuestionBank.getQuestionsByCompetence(
+                    competence.competenceId, track, isProUnlocked = true
+                ).size
             }
             val registryTrackCount = MaritimeCompetenceRegistry.getTotalTrackQuestionCount(
                 track, isCrpMode = false, isProUnlocked = true

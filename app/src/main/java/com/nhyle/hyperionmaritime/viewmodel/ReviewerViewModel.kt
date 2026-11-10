@@ -35,6 +35,7 @@ import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.UserQuestionState
 import com.nhyle.hyperionmaritime.data.repository.MarinaScoringEngine
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.data.repository.RetiredQuestionPolicy
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBankGmdss
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
@@ -2530,7 +2531,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val currentTrack = _selectedTrack.value
         val vaultEntries = MistakesVaultManager.getEntriesForTrack(getApplication(), currentTrack.name)
-        val questions = vaultEntries.map { it.question }
+        val questions = RetiredQuestionPolicy.active(vaultEntries.map { it.question })
 
         if (questions.isEmpty()) return
 
@@ -2541,6 +2542,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun startMistakesVaultPractice(questions: List<Question>) {
+        val activeQuestions = RetiredQuestionPolicy.active(questions)
+        if (activeQuestions.isEmpty()) return
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
@@ -2558,8 +2561,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _isShuffled.value = false
         activeEvaluationAttemptCommittedId = null
 
-        _activeQuestions.value = questions
-        _userQuestionStates.value = questions.associate { it.id to UserQuestionState(questionId = it.id) }
+        _activeQuestions.value = activeQuestions
+        _userQuestionStates.value = activeQuestions.associate { it.id to UserQuestionState(questionId = it.id) }
         _firstAttemptStatus.value = emptyMap()
         _timeRemainingSeconds.value = 0
         _selectedChoiceIndex.value = null
@@ -2597,7 +2600,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
         val isPro = isTrackUnlocked(_selectedTrack.value)
         val bookmarked = bookmarkedIds.value
-        var questions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked }
+        var questions = RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarked })
         if (competenceId != null && competenceId != "ALL" && competenceId != "BOOKMARKS") {
             val currentTrack = _selectedTrack.value
             questions = questions.filter { q ->
@@ -2701,9 +2704,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        var questions = trackMistakes.map { entry ->
+        var questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }
+        })
 
         if (endItem != null && endItem >= startItem && questions.isNotEmpty()) {
             val fromIndex = (startItem - 1).coerceIn(0, questions.size - 1)
@@ -2785,9 +2788,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        val questions = trackMistakes.map { entry ->
+        val questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }.shuffled()
+        }).shuffled()
 
         if (questions.isEmpty()) return
 
@@ -2824,9 +2827,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
             }
         }
-        val questions = trackMistakes.map { entry ->
+        val questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
             MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        }
+        })
 
         if (questions.isEmpty()) return
 
@@ -4887,7 +4890,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }.map { it.id }.toSet()
 
         if (missedQuestionIds.isNotEmpty()) {
-            val missedQuestions = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in missedQuestionIds }
+            val missedQuestions = RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in missedQuestionIds })
             _activeQuestions.value = missedQuestions.shuffled()
             _activeQuizMode.value = QuizMode.PRACTICE
             _currentQuestionIndex.value = 0

@@ -465,10 +465,10 @@ class ReviewerRepository(
                 }
             }
             QuizMode.VAULT_DRILL, QuizMode.MISTAKES -> {
-                MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in vaultQuestionIds }.shuffled()
+                RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in vaultQuestionIds }).shuffled()
             }
             QuizMode.BOOKMARKS_DRILL -> {
-                MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkIds }.shuffled()
+                RetiredQuestionPolicy.active(MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkIds }).shuffled()
             }
         }
 

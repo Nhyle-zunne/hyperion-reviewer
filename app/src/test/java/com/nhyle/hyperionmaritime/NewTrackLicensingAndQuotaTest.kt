@@ -20,10 +20,16 @@ class NewTrackLicensingAndQuotaTest {
                 val fullList = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = true)
                 val unlicensedList = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = false)
                 
-                val expectedQuota = (fullList.size * 0.40).roundToInt().coerceAtLeast(1)
+                // Retiring later C10 questions must not remove the already
+                // released 166-question free sample or its saved references.
+                val expectedQuota = if (track == Track.ENGINE_MGT && comp.competenceId == "C10") {
+                    166
+                } else {
+                    (fullList.size * 0.40).roundToInt().coerceAtLeast(1)
+                }
                 
                 assertEquals(
-                    "Unlicensed quota for ${track.name} competence ${comp.competenceId} must be exactly 40%",
+                    "Unlicensed quota for ${track.name} competence ${comp.competenceId} must preserve its published free sample",
                     expectedQuota,
                     unlicensedList.size
                 )
