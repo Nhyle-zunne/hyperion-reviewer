@@ -225,7 +225,7 @@ object MaritimeQuestionBankDeckF2F3 {
                         questionText = qText,
                         options = options,
                         correctAnswerIndex = ansIdx,
-                        explanation = "",
+                        explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
                             difficulty = diff
                     )
