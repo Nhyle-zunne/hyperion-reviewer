@@ -226,7 +226,8 @@ object MaritimeQuestionBankDeckF2F3 {
                         options = options,
                         correctAnswerIndex = ansIdx,
                         explanation = "",
-                        difficulty = diff
+                        isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                            difficulty = diff
                     )
                 }
             }
