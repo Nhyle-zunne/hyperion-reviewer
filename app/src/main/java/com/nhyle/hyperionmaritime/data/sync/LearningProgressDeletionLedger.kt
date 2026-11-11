@@ -72,13 +72,15 @@ object LearningProgressDeletionLedger {
     }
 
     private fun save(context: Context, ledger: JSONObject) {
-        // A delete/restore marker must reach durable storage before the caller removes
-        // the corresponding Room/vault item. apply() only guarantees an in-memory
-        // update and can lose the tombstone if Android kills the process immediately.
-        val persisted = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(PREFS_KEY, ledger.toString())
-            .commit()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val previous = prefs.getString(PREFS_KEY, null)
+        // Merge runs on every sync and fingerprint check. Don't issue a disk
+        // commit for the same deletion state, but keep the original synchronous
+        // durability guarantee whenever a marker actually changes.
+        if (previous != null && runCatching {
+                LearningProgressStorageComparator.sameStorage(JSONObject(previous), ledger)
+            }.getOrDefault(false)) return
+        val persisted = prefs.edit().putString(PREFS_KEY, ledger.toString()).commit()
         check(persisted) { "Unable to persist the study progress deletion marker." }
     }
 }
