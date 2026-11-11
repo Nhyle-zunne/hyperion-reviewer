@@ -37,6 +37,15 @@ object LearningProgressSyncAdapter {
     private const val QUESTION_ATTEMPTS_KEY = "hyperion-question-attempt-history"
     private const val DELETIONS_KEY = "hyperion-progress-deletions"
 
+    /** Fingerprint just locally persisted study collections, never session tokens
+     * or volatile transport timestamps. Used only for app-background one-shots. */
+    suspend fun localStorageFingerprint(context: Context): String {
+        val native = mergeNativeIntoSnapshot(context, null)
+        return LearningProgressStorageComparator.storageFingerprint(
+            checkNotNull(native.optJSONObject("storage"))
+        )
+    }
+
     suspend fun mergeNativeIntoSnapshot(context: Context, remote: JSONObject?): JSONObject {
         val appContext = context.applicationContext
         val database = HyperionDatabase.getInstance(appContext)
@@ -90,12 +99,28 @@ object LearningProgressSyncAdapter {
         val questionIndex = loadQuestionIndex(database).toMutableMap()
         val bookmarkQuestions = questionItems(storage, BOOKMARKS_KEY, questionIndex)
         if (bookmarkQuestions.isNotEmpty()) {
-            database.questionDao().insertAll(bookmarkQuestions.mapNotNull { it.toQuestion()?.toEntity() })
-            val bookmarks = questionItems(storage, BOOKMARKS_KEY, questionIndex).mapNotNull { item ->
-                val savedAt = item.optLong("savedAt", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
-                item.optString("id").takeIf { it.isNotBlank() }?.let { BookmarkEntity(it, savedAt) }
+            // Replaying an unchanged cloud snapshot must not REPLACE every
+            // bookmarked question and invalidate Room's observable queries.
+            // Query only the referenced IDs in bounded SQLite batches.
+            val received = bookmarkQuestions.mapNotNull { it.toQuestion()?.toEntity() }.distinctBy { it.id }
+            val existingQuestions = received.map { it.id }.chunked(400)
+                .flatMap { database.questionDao().getQuestionsByIds(it) }
+                .associateBy { it.id }
+            val changedQuestions = received.filter { existingQuestions[it.id] != it }
+            if (changedQuestions.isNotEmpty()) database.questionDao().insertAll(changedQuestions)
+
+            val existingBookmarks = database.bookmarkDao().getAllBookmarksOnce().associateBy { it.questionId }
+            val bookmarksToInsert = bookmarkQuestions.mapNotNull { item ->
+                val id = item.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val existing = existingBookmarks[id]
+                // Older PWA snapshots (without savedAt) must not constantly
+                // generate new local timestamps or overwrite a newer bookmark.
+                val savedAt = item.optLong("savedAt", 0L).takeIf { it > 0L }
+                    ?: existing?.addedTimestamp ?: System.currentTimeMillis()
+                if (existing != null && existing.addedTimestamp >= savedAt) null
+                else BookmarkEntity(id, savedAt)
             }
-            if (bookmarks.isNotEmpty()) database.bookmarkDao().insertBookmarks(bookmarks)
+            if (bookmarksToInsert.isNotEmpty()) database.bookmarkDao().insertBookmarks(bookmarksToInsert)
         }
 
         applyCloudMistakes(context, database, storage)
@@ -450,7 +475,8 @@ object LearningProgressSyncAdapter {
         database: HyperionDatabase,
         storage: JSONObject
     ) {
-        val current = MistakesVaultManager.loadEntries(context).associateBy { it.questionId }.toMutableMap()
+        val originalEntries = MistakesVaultManager.loadEntries(context)
+        val current = originalEntries.associateBy { it.questionId }.toMutableMap()
         val roomRows = database.mistakeDao().getAllMistakesOnce().associateBy { it.questionId }.toMutableMap()
         val wrapper = runCatching { JSONObject(storage.optString(VAULT_KEY, "{}")) }.getOrNull()
         val remoteItems = wrapper?.optJSONObject("state")?.optJSONArray("items") ?: JSONArray()
@@ -475,14 +501,16 @@ object LearningProgressSyncAdapter {
                     timesFailed = item.optInt("wrongCount", 1).coerceAtLeast(1),
                     lastFailedTimestamp = lastWrong
                 )
-                database.mistakeDao().insertOrUpdate(row)
+                if (row != prior) database.mistakeDao().insertOrUpdate(row)
                 roomRows[id] = row
             }
         }
         // Preserve native-only mistake entries: the service may filter question-bearing
         // cloud records when the current account has no active entitlement for that track.
         val merged = current.values.toList()
-        MistakesVaultManager.saveEntries(context, merged)
+        if (merged != originalEntries) {
+            MistakesVaultManager.saveEntries(context, merged)
+        }
     }
 
     private suspend fun applyCloudStudySegments(database: HyperionDatabase, storage: JSONObject) {

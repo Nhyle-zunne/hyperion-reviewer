@@ -15,7 +15,10 @@ class LearningProgressSyncWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         return try {
-            SupabaseAccountManager.syncLearningProgressInBackground(applicationContext)
+            SupabaseAccountManager.syncLearningProgressInBackground(
+                applicationContext,
+                isAppBackgroundOneShot = inputData.getBoolean("skip_when_unchanged", false)
+            )
             Result.success()
         } catch (_: Exception) {
             if (runAttemptCount < 4) Result.retry() else Result.failure()

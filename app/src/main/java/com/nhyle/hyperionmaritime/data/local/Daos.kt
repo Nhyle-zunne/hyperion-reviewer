@@ -149,6 +149,10 @@ interface QuestionDao {
     @Query("SELECT * FROM questions WHERE id = :id LIMIT 1")
     suspend fun getQuestionById(id: String): QuestionEntity?
 
+    // Inspect only cloud-bookmarked questions rather than re-reading every bank.
+    @Query("SELECT * FROM questions WHERE id IN (:ids)")
+    suspend fun getQuestionsByIds(ids: List<String>): List<QuestionEntity>
+
     @Query("SELECT COUNT(*) FROM questions WHERE track = :track AND competence = :competence")
     suspend fun getQuestionCountForCompetence(track: String, competence: String): Int
 
