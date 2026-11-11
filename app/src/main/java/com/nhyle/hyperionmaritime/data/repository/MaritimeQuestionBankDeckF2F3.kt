@@ -61,6 +61,11 @@ object MaritimeQuestionBankDeckF2F3 {
     }
 
     fun openAssetStream(assetPath: String): java.io.InputStream? {
+        // Prefer a verified, account-bound remote correction when explicitly enabled;
+        // keep bundled encrypted assets as the offline/rollback fallback.
+        MaritimeQuestionBank.appContext?.let { context ->
+            VerifiedRemoteBankStore.openLicensedCsv(context, assetPath)?.let { return it }
+        }
         val encrypted = openRawAssetStream("$assetPath.enc")
         if (encrypted != null) {
             return try {
