@@ -156,6 +156,9 @@ class MainActivity : ComponentActivity() {
             .build()
         val request = OneTimeWorkRequestBuilder<LearningProgressSyncWorker>()
             .setConstraints(constraints)
+            // A routine app-background save checks the local fingerprint first.
+            // The hourly worker does not set this flag and still pulls cloud changes.
+            .setInputData(androidx.work.Data.Builder().putBoolean("skip_when_unchanged", true).build())
             .setInitialDelay(3, TimeUnit.SECONDS)
             .build()
         WorkManager.getInstance(applicationContext).enqueueUniqueWork(
