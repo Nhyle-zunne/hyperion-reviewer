@@ -53,7 +53,9 @@ internal object SmartBankManifest {
         require(this.path.matches(path) && sha256.matches(ciphertextSha) && bytes in 29..1048576) {
             "Invalid published ciphertext fingerprint"
         }
-        val encoded = JSONArray().put(path).put(ciphertextSha).put(bytes).toString()
+        // Compute exactly JSON.stringify([path, encrypted SHA256, byte length]).
+        // Do not depend on org.json slash escaping or whitespace conventions.
+        val encoded = "[\"$path\",\"$ciphertextSha\",$bytes]"
         return digest(encoded.toByteArray(Charsets.UTF_8))
     }
 
