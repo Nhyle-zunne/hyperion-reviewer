@@ -48,7 +48,9 @@ data class Question(
     val explanation: String,
     val difficulty: Difficulty,
     val isBookmarked: Boolean = false,
-    val isWrongInVault: Boolean = false
+    val isWrongInVault: Boolean = false,
+    /** Source CSV retirement status. Saved historic question records remain valid. */
+    val isRetired: Boolean = false
 ) {
     val rationale: String get() = explanation
 }
