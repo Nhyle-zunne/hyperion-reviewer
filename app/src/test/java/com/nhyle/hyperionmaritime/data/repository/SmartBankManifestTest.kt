@@ -26,6 +26,8 @@ class SmartBankManifestTest {
 
     @Test fun bundledManifestMatchesOriginalEncryptedBytesWithoutNetwork() {
         val version1 = SmartBankManifest.version(c1,c1Sha,1234)
+        assertEquals("17772a6fd7db8acaac5e058d39c6b7d6fa3e56d9dcd2950124dad067ebecc011", version1)
+        // Exact SHA256 of JSON.stringify([logicalPath,encryptedSha,byteLength])
         val version2 = SmartBankManifest.version(c2,c2Sha,2048)
         val remote = SmartBankManifest.parseRemote(
             server(version1,version2),Track.DECK_OIC_NW, old.keys
