@@ -107,8 +107,9 @@ object ProQuestionRepository {
                     ?: java.io.File("src/main/assets/$path").takeIf { it.exists() }?.inputStream()
                     ?: java.io.File("/app/src/main/assets/$path").takeIf { it.exists() }?.inputStream()
             }
+            val verifiedStream = ctx?.let { VerifiedRemoteBankStore.openLicensedCsv(it, assetPath) }
             val encryptedStream = openRaw("$assetPath.enc")
-            val stream = (if (encryptedStream != null) {
+            val stream = verifiedStream ?: (if (encryptedStream != null) {
                 com.nhyle.hyperionmaritime.data.util.AssetCrypto.decryptStream(encryptedStream)
             } else {
                 openRaw(assetPath)
