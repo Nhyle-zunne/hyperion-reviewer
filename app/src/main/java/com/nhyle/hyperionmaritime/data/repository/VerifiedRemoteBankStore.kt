@@ -135,6 +135,7 @@ internal object VerifiedRemoteBankStore {
 
     /** The question loader uses this only if the same owner still has a valid license. */
     fun openLicensedCsv(context: Context, assetPath: String): InputStream? {
+        if (!BuildConfig.SMART_BANK_UPDATES_ENABLED) return null
         val source = SmartBankManifest.sourceForAssetPath(assetPath) ?: return null
         val track = SmartBankManifest.trackForPath(source) ?: return null
         if (!LicenseManager.isTrackProUnlocked(context, track)) return null
@@ -205,6 +206,7 @@ internal object VerifiedRemoteBankStore {
         jwt: String,
         stillAuthorized: () -> Boolean
     ): Int = withContext(Dispatchers.IO) {
+        check(BuildConfig.SMART_BANK_UPDATES_ENABLED) { "Verified bank updates are not enabled in this build" }
         require(ownerPattern.matches(owner) && jwt.isNotBlank())
         if (!LicenseManager.isTrackProUnlocked(context, track) || !stillAuthorized()) {
             throw IOException("The requested track is not currently licensed")
