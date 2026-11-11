@@ -21,6 +21,8 @@ import com.nhyle.hyperionmaritime.data.sync.LearningProgressReadCache
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressBackgroundPolicy
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncAdapter
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressStorageComparator
+import com.nhyle.hyperionmaritime.data.repository.VerifiedRemoteBankStore
+import com.nhyle.hyperionmaritime.data.repository.VerifiedBankRefreshScheduler
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -161,6 +163,11 @@ object SupabaseAccountManager {
                     storeSession(appContext, it)
                     recordAccountActivity(it)
                 }
+            }
+            if (BuildConfig.SMART_BANK_UPDATES_ENABLED) {
+                // Never delay the sign-in result to download source files. The
+                // worker is network-bound and rate-limited; existing APK banks work.
+                VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(context)
             }
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
@@ -348,6 +355,38 @@ object SupabaseAccountManager {
      * switching accounts pauses study sync rather than uploading one person's local data
      * into another person's account.
      */
+    /** Account-scoped owner of an already saved Google sign-in, without a new Auth request. */
+    fun savedSignedInOwnerId(context: Context): String? =
+        runCatching { readSession(context.applicationContext)?.userId }.getOrNull()
+
+    /**
+     * Authenticated, paid-track-only manual/worker refresh. A free or unsigned
+     * account exits locally without contacting the question-bank service.
+     * A failed update never deletes either the bundled APK bank or a previously
+     * verified encrypted override.
+     */
+    suspend fun refreshLicensedQuestionBanks(context: Context): Map<Track, Int> =
+        withContext(Dispatchers.IO) {
+            if (!BuildConfig.SMART_BANK_UPDATES_ENABLED) return@withContext emptyMap()
+            val activeTracks = Track.values().filter {
+                LicenseManager.isTrackProUnlocked(context, it)
+            }
+            if (activeTracks.isEmpty()) return@withContext emptyMap()
+            val saved = readSession(context.applicationContext)
+                ?: return@withContext emptyMap()
+            val session = getFreshSession(context.applicationContext, saved)
+            val changes = linkedMapOf<Track, Int>()
+            for (track in activeTracks) {
+                changes[track] = VerifiedRemoteBankStore.refreshLicensedTrack(
+                    context.applicationContext, track, session.userId, session.accessToken
+                ) {
+                    savedSignedInOwnerId(context) == session.userId &&
+                        LicenseManager.isTrackProUnlocked(context, track)
+                }
+            }
+            changes
+        }
+
     suspend fun syncLearningProgressInBackground(context: Context, isAppBackgroundOneShot: Boolean = false) {
         val appContext = context.applicationContext
         val saved = withContext(Dispatchers.IO) { readSession(appContext) } ?: return
