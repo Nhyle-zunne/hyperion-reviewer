@@ -18,6 +18,7 @@ import com.nhyle.hyperionmaritime.BuildConfig
 import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressReadCache
+import com.nhyle.hyperionmaritime.data.sync.LearningProgressBackgroundPolicy
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncAdapter
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressStorageComparator
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -115,6 +116,7 @@ object SupabaseAccountManager {
     private val learningProgressReadCache = LearningProgressReadCache()
     private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 5 * 60 * 1000L
     private const val LEARNING_PROGRESS_LAST_SUCCESS_KEY = "last_successful_sync_at"
+    private const val LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY = "last_verified_local_storage_hash"
 
 
     suspend fun signInWithGoogle(activity: Activity) {
@@ -346,34 +348,73 @@ object SupabaseAccountManager {
      * switching accounts pauses study sync rather than uploading one person's local data
      * into another person's account.
      */
-    suspend fun syncLearningProgressInBackground(context: Context) {
+    suspend fun syncLearningProgressInBackground(context: Context, isAppBackgroundOneShot: Boolean = false) {
         val appContext = context.applicationContext
         val saved = withContext(Dispatchers.IO) { readSession(appContext) } ?: return
         withContext(Dispatchers.IO) {
+            val prefs = appContext.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            val last = prefs.getLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, 0L)
+            // Avoid refreshing the auth token and contacting Supabase when a
+            // background retry follows a successful sync within five minutes.
+            // Account ownership must match; account switching must never
+            // short-circuit the protected synchronization check.
+            if (prefs.getString("owner_user_id", null) == saved.userId &&
+                last > 0L && now >= last && now - last < LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS) return@withContext
             val fresh = getFreshSession(appContext, saved)
-            syncLearningProgressNow(appContext, fresh, enforceBackgroundCooldown = true)
+            syncLearningProgressNow(
+                appContext, fresh, enforceBackgroundCooldown = true,
+                skipUnchangedOneShot = isAppBackgroundOneShot
+            )
         }
     }
 
     private suspend fun syncLearningProgressNow(
         context: Context,
         session: SupabaseSession,
-        enforceBackgroundCooldown: Boolean = false
+        enforceBackgroundCooldown: Boolean = false,
+        skipUnchangedOneShot: Boolean = false
     ): String = learningProgressSyncMutex.withLock {
         val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastSuccess = prefs.getLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, 0L)
-        if (enforceBackgroundCooldown && lastSuccess > 0L &&
+        if (enforceBackgroundCooldown && lastSuccess > 0L && now >= lastSuccess &&
             now - lastSuccess < LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS
         ) {
             return@withLock "Study progress was synchronized recently."
         }
 
+        // This fingerprint is local-only and owner-scoped. Capture it *before*
+        // the network roundtrip, then verify it again after applying the cloud
+        // response. Concurrent study edits must never be falsely acknowledged.
+        val beforeHash = runCatching {
+            LearningProgressSyncAdapter.localStorageFingerprint(context)
+        }.getOrNull()
+        if (skipUnchangedOneShot && beforeHash != null &&
+            prefs.getString("owner_user_id", null) == session.userId &&
+            LearningProgressBackgroundPolicy.canSkipBackgroundSync(
+                beforeHash,
+                prefs.getString(LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY, null),
+                lastSuccess,
+                now
+            )
+        ) {
+            return@withLock "Unchanged local progress; next hourly or manual sync will check the cloud."
+        }
+
         val result = syncLearningProgressUnlocked(context, session)
-        // Persist the cooldown only after the server sync and local snapshot application
-        // both completed successfully. Manual account syncs also suppress a duplicate
-        // background worker immediately following sign-in or a user-initiated refresh.
-        prefs.edit().putLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, System.currentTimeMillis()).commit()
+        val afterHash = runCatching {
+            LearningProgressSyncAdapter.localStorageFingerprint(context)
+        }.getOrNull()
+        // Persist the cooldown only after full cloud/Room sync succeeds.
+        // Do not cache a fingerprint if local data changed mid-request.
+        val editor = prefs.edit().putLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, System.currentTimeMillis())
+        if (beforeHash != null && beforeHash == afterHash) {
+            editor.putString(LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY, beforeHash)
+        } else {
+            editor.remove(LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY)
+        }
+        editor.commit()
         result
     }
 
