@@ -4,7 +4,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+// Android's org.json APIs require a real implementation in local JVM tests.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], manifest = Config.NONE)
 class ProgressDeltaOutboxTest {
     private val alice = "11111111-1111-4111-8111-111111111111"
     private val bob = "22222222-2222-4222-8222-222222222222"
