@@ -45,6 +45,8 @@ android {
 
   defaultConfig {
     applicationId = "com.nhyle.hyperionmaritime"
+    // Default OFF until authenticated Worker delivery and cross-device CI pass.
+    buildConfigField("boolean", "SMART_BANK_UPDATES_ENABLED", (providers.gradleProperty("HYPERION_SMART_BANK_UPDATES_ENABLED").orNull == "true").toString())
     buildConfigField("String", "SUPABASE_URL", "\"https://evnjoezffghtrzqacwcj.supabase.co\"")
     buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_3QAooJa46k2g9PaUNbTOLA_1UXxAIeR\"")
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
