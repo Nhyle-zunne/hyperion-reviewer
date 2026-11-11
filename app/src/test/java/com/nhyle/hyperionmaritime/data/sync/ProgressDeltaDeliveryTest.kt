@@ -69,8 +69,8 @@ class ProgressDeltaDeliveryTest {
         assertEquals(ProgressDeltaDeliveryResult.Status.ACKNOWLEDGED,
             worker.deliver(owner,nextId,changes()).status)
         assertNull(outbox.pending(owner))
-        assertEquals(network.requests[0],network.requests[1],
-            "An uncertain network response replays exact immutable operation bytes")
+        assertEquals("An uncertain network response replays exact immutable operation bytes",
+            network.requests[0], network.requests[1])
     }
 
     @Test fun falseAcknowledgementAndConflictNeverDiscardStoredOperations() {
