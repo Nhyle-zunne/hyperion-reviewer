@@ -37,6 +37,15 @@ object LearningProgressSyncAdapter {
     private const val QUESTION_ATTEMPTS_KEY = "hyperion-question-attempt-history"
     private const val DELETIONS_KEY = "hyperion-progress-deletions"
 
+    /** Fingerprint just locally persisted study collections, never session tokens
+     * or volatile transport timestamps. Used only for app-background one-shots. */
+    suspend fun localStorageFingerprint(context: Context): String {
+        val native = mergeNativeIntoSnapshot(context, null)
+        return LearningProgressStorageComparator.storageFingerprint(
+            checkNotNull(native.optJSONObject("storage"))
+        )
+    }
+
     suspend fun mergeNativeIntoSnapshot(context: Context, remote: JSONObject?): JSONObject {
         val appContext = context.applicationContext
         val database = HyperionDatabase.getInstance(appContext)
