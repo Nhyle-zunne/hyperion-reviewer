@@ -169,7 +169,7 @@ object SupabaseAccountManager {
                 // Google sign-in/license sync into a reported account failure.
                 // No question bytes are downloaded in this callback.
                 runCatching {
-                    VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(context)
+                    VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(appContext)
                 }.onFailure { schedulingError ->
                     Log.w(TAG, "Optional licensed question-bank refresh could not be queued.", schedulingError)
                 }
