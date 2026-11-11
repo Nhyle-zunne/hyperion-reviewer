@@ -108,7 +108,9 @@ object ProQuestionRepository {
                     ?: java.io.File("/app/src/main/assets/$path").takeIf { it.exists() }?.inputStream()
             }
             val verifiedStream = ctx?.let { VerifiedRemoteBankStore.openLicensedCsv(it, assetPath) }
-            val encryptedStream = openRaw("$assetPath.enc")
+            // Do not open an APK stream when a verified remote override is
+            // already selected: the unused stream would leak file descriptors.
+            val encryptedStream = if (verifiedStream == null) openRaw("$assetPath.enc") else null
             val stream = verifiedStream ?: (if (encryptedStream != null) {
                 com.nhyle.hyperionmaritime.data.util.AssetCrypto.decryptStream(encryptedStream)
             } else {
