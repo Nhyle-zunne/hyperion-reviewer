@@ -165,9 +165,14 @@ object SupabaseAccountManager {
                 }
             }
             if (BuildConfig.SMART_BANK_UPDATES_ENABLED) {
-                // Never delay the sign-in result to download source files. The
-                // worker is network-bound and rate-limited; existing APK banks work.
-                VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(context)
+                // Optional background bank refresh must never turn a successful
+                // Google sign-in/license sync into a reported account failure.
+                // No question bytes are downloaded in this callback.
+                runCatching {
+                    VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(context)
+                }.onFailure { schedulingError ->
+                    Log.w(TAG, "Optional licensed question-bank refresh could not be queued.", schedulingError)
+                }
             }
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
