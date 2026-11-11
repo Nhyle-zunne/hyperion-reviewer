@@ -18,9 +18,18 @@ object RetiredQuestionPolicy {
         engineManagementC10Numbers.map { "EM-C10-%04d".format(it) }.toSet()
 
     fun isRetired(question: Question): Boolean =
-        question.track == Track.ENGINE_MGT &&
+        question.isRetired || (question.track == Track.ENGINE_MGT &&
             question.competenceId == "C10" &&
-            question.id in engineManagementC10Ids
+            question.id in engineManagementC10Ids)
+
+    /** CSV row lifecycle marker. Parsing is read-only and never drops the row. */
+    fun retiredFromCsv(row: List<String>, rows: List<List<String>>): Boolean {
+        val header = rows.take(15).firstOrNull { cells ->
+            cells.any { it.trim().equals("HYPERION_STATUS", ignoreCase = true) }
+        } ?: return false
+        val statusColumn = header.indexOfFirst { it.trim().equals("HYPERION_STATUS", ignoreCase = true) }
+        return statusColumn >= 0 && row.getOrNull(statusColumn)?.trim()?.equals("RETIRED", ignoreCase = true) == true
+    }
 
     fun active(questions: List<Question>): List<Question> =
         questions.filterNot(::isRetired)
