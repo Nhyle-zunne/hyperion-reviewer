@@ -70,6 +70,7 @@ object NewTrackQuestionBank {
                 return emptyList()
             }
 
+            val statusIndex = rows[headerIndex].indexOfFirst { it.trim().equals("HYPERION_STATUS", ignoreCase = true) }
             val seenNumbers = mutableSetOf<Int>()
             val questions = mutableListOf<Question>()
 
@@ -136,8 +137,9 @@ object NewTrackQuestionBank {
                         questionText = qText,
                         options = options,
                         correctAnswerIndex = correctIndex,
-                        explanation = "",
-                        difficulty = diff
+                        explanation = row.getOrNull(7).orEmpty(),
+                        difficulty = diff,
+                        isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true
                     )
                 )
             }
