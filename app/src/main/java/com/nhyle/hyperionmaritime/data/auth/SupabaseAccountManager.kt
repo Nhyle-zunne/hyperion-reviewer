@@ -19,6 +19,7 @@ import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressReadCache
 import com.nhyle.hyperionmaritime.data.sync.LearningProgressSyncAdapter
+import com.nhyle.hyperionmaritime.data.sync.LearningProgressStorageComparator
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -418,13 +419,17 @@ object SupabaseAccountManager {
         // mergeNativeIntoSnapshot mutates the supplied JSONObject, including its nested
         // storage object. Capture the actual server value first and merge into a deep copy
         // so the no-op comparison cannot accidentally compare the object to itself.
-        val remoteStorageJson = remoteSnapshot?.optJSONObject("storage")?.toString()
+        val remoteStorage = remoteSnapshot?.optJSONObject("storage")
         val initialMergedSnapshot = LearningProgressSyncAdapter.mergeNativeIntoSnapshot(
             context,
             remoteSnapshot?.let { JSONObject(it.toString()) }
         )
-        val mergedStorageJson = initialMergedSnapshot.optJSONObject("storage")?.toString()
-        if (remoteSnapshot != null && remoteStorageJson == mergedStorageJson) {
+        val mergedStorage = initialMergedSnapshot.optJSONObject("storage")
+        // Ignore JSON object key-order/formatting differences in Zustand's
+        // serialized store values, but never ignore changed answers, deletions,
+        // session order, bookmarks or other actual study data.
+        if (remoteSnapshot != null &&
+            LearningProgressStorageComparator.sameStorage(remoteStorage, mergedStorage)) {
             LearningProgressSyncAdapter.applyCloudSnapshot(context, remoteSnapshot)
             return "Study progress is already up to date across your signed-in devices."
         }
