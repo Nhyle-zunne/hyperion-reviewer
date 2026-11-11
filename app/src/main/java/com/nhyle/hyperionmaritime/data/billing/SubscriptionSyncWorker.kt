@@ -2,7 +2,6 @@ package com.nhyle.hyperionmaritime.data.billing
 
 import android.content.Context
 import android.util.Log
-import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -14,10 +13,10 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Enterprise WorkManager task that periodically checks Google Play billing status.
- * Reconciles the local Google Play Billing snapshot and, when the user has signed in,
- * refreshes the server-authoritative Hyperion account entitlements as well. The network
- * constraint keeps the 12-hour job from treating an offline BillingClient cache as a
- * fresh server verification.
+ * Reconciles Google Play Billing ownership, renewals, cancellations and expiry.
+ * Server-side Hyperion account entitlements are refreshed separately on sign-in,
+ * explicit Sync Licenses, or confirmed purchase/restore. The network constraint
+ * prevents treating an offline Play Billing cache as a fresh verification.
  */
 class SubscriptionSyncWorker(
     appContext: Context,
@@ -62,12 +61,11 @@ class SubscriptionSyncWorker(
             val billingManager = BillingManager.getInstance(applicationContext)
             billingManager.queryPurchasesAsync()
 
-            // Keep account-linked website and Google Play entitlements current too.
-            // This is a no-op for users who have not opted into Hyperion sign-in.
-            // The server re-verifies every owned purchase token before issuing any grant.
-            SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(applicationContext)
-
-            Log.i(TAG, "Completed periodic Google Play and signed-in account entitlement sync.")
+            // Google Play must still verify its own active subscriptions, but
+            // do not requery Supabase account entitlements every 12 hours.
+            // Protected Hyperion backend endpoints continue authorizing
+            // resources server-side at request time.
+            Log.i(TAG, "Completed periodic Google Play ownership check.")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "Error executing subscription sync worker: ${e.message}", e)
