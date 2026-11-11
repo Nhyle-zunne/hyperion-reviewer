@@ -722,8 +722,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
             scope.launch {
                 queryProductDetails()
+                // Restore Play-owned access, but leave full Supabase license
+                // synchronization to sign-in, manual Sync and new purchases.
                 queryPurchasesAsync()
-                syncAccountAfterPlayPurchaseChanged()
             }
         } else {
             Log.w(TAG, "Billing setup failed: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -843,23 +844,30 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun queryPurchasesOnResume() {
         scope.launch {
-            // MainActivity calls this after the Play sheet closes and the app resumes.
-            // A still-pending transaction is preserved by the purchase snapshot itself.
+            // Keep Google Play's purchase-owner refresh for renewals, expiry,
+            // cancellations, pending purchases, and subscription testers.
+            // Do NOT re-fetch Supabase website licenses on every app resume.
+            val checkoutPending = checkoutFlowProductId != null ||
+                _entitlements.value.pendingPurchaseProductId != null
             checkoutFlowProductId = null
             if (!billingClient.isReady) startConnection()
-
-            // A disconnected BillingClient can take a moment to reconnect. Do not skip
-            // the foreground entitlement refresh just because Play was reconnecting.
             val connected = withTimeoutOrNull(15_000L) {
                 _entitlements.first { it.billingConnected }
             } != null
             if (!connected) return@launch
 
-            // Refresh local ownership first, then ask the authenticated server to read
-            // Google's current SubscriptionsV2 expiryTime. This picks up auto-renewals,
-            // grace-period changes, and accelerated license-tester renewals.
-            queryPurchasesAsync()
-            if (hasValidatedInternet()) {
+            val beforeTokens = getOwnedPurchasesForAccountLinking()
+                .map { it.purchaseToken }.toSet()
+            val queried = queryPurchasesAsync()
+            if (!queried) return@launch
+            val afterTokens = getOwnedPurchasesForAccountLinking()
+                .map { it.purchaseToken }.toSet()
+            // Only a purchase event or actual ownership change links to the
+            // Hyperion account. Sign-in and the manual Sync button handle
+            // existing website licenses independently.
+            if (shouldSyncLinkedAccountAfterPlayRefresh(
+                checkoutPending, beforeTokens, afterTokens
+            ) && hasValidatedInternet()) {
                 syncAccountAfterPlayPurchaseChanged()
             }
         }
