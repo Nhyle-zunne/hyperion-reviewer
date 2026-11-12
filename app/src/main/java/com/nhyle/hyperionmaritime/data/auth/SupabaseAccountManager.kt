@@ -369,6 +369,21 @@ object SupabaseAccountManager {
      * A failed update never deletes either the bundled APK bank or a previously
      * verified encrypted override.
      */
+    /**
+     * Shared, owner-bound access to authenticated optional question images.
+     * Returns only an already signed-in account. Refreshes an expired JWT
+     * without changing the user's subscription or triggering progress sync.
+     * The question-media Edge Function still verifies the CURRENT paid grant.
+     */
+    internal suspend fun authenticatedQuestionMediaSession(context: Context): Pair<String, String>? =
+        withContext(Dispatchers.IO) {
+            val session = readSession(context.applicationContext) ?: return@withContext null
+            val fresh = runCatching { getFreshSession(context.applicationContext, session) }.getOrNull()
+                ?: return@withContext null
+            if (fresh.userId != LicenseManager.getCurrentAccountUserId(context)) return@withContext null
+            fresh.userId to fresh.accessToken
+        }
+
     suspend fun refreshLicensedQuestionBanks(context: Context): Map<Track, Int> =
         withContext(Dispatchers.IO) {
             if (!BuildConfig.SMART_BANK_UPDATES_ENABLED) return@withContext emptyMap()

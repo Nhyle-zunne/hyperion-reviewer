@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
+
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Quadruple
 import com.nhyle.hyperionmaritime.data.model.Question
@@ -102,6 +104,9 @@ object MaritimeQuestionBankDeckF1 {
 
         val text = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 1) return emptyList()
 
         val list = mutableListOf<Question>()
@@ -163,6 +168,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                             )
                         )
@@ -277,6 +283,9 @@ object MaritimeQuestionBankDeckF1 {
 
         val text = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 1) return emptyList()
 
         val list = mutableListOf<Question>()
@@ -333,6 +342,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                             )
                         )
@@ -395,6 +405,9 @@ object MaritimeQuestionBankDeckF1 {
             .replace("&amp;", "&")
             .replace("°", "°")
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 1) return emptyList()
 
         val list = mutableListOf<Question>()
@@ -454,6 +467,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                             )
                         )
@@ -516,6 +530,9 @@ object MaritimeQuestionBankDeckF1 {
             .replace("&amp;", "&")
             .replace("°", "°")
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 1) return emptyList()
 
         val list = mutableListOf<Question>()
@@ -575,6 +592,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                             )
                         )
@@ -635,6 +653,9 @@ object MaritimeQuestionBankDeckF1 {
             .replace("&amp;", "&")
             .replace("°", "°")
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 4) return emptyList()
 
         // Find the index of the header row "No."
@@ -700,6 +721,7 @@ object MaritimeQuestionBankDeckF1 {
                             correctAnswerIndex = ansIdx,
                             explanation = row.getOrNull(7).orEmpty(),
                             isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                         )
                     )
@@ -753,6 +775,9 @@ object MaritimeQuestionBankDeckF1 {
             .replace("&amp;", "&")
             .replace("°", "°")
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 4) return emptyList()
 
         // Find the index of the header row "No."
@@ -839,6 +864,7 @@ object MaritimeQuestionBankDeckF1 {
                         correctAnswerIndex = ansIdx,
                         explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                     )
                 }
@@ -919,6 +945,9 @@ object MaritimeQuestionBankDeckF1 {
             .replace("&amp;", "&")
             .replace("\uFFFD", "'")
         val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
         if (rows.size <= 4) return emptyList()
 
         // Find the index of the header row "No."
@@ -1005,6 +1034,7 @@ object MaritimeQuestionBankDeckF1 {
                         correctAnswerIndex = ansIdx,
                         explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
                             difficulty = diff
                     )
                 }

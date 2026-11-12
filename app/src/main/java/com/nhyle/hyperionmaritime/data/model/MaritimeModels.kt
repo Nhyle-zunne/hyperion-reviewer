@@ -50,7 +50,9 @@ data class Question(
     val isBookmarked: Boolean = false,
     val isWrongInVault: Boolean = false,
     /** Source CSV retirement status. Saved historic question records remain valid. */
-    val isRetired: Boolean = false
+    val isRetired: Boolean = false,
+    /** Hash-only media references; image bytes stay in protected local storage. */
+    val imageAttachments: List<QuestionImageRef> = emptyList()
 ) {
     val rationale: String get() = explanation
 }

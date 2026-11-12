@@ -77,6 +77,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
@@ -480,6 +481,7 @@ private fun IntensiveDrillScreen(
                             fontWeight = FontWeight.Medium
                         )
                     )
+                    QuestionImageGallery(question = currentQuestion, placement = "question")
                 }
             }
 
@@ -549,6 +551,10 @@ private fun IntensiveDrillScreen(
                         )
                     }
                 }
+            }
+
+            if (isSubmitted) {
+                QuestionImageGallery(question = currentQuestion, placement = "explanation")
             }
 
             // Question Attempt Stats Card
@@ -909,6 +915,7 @@ private fun StandardDrillScreen(
                             fontWeight = FontWeight.Medium
                         )
                     )
+                    QuestionImageGallery(question = question, placement = "question")
                 }
             }
 
@@ -932,6 +939,10 @@ private fun StandardDrillScreen(
             }
 
             // Question Attempt Stats Card
+            if (isAnswerEvaluated) {
+                QuestionImageGallery(question = question, placement = "explanation")
+            }
+
             val currentStandardStats by viewModel.currentQuestionStats.collectAsState()
             val isStandardStatsMatching = currentStandardStats != null &&
                 currentStandardStats?.questionId == question.id &&

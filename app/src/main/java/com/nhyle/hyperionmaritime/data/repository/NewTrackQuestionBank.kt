@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
+
 import android.util.Log
 import com.nhyle.hyperionmaritime.data.model.CompetenceInfo
 import com.nhyle.hyperionmaritime.data.model.Difficulty
@@ -54,6 +56,9 @@ object NewTrackQuestionBank {
                 .replace("\uFFFD", "'")
 
             val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
             if (rows.isEmpty()) return emptyList()
 
             // Header row is the one whose first cell equals "No." (ignore case)
@@ -139,7 +144,8 @@ object NewTrackQuestionBank {
                         correctAnswerIndex = correctIndex,
                         explanation = row.getOrNull(7).orEmpty(),
                         difficulty = diff,
-                        isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true
+                        isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true,
+                        imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row)
                     )
                 )
             }
