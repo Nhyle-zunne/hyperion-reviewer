@@ -64,7 +64,9 @@ import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
-import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionEditor
+import com.nhyle.hyperionmaritime.ui.components.KeywordChoiceText
+import com.nhyle.hyperionmaritime.ui.components.rememberKeywordEditorState
 import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
@@ -114,6 +116,10 @@ fun QuickScanViewerScreen(
     val currentQuestion = remember(rawCurrentQuestion?.id) {
         rawCurrentQuestion?.let { shuffleOptionsStable(it, "quickscan") }
     }
+
+    val keywordsEnabled by viewModel.highlightKeywords.collectAsState()
+    val keywordState = rememberKeywordEditorState(keywordsEnabled, currentQuestion?.track?.name.orEmpty(),
+        currentQuestion?.id.orEmpty(), currentQuestion?.questionText.orEmpty(), currentQuestion?.options.orEmpty())
 
     val savedIndex = remember(competenceId, activeTrack) {
         viewModel.getQuickScanLastIndex(activeTrack, competenceId)
@@ -323,10 +329,8 @@ fun QuickScanViewerScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             // Question Stem Text
-                            KeywordQuestionText(
-                                viewModel = viewModel,
-                                track = currentQuestion.track.name,
-                                questionId = currentQuestion.id,
+                            KeywordQuestionEditor(
+                                state = keywordState,
                                 text = currentQuestion.questionText,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontSize = MaterialTheme.typography.titleMedium.fontSize * textScale,
@@ -392,12 +396,14 @@ fun QuickScanViewerScreen(
 
                             // Option Text
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
+                                KeywordChoiceText(
+                                    state = keywordState,
                                     text = optionText,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = textColor,
-                                    lineHeight = 20.sp,
-                                    fontWeight = if (isCorrect) FontWeight.Bold else FontWeight.Normal
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        color = textColor,
+                                        lineHeight = 20.sp,
+                                        fontWeight = if (isCorrect) FontWeight.Bold else FontWeight.Normal
+                                    )
                                 )
 
                                 if (isCorrect) {

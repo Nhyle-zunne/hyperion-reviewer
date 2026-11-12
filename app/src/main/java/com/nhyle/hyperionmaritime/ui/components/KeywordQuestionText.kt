@@ -14,65 +14,105 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import com.nhyle.hyperionmaritime.data.local.QuestionKeywords
-import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 
-@Composable
-fun KeywordQuestionText(
-    viewModel: ReviewerViewModel,
-    track: String,
-    questionId: String,
-    text: String,
-    style: TextStyle
+/** One draft and save transaction for a question and its choices. */
+class KeywordEditorState internal constructor(
+    val enabled: Boolean,
+    internal val stemKey: String,
+    choices: List<Pair<String, String>>,
+    load: (String, Int) -> Set<Int>,
+    private val persist: (Map<String, Set<Int>>) -> Boolean
 ) {
-    val enabled by viewModel.highlightKeywords.collectAsState()
-    KeywordQuestionEditor(enabled, track, questionId, text, style)
+    var editing by mutableStateOf(false)
+        private set
+    var saveFailed by mutableStateOf(false)
+        private set
+    private val choiceKeys = choices.associate { (key, text) -> text to key }
+    private var draft by mutableStateOf((listOf(stemKey) + choices.map { it.first })
+        .associateWith { load(it, Int.MAX_VALUE) })
+
+    internal fun choiceKey(text: String): String = choiceKeys.getValue(text)
+    internal fun selected(key: String): Set<Int> = draft[key].orEmpty()
+    internal fun toggle(key: String, text: String, token: Int) {
+        if (!enabled || !editing) return
+        val selected = selected(key)
+        draft = draft + (key to QuestionKeywords.toggleSelection(text, selected, token))
+    }
+    internal fun editOrSave() {
+        if (!enabled) return
+        if (!editing) {
+            editing = true
+        } else {
+            val saved = runCatching { persist(draft) }.getOrDefault(false)
+            saveFailed = !saved
+            if (saved) editing = false
+        }
+    }
 }
 
 @Composable
-internal fun KeywordQuestionEditor(
+fun rememberKeywordEditorState(
     enabled: Boolean,
     track: String,
     questionId: String,
     text: String,
-    style: TextStyle
-) {
+    choices: List<String> = emptyList()
+): KeywordEditorState {
     val context = LocalContext.current
     val storage = remember(context) { QuestionKeywords(context) }
-    val key = remember(track, questionId, text) { storage.key(track, questionId, text) }
-    val words = remember(text) { Regex("[\\p{L}\\p{N}]+(?:['’\\-][\\p{L}\\p{N}]+)*").findAll(text).toList() }
-    // Discard unsaved edits on navigation or when highlighting is switched off.
-    var editing by remember(key, enabled) { mutableStateOf(false) }
-    var selected by remember(key, enabled) { mutableStateOf(storage.load(key, words.size)) }
-    val annotated = remember(text, selected, enabled, words) {
-        buildAnnotatedString {
-            var cursor = 0
-            words.forEachIndexed { index, word ->
-                append(text.substring(cursor, word.range.first))
-                if (enabled && index in selected) {
-                    withStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717))) { append(word.value) }
-                } else append(word.value)
-                cursor = word.range.last + 1
-            }
-            append(text.substring(cursor))
-        }
+    // Choice order is presentation only; navigation, revisions and disabling discard the draft.
+    return remember(storage, enabled, track, questionId, text, choices.sorted()) {
+        val key = storage.key(track, questionId, text)
+        val choiceTexts = choices.distinct().map { storage.choiceKey(key, it) to it }
+        val texts = (choiceTexts + (key to text)).toMap()
+        KeywordEditorState(enabled, key, choiceTexts,
+            { fieldKey, _ -> storage.loadText(fieldKey, texts.getValue(fieldKey)) }, storage::saveAll)
     }
+}
+
+@Composable
+internal fun KeywordQuestionEditor(enabled: Boolean, track: String, questionId: String, text: String, style: TextStyle) {
+    KeywordQuestionEditor(rememberKeywordEditorState(enabled, track, questionId, text), text, style)
+}
+
+@Composable
+fun KeywordQuestionEditor(state: KeywordEditorState, text: String, style: TextStyle) {
     Column(Modifier.fillMaxWidth()) {
-        if (enabled && editing) {
-            Text("Tap words to highlight or remove highlights.")
-            ClickableText(modifier = Modifier.testTag("keyword_question_text"), text = annotated, style = style, onClick = { offset ->
-                val index = words.indexOfFirst { offset in it.range }
-                if (index >= 0) selected = if (index in selected) selected - index else selected + index
-            })
-        } else {
-            Text(text = annotated, style = style)
-        }
-        if (enabled) {
-            TextButton(modifier = Modifier.align(Alignment.End), onClick = {
-                if (editing) storage.save(key, selected)
-                editing = !editing
-            }) { Text(if (editing) "Save Keywords" else "Edit Keyword") }
+        if (state.enabled && state.editing) Text("Tap words or symbols in the question and choices to highlight or remove highlights.")
+        KeywordHighlightText(state, state.stemKey, text, style, Modifier.testTag("keyword_question_text"))
+        if (state.saveFailed) Text("Could not save keywords. Please try again.")
+        if (state.enabled) {
+            TextButton(modifier = Modifier.align(Alignment.End), onClick = state::editOrSave) {
+                Text(if (state.editing) "Save Keywords" else "Edit Keyword")
+            }
         }
     }
+}
+
+@Composable
+fun KeywordChoiceText(state: KeywordEditorState, text: String, style: TextStyle, modifier: Modifier = Modifier) {
+    KeywordHighlightText(state, state.choiceKey(text), text, style, modifier.testTag("keyword_choice_$text"))
+}
+
+@Composable
+private fun KeywordHighlightText(state: KeywordEditorState, key: String, text: String, style: TextStyle, modifier: Modifier) {
+    val tokens = remember(text) { QuestionKeywords.tokens(text) }
+    val selected = state.selected(key)
+    val annotated = remember(text, selected, state.enabled) {
+        buildAnnotatedString {
+            append(text)
+            if (state.enabled) QuestionKeywords.highlightRanges(text, selected).forEach { range ->
+                addStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717)),
+                    range.first, range.last + 1)
+            }
+        }
+    }
+    if (state.enabled && state.editing) {
+        ClickableText(modifier = modifier, text = annotated, style = style, onClick = { offset ->
+            // Punctuation inside a legacy compound word is selectable on its own.
+            val id = tokens.indexOfLast { offset in it.range }
+            if (id >= 0) state.toggle(key, text, id)
+        })
+    } else Text(text = annotated, style = style, modifier = modifier)
 }

@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,7 +77,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
-import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionEditor
+import com.nhyle.hyperionmaritime.ui.components.rememberKeywordEditorState
 import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
@@ -271,6 +273,11 @@ private fun IntensiveDrillScreen(
     }
 
     val currentQuestion = intensiveQueue.first()
+    val keywordsEnabled by viewModel.highlightKeywords.collectAsState()
+    val keywordState = rememberKeywordEditorState(keywordsEnabled, currentQuestion.track.name, currentQuestion.id, currentQuestion.questionText, currentQuestion.options)
+    LaunchedEffect(keywordState.editing) {
+        if (keywordState.editing) viewModel.cancelAutoAdvance()
+    }
     val selectedChoiceIndex by viewModel.selectedChoiceIndex.collectAsState()
     val isAnswerEvaluated by viewModel.isAnswerEvaluated.collectAsState()
     val isSubmitted = isAnswerEvaluated
@@ -469,10 +476,8 @@ private fun IntensiveDrillScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    KeywordQuestionText(
-                        viewModel = viewModel,
-                        track = currentQuestion.track.name,
-                        questionId = currentQuestion.id,
+                    KeywordQuestionEditor(
+                        state = keywordState,
                         text = currentQuestion.questionText,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface,
@@ -491,11 +496,12 @@ private fun IntensiveDrillScreen(
                     DrillOptionCard(
                         choiceIndex = optIndex,
                         choiceText = optionText,
+                        keywordState = keywordState,
                         isSelected = isSelected,
                         isCorrect = optIndex == currentQuestion.correctAnswerIndex,
                         isEvaluated = isSubmitted,
                         onOptionSelected = { chosenIdx ->
-                            if (!isSubmitted) {
+                            if (!keywordState.editing && !isSubmitted) {
                                 viewModel.selectIntensiveChoice(chosenIdx)
                             }
                         },
@@ -591,13 +597,14 @@ private fun IntensiveDrillScreen(
 
                 Button(
                     onClick = {
+                        if (keywordState.editing) return@Button
                         if (!isSubmitted) {
                             viewModel.confirmIntensiveAnswer()
                         } else {
                             viewModel.advanceIntensiveQuestion()
                         }
                     },
-                    enabled = selectedChoiceIndex != null,
+                    enabled = !keywordState.editing && selectedChoiceIndex != null,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSubmitted && isAnswerCorrect) PassGreen else MaterialTheme.colorScheme.primary,
                         contentColor = PureWhite,
@@ -746,6 +753,11 @@ private fun StandardDrillScreen(
     }
 
     val question = activeQuestions[currentIndex]
+    val keywordsEnabled by viewModel.highlightKeywords.collectAsState()
+    val keywordState = rememberKeywordEditorState(keywordsEnabled, question.track.name, question.id, question.questionText, question.options)
+    LaunchedEffect(keywordState.editing) {
+        if (keywordState.editing) viewModel.cancelAutoAdvance()
+    }
     val currentState = userStates[question.id]
     val isBookmarked = bookmarkedIds.contains(question.id)
     val isFlagged = currentState?.isFlagged == true
@@ -898,10 +910,8 @@ private fun StandardDrillScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
             ) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    KeywordQuestionText(
-                        viewModel = viewModel,
-                        track = question.track.name,
-                        questionId = question.id,
+                    KeywordQuestionEditor(
+                        state = keywordState,
                         text = question.questionText,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface,
@@ -920,11 +930,12 @@ private fun StandardDrillScreen(
                     DrillOptionCard(
                         choiceIndex = optIndex,
                         choiceText = optionText,
+                        keywordState = keywordState,
                         isSelected = isSelected,
                         isCorrect = isChoiceCorrect,
                         isEvaluated = isAnswerEvaluated,
                         onOptionSelected = { chosenIdx ->
-                            viewModel.selectOption(currentIndex, chosenIdx)
+                            if (!keywordState.editing) viewModel.selectOption(currentIndex, chosenIdx)
                         },
                         modifier = Modifier.testTag("option_card_$optIndex")
                     )
@@ -985,6 +996,7 @@ private fun StandardDrillScreen(
 
                 Button(
                     onClick = {
+                        if (keywordState.editing) return@Button
                         if (!isAnswerEvaluated) {
                             viewModel.confirmOrNextQuestion()
                         } else {
@@ -995,7 +1007,7 @@ private fun StandardDrillScreen(
                             }
                         }
                     },
-                    enabled = isAnswerEvaluated || selectedChoiceIndex != null,
+                    enabled = !keywordState.editing && (isAnswerEvaluated || selectedChoiceIndex != null),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = PureWhite,

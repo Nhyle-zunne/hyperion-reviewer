@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      test_filter:
+        description: Optional Gradle test pattern for focused diagnostics; blank runs the full suite
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -29,7 +35,7 @@ jobs:
         run: node scripts/tests/agent-skills-test.mjs
 
   test-and-build:
-    name: Unit tests and lint
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.test_filter != '' && 'Focused tests and lint (manual diagnostics)' || 'Unit tests and lint' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -59,7 +65,14 @@ jobs:
         run: python3 scripts/tests/question-bank-asset-safety.py
 
       - name: Run Android unit tests
-        run: gradle --no-daemon :app:testDebugUnitTest
+        env:
+          TEST_FILTER: ${{ github.event_name == 'workflow_dispatch' && inputs.test_filter || '' }}
+        run: |
+          filter_args=()
+          if [[ -n "$TEST_FILTER" ]]; then
+            filter_args+=(--tests "$TEST_FILTER")
+          fi
+          gradle --no-daemon :app:testDebugUnitTest "${filter_args[@]}"
 
       - name: Run Android static analysis
         run: gradle --no-daemon :app:lintDebug

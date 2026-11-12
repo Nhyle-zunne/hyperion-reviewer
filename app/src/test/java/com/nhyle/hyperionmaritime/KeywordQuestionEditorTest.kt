@@ -7,22 +7,226 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.geometry.Offset
+import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.nhyle.hyperionmaritime.data.local.QuestionKeywords
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionEditor
+import com.nhyle.hyperionmaritime.ui.components.KeywordEditorState
+import com.nhyle.hyperionmaritime.ui.components.rememberKeywordEditorState
+import com.nhyle.hyperionmaritime.ui.screens.DrillOptionCard
+import androidx.compose.foundation.layout.Column
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Rule
+import androidx.lifecycle.ViewModelStore
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
+@OptIn(ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class KeywordQuestionEditorTest {
     @get:Rule val compose = createComposeRule()
+    private val viewModels = ViewModelStore()
+    private val restoreActions = mutableListOf<() -> Unit>()
+
+    @After fun restoreFixtureState() {
+        viewModels.clear()
+        restoreActions.asReversed().forEach { it() }
+    }
+
+    private fun preserveScreenPreferences(context: Context) {
+        val names = listOf("hyperion_prefs", LicenseManager.PREFS_NAME, LicenseManager.SECURE_PREFS_NAME)
+        val snapshots = names.associateWith { name ->
+            context.getSharedPreferences(name, Context.MODE_PRIVATE).all.mapValues { (_, value) ->
+                if (value is Set<*>) value.toSet() else value
+            }
+        }
+        val originalOic = LicenseManager.isOicNwProUnlockedFlow.value
+        val originalGmdss = LicenseManager.isGmdssProUnlockedFlow.value
+        val originalEngine = LicenseManager.isEngineOicEwProUnlockedFlow.value
+        val originalDeckMgt = LicenseManager.isDeckMgtProUnlockedFlow.value
+        val originalEngineMgt = LicenseManager.isEngineMgtProUnlockedFlow.value
+        restoreActions += {
+            LicenseManager.setOicNwProUnlocked(context, originalOic)
+            LicenseManager.setGmdssProUnlocked(context, originalGmdss)
+            LicenseManager.setEngineOicEwProUnlocked(context, originalEngine)
+            LicenseManager.setDeckMgtProUnlocked(context, originalDeckMgt)
+            LicenseManager.setEngineMgtProUnlocked(context, originalEngineMgt)
+            snapshots.forEach { (name, values) ->
+                val editor = context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear()
+                values.forEach { (key, value) ->
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is String -> editor.putString(key, value)
+                        is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                    }
+                }
+                assertTrue(editor.commit())
+            }
+        }
+    }
+
+    @Test fun pendingDrillAnswerCannotSubmitDuringKeywordEditing() = pendingAnswer(DrillDeliveryMode.STANDARD)
+
+    @Test fun pendingIntensiveAnswerCannotSubmitDuringKeywordEditing() = pendingAnswer(DrillDeliveryMode.INTENSIVE)
+
+    private fun pendingAnswer(mode: DrillDeliveryMode) {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        preserveScreenPreferences(app)
+        com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank.init(app)
+        com.nhyle.hyperionmaritime.data.util.LicenseManager.setOicNwProUnlocked(app, true)
+        com.nhyle.hyperionmaritime.data.util.LicenseManager.init(app)
+        val viewModel = com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel(app)
+        viewModels.put("pending-answer", viewModel)
+        viewModel.setTrack(com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW)
+        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 10, deliveryMode = mode,
+            shuffleQuestions = false, shuffleChoices = false, isCrpMode = false)
+        assertTrue(viewModel.activeQuestions.value.isNotEmpty())
+        viewModel.setHighlightKeywords(true)
+        viewModel.toggleAutoNextCorrect(true)
+        viewModel.toggleAutoNextWrong(true)
+        if (mode == DrillDeliveryMode.INTENSIVE) viewModel.selectIntensiveChoice(0)
+        else viewModel.selectOptionForQuestion(viewModel.activeQuestions.value.first().id, 0)
+        compose.setContent {
+            MaterialTheme { com.nhyle.hyperionmaritime.ui.screens.PracticeQuizScreen(viewModel) }
+        }
+        compose.onNodeWithText("Edit Keyword").performScrollTo().performClick()
+        compose.onNodeWithText("Check Answer").assertIsNotEnabled()
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.runOnIdle { assertFalse(viewModel.isAnswerEvaluated.value) }
+        compose.onNodeWithText("Save Keywords").performScrollTo().performClick()
+        compose.onNodeWithText("Check Answer").performClick()
+        compose.runOnIdle { assertTrue(viewModel.isAnswerEvaluated.value) }
+        val evaluatedId = if (mode == DrillDeliveryMode.INTENSIVE) viewModel.intensiveQueue.value.first().id
+            else viewModel.activeQuestions.value[viewModel.currentQuestionIndex.value].id
+        compose.onNodeWithText("Edit Keyword").performScrollTo().performClick()
+        compose.waitForIdle()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
+            .idleFor(2, java.util.concurrent.TimeUnit.SECONDS)
+        compose.onNodeWithText("Save Keywords").assertExists()
+        compose.runOnIdle {
+            val currentId = if (mode == DrillDeliveryMode.INTENSIVE) viewModel.intensiveQueue.value.first().id
+                else viewModel.activeQuestions.value[viewModel.currentQuestionIndex.value].id
+            assertEquals(evaluatedId, currentId)
+        }
+    }
+
+    @Test fun choicesEditWithoutAnsweringThenSaveRestoresAnswering() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE).edit().clear().commit()
+        val store = QuestionKeywords(context)
+        var answers = 0
+        lateinit var inputMode: InputModeManager
+        var enabled by mutableStateOf(true)
+        var questionId by mutableStateOf("choices")
+        var options by mutableStateOf(listOf("Ship, 12%", "Other"))
+        compose.setContent {
+            MaterialTheme {
+                inputMode = LocalInputModeManager.current
+                val state = rememberKeywordEditorState(enabled, "DECK", questionId, "Stem?", options)
+                Column {
+                    KeywordQuestionEditor(state, "Stem?", MaterialTheme.typography.bodyLarge)
+                    options.forEachIndexed { index, choice ->
+                        DrillOptionCard(index, choice, false, false, false, { answers++ }, keywordState = state)
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("option_card_0").performClick()
+        compose.runOnIdle { assertEquals(1, answers) }
+        compose.runOnIdle { inputMode.requestInputMode(InputMode.Keyboard) }
+        compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("option_card_0").assertIsFocused()
+        compose.onNodeWithText("Edit Keyword").performClick()
+        compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
+        // A disabled clickable removes its focus target instead of reporting Focused=false.
+        compose.onNodeWithTag("option_card_0").assert(isFocused().not())
+        compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithTag("option_card_0").performKeyInput { pressKey(Key.Enter) }
+        compose.runOnIdle { assertEquals(1, answers) }
+        // Focus may move to Save after the card becomes disabled; Enter may validly save.
+        if (compose.onAllNodesWithText("Edit Keyword").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Edit Keyword").performClick()
+        }
+        compose.onNodeWithText("Save Keywords").assertExists()
+        tapToken("keyword_choice_Ship, 12%", 4) // comma
+        tapToken("keyword_choice_Ship, 12%", 8) // percent
+        tapToken("keyword_question_text", 4) // question mark
+        compose.onNodeWithText("Save Keywords").performClick()
+        val stem = store.key("DECK", "choices", "Stem?")
+        compose.runOnIdle {
+            assertEquals(setOf(2, 3), store.load(store.choiceKey(stem, "Ship, 12%"), 4))
+            assertEquals(setOf(1), store.load(stem, 2))
+            options = options.reversed()
+        }
+        compose.onNodeWithTag("option_card_0").performClick()
+        compose.runOnIdle { assertEquals(2, answers) }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        tapToken("keyword_choice_Ship, 12%", 4)
+        compose.runOnIdle { enabled = false }
+        compose.runOnIdle { enabled = true }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        compose.onNodeWithText("Save Keywords").performClick()
+        compose.runOnIdle {
+            assertEquals(setOf(2, 3), store.load(store.choiceKey(stem, "Ship, 12%"), 4))
+        }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        tapToken("keyword_question_text", 0)
+        compose.runOnIdle { questionId = "next" }
+        compose.onNodeWithText("Save Keywords").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(setOf(1), store.load(stem, 2)) }
+    }
+
+    @Test fun internalPunctuationHasIndependentHitTargetsWithoutDuplicatingText() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
+        val text = "ship's give-way"
+        val key = store.key("DECK", "compounds", text)
+        store.save(key, setOf(0))
+        compose.setContent {
+            MaterialTheme { KeywordQuestionEditor(true, "DECK", "compounds", text, MaterialTheme.typography.bodyLarge) }
+        }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        compose.onNodeWithTag("keyword_question_text").assertTextEquals(text)
+        tapToken("keyword_question_text", 4)
+        tapToken("keyword_question_text", 11)
+        compose.onNodeWithText("Save Keywords").performClick()
+        compose.runOnIdle { assertEquals(setOf(0, 3), store.load(key, 4)) }
+    }
+
+    @Test fun failedSaveRetainsEditingAndDraft() {
+        val state = KeywordEditorState(true, "stem", emptyList(), { _, _ -> emptySet() }, { false })
+        compose.setContent {
+            MaterialTheme { KeywordQuestionEditor(state, "Stem?", MaterialTheme.typography.bodyLarge) }
+        }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        tapToken("keyword_question_text", 4)
+        compose.onNodeWithText("Save Keywords").performClick()
+        compose.onNodeWithText("Save Keywords").assertIsDisplayed()
+        compose.onNodeWithText("Could not save keywords. Please try again.").assertIsDisplayed()
+        compose.runOnIdle { assertTrue(state.editing); assertEquals(setOf(1), state.selected("stem")) }
+    }
+
+    private fun tapToken(tag: String, offset: Int) {
+        val layouts = mutableListOf<TextLayoutResult>()
+        val node = compose.onNodeWithTag(tag, useUnmergedTree = true)
+        node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val box = layouts.single().getBoundingBox(offset)
+        node.performTouchInput { click(Offset(box.left + box.width * 0.25f, box.center.y)) }
+    }
 
     @Test fun editingRequiresSaveAndTogglePreservesSelection() {
         val context = ApplicationProvider.getApplicationContext<Context>()
