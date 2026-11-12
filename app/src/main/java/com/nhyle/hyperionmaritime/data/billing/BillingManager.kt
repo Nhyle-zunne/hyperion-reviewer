@@ -28,6 +28,8 @@ import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -613,6 +615,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         fun resetForTesting() {
             synchronized(this) {
+                INSTANCE?.scope?.cancel()
+                INSTANCE?.runCatchingCloseForTesting()
                 INSTANCE?.resetEntitlementsForTesting()
                 INSTANCE = null
             }
@@ -625,14 +629,24 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     }
 
     fun resetEntitlementsForTesting() {
-        try {
-            securePrefs.edit().clear().apply()
-        } catch (_: Exception) {}
-        _entitlements.value = TrackEntitlements()
+        synchronized(entitlementCacheGuard) {
+            entitlementMutationRevision.incrementAndGet()
+            try {
+                securePrefs.edit().clear().apply()
+            } catch (_: Exception) {}
+            _entitlements.value = TrackEntitlements()
+        }
     }
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Prevent a late startup cache snapshot from overwriting a newer Play grant.
+    private val entitlementCacheGuard = Any()
+    private val entitlementMutationRevision = AtomicInteger(0)
+
+    private fun runCatchingCloseForTesting() {
+        runCatching { billingClient.endConnection() }
+    }
 
     private val _entitlements = MutableStateFlow(TrackEntitlements())
     val entitlements: StateFlow<TrackEntitlements> = _entitlements.asStateFlow()
@@ -1327,7 +1341,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         editor.apply()
 
-        _entitlements.update {
+        synchronized(entitlementCacheGuard) {
+            entitlementMutationRevision.incrementAndGet()
+            _entitlements.update {
             TrackEntitlements(
                 oicNwPlan = oicPlan,
                 gmdssPlan = gmdssPlan,
@@ -1342,6 +1358,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 cachedPurchaseTime = lastPurchaseTime,
                 isClockTampered = isClockTampered
             )
+            }
         }
         true
     }
@@ -1391,6 +1408,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     }
 
     private fun loadCachedEntitlements() {
+        val readRevision = entitlementMutationRevision.get()
         migrateLegacyWeeklyFallbacks()
 
         val oic = securePrefs.getBoolean(KEY_OIC_NW_UNLOCKED, false)
@@ -1550,10 +1568,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val anyActive = hasOicActive || hasGmdssActive || hasAllActive || hasEwActive || hasDmActive || hasEmActive
         val expectedHash = computeIntegrityChecksum(hasOicActive, hasGmdssActive, hasAllActive, hasEwActive, hasDmActive, hasEmActive)
         
-        // Auto-heal integrity hash on app version upgrades
-        securePrefs.edit().putString(KEY_SIGNATURE_HASH, expectedHash).apply()
-
-        _entitlements.update {
+        // A newer purchase/Play query wins over a stale startup cache read.
+        synchronized(entitlementCacheGuard) {
+            if (entitlementMutationRevision.get() != readRevision) return
+            securePrefs.edit().putString(KEY_SIGNATURE_HASH, expectedHash).apply()
+            _entitlements.update {
             it.copy(
                 oicNwPlan = if (hasOicActive) oicPlan else null,
                 gmdssPlan = if (hasGmdssActive) gmdssPlan else null,
@@ -1564,6 +1583,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 cachedPurchaseTime = purchaseTime,
                 cachedBasePlan = basePlan
             )
+            }
         }
     }
 
@@ -1738,10 +1758,12 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
      * Guarded strictly for DEBUG builds.
      */
     fun simulatePurchaseForTesting(productId: String, cycle: BillingCycle = BillingCycle.YEARLY) {
+        synchronized(entitlementCacheGuard) {
         if (!BuildConfig.DEBUG) {
             Log.w(TAG, "Sandbox purchase simulation is strictly forbidden in RELEASE builds.")
             return
         }
+        entitlementMutationRevision.incrementAndGet()
         lastRequestedCycles[productId] = cycle
         val now = System.currentTimeMillis()
         val expiryTime = cycle.nextBillingPeriod(now)
@@ -1915,6 +1937,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 errorMessage = null,
                 cachedPurchaseTime = now
             )
+        }
         }
     }
 }
