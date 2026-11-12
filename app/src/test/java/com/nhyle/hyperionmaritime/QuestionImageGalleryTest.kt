@@ -10,6 +10,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.model.*
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
+import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
+import kotlinx.coroutines.runBlocking
 import org.junit.*
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -103,6 +105,17 @@ class QuestionImageGalleryTest {
         compose.onNodeWithText("Retry").performClick()
         awaitImage()
         compose.onNodeWithText("Diagram unavailable.", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun verifiedCacheRejectsTamperedBytesAndOtherOwner() = runBlocking {
+        Assert.assertArrayEquals(bytes, VerifiedQuestionMediaStore.load(context, Track.DECK_OIC_NW, ref))
+        LicenseManager.setCurrentAccountUserId(context, "22222222-2222-4222-8222-222222222222")
+        Assert.assertNull(VerifiedQuestionMediaStore.load(context, Track.DECK_OIC_NW, ref))
+        LicenseManager.setCurrentAccountUserId(context, owner)
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, true)
+        File(cache, "$owner/DECK_OIC_NW/${ref.sha256}.png").appendBytes(byteArrayOf(1))
+        Assert.assertNull(VerifiedQuestionMediaStore.load(context, Track.DECK_OIC_NW, ref))
+        Assert.assertFalse(File(cache, "$owner/DECK_OIC_NW/${ref.sha256}.png").exists())
     }
 
     @Test fun sameHashCanRenderAtBothPlacements() {

@@ -1,4 +1,5 @@
 package com.nhyle.hyperionmaritime.ui.screens
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -661,6 +662,8 @@ private fun MockQuestionItemCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            QuestionImageGallery(question = question, placement = "question")
+
             // Radio Options (A, B, C, D)
             val optionLetters = listOf("A", "B", "C", "D")
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -768,6 +771,7 @@ private fun MockQuestionItemCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
+                        QuestionImageGallery(question = question, placement = "explanation")
                         Text(
                             text = "OFFICIAL ANSWER RATIONALE",
                             style = MaterialTheme.typography.labelSmall,

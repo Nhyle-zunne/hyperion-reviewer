@@ -1,5 +1,6 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -608,6 +609,8 @@ private fun VaultMistakeCard(
                     modifier = Modifier.padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    QuestionImageGallery(question = question, placement = "question")
+                    QuestionImageGallery(question = question, placement = "explanation")
                     val letters = listOf("A", "B", "C", "D", "E", "F")
                     val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
                     val correctOptLetter = letters.getOrElse(question.correctAnswerIndex) { "?" }
