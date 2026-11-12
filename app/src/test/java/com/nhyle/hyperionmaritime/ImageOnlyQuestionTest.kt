@@ -28,7 +28,7 @@ class ImageOnlyQuestionTest {
         imageAttachments = listOf(ref))
 
     @Test fun numberedCsvAcceptsOnlyValidPromptImagesWithoutChangingIdsOrOptions() {
-        val file = File("build/image-only-regression.csv").apply { parentFile.mkdirs() }
+        val file = File("src/main/assets/../../../build/image-only-regression.csv").apply { parentFile.mkdirs() }
         fun cell(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
         val rows = listOf(
             listOf("No.", "Question", "A", "B", "C", "D", "Answer", "Explanation", "HYPERION_MEDIA"),
@@ -39,18 +39,20 @@ class ImageOnlyQuestionTest {
             listOf("11", "Text prompt", "North", "South", "East", "West", "C", "Reason", "")
         )
         file.writeText(rows.joinToString("\n") { it.joinToString(",", transform = ::cell) })
+        val previousContext = MaritimeQuestionBank.appContext
+        MaritimeQuestionBank.appContext = null
         try {
             val competence = MaritimeCompetenceRegistry.getCompetencesForTrack(Track.ENGINE_OIC_EW).first()
             val loader = NewTrackQuestionBank::class.java.getDeclaredMethod("loadCompetenceCsv",
                 String::class.java, CompetenceInfo::class.java, String::class.java).apply { isAccessible = true }
             @Suppress("UNCHECKED_CAST")
-            val parsed = loader.invoke(NewTrackQuestionBank, file.absolutePath, competence, "EW") as List<Question>
+            val parsed = loader.invoke(NewTrackQuestionBank, "../../../build/image-only-regression.csv", competence, "EW") as List<Question>
             assertEquals(listOf("EW-${competence.competenceId}-0007", "EW-${competence.competenceId}-0011"), parsed.map { it.id })
             assertEquals("", parsed.first().questionText)
             assertEquals(question().options, parsed.first().options)
             assertEquals(2, parsed.first().correctAnswerIndex)
             assertEquals(listOf(ref), parsed.first().imageAttachments)
-        } finally { file.delete() }
+        } finally { file.delete(); MaritimeQuestionBank.appContext = previousContext }
     }
 
     @Test fun sessionSnapshotPreservesImageOnlyQuestionAndAnswerOrder() {
