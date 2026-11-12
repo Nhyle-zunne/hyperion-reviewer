@@ -81,6 +81,8 @@ class KeywordQuestionEditorTest {
         }
         compose.onNodeWithTag("option_card_0").performClick()
         compose.runOnIdle { assertEquals(1, answers) }
+        compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.onNodeWithTag("option_card_0").assertIsFocused()
         compose.onNodeWithText("Edit Keyword").performClick()
         compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)

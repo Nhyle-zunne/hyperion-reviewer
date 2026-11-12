@@ -14,10 +14,12 @@ Preserve existing stem highlights, banks, licensing and private storage. Do not 
 Legacy word IDs; punctuation and symbols; shuffled choices; pending answer submission; failed save and navigation discarding drafts.
 
 ### Task 1: Storage and UI behavior
-- [ ] Add storage and Compose tests for tokens, text identity, shared editing, inert cards, saving and failure.
-- [ ] Run tests in CI to observe missing behavior, then implement shared state and atomic save.
-- [ ] Wire standard drill, intensive drill and Quick Scan to the same state per question.
+- [x] Add storage and Compose tests for tokens, text identity, shared editing, inert cards, saving and failure.
+- [x] Observe missing APIs in red CI 43200299249, then implement shared state and atomic save.
+- [x] Wire standard drill, intensive drill and Quick Scan to the same state per question.
 - [ ] Verify unit tests, lint and debug assembly using unsigned Android CI; inspect diff and open focused PR.
 
 ## Execution ledger
 User specification authorizes implementation without another design approval. Local SDK and Gradle are unavailable, so red/green evidence comes from CI.
+
+Review found that Android commits update memory even when disk persistence fails. The storage now restores previous values on failed commit; a wrapped real-preferences regression covers later loads. Legacy compound punctuation overlaps word ranges, so rendering appends text once and adds styles to ranges; hit lookup prioritizes punctuation IDs. Independent review of 62c4be0 found no remaining important code bugs. Shared Compose tests cover punctuation taps, shuffled choices, focus/keyboard/accessibility blocking, disabled settings and navigation. Standard and intensive screen tests cover pending confirmation; Quick Scan uses the tested shared editor but has no separate full-screen regression.
