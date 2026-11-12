@@ -30,5 +30,33 @@
   "peerReviewedRemainingQuestions": 821,
   "onlyCsvColumnChanged": 7,
   "layoutChanges": false,
-  "keysChanged": false
+  "keysChanged": false,
+  "pwaBrowserVerification": {
+    "publishedQuestionsLoaded": 831,
+    "viewports": [
+      "390x844",
+      "1440x1000"
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "explanationHiddenUntilCheckAnswer": true,
+    "renderedExplanationMatchesPublishedContent": true,
+    "horizontalOverflow": false,
+    "pageErrors": 0,
+    "externalRequests": 0,
+    "fixtureBuildPassed": true
+  },
+  "nativeAndroidVerification": {
+    "accountLinkingBuild": "passed",
+    "unitTestsAndLint": "failed",
+    "workflowRun": 43194202554,
+    "failedTestsAcrossInitialAndRetry": [
+      "testReactiveEntitlementPropagationWithoutRecreation",
+      "testB_purchasingGmdssPassUnlocksGmdssButKeepsOicLocked"
+    ],
+    "rootCauseEstablished": false,
+    "nativeReleaseCreated": false
+  }
 }

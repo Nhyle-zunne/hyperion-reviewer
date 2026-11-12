@@ -25,4 +25,5 @@ Explanations follow the bank's keyed answer. Where wording, arithmetic or a lega
 - Existing publisher validation, transaction/idempotency, release-source, delivery/access-control and security checks passed.
 - The live public free-sample response reports the new revision and matches the authored explanation. Anonymous full-bank access remains denied (HTTP 401).
 - The current PWA publisher already reconciles C1 explanations on later uploads; no duplicate backend implementation was added.
-- This change does not sign or publish an Android APK/AAB.
+- Published content was loaded into the actual PWA practice screen at mobile (390 × 844) and desktop (1440 × 1000) sizes in dark and light themes. Explanations stayed hidden until Check Answer, matched the published text, and rendered without horizontal overflow or page errors. The browser-fixture build passed.
+- Native Android account-linking build passed. Android CI unit tests failed on an entitlement assertion; retry failed on a different entitlement test. Root cause is not established. These tests are not evidence of a successful native release; this change does not sign or publish an APK/AAB.
