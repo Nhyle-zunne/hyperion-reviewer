@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -31,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.Role
 import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -39,7 +41,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import androidx.compose.ui.semantics.Role
 import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
 
 private fun decodeBounded(bytes: ByteArray): ImageBitmap? {
@@ -80,7 +81,7 @@ fun QuestionImageGallery(question: Question, placement: String) {
     LaunchedEffect(context, question.track, revision, unlocked) {
         while (true) {
             delay(1_000)
-            access = currentAccess()
+            access = withContext(Dispatchers.IO) { currentAccess() }
         }
     }
     val owner = access.first
@@ -140,22 +141,23 @@ fun QuestionImageGallery(question: Question, placement: String) {
             title={Text("Question diagram")},
             text={
                 Column {
-                Image(
-                    bitmap=selected,
-                    contentDescription=refs.firstOrNull { it.sha256==enlarged }?.alt,
-                    contentScale=ContentScale.Fit,
-                    modifier=Modifier.fillMaxWidth().heightIn(max=580.dp)
-                        .graphicsLayer(scaleX=scale,scaleY=scale)
-                        .pointerInput(enlarged) {
-                            detectTransformGestures { _,_,zoom,_ ->
-                                scale=(scale*zoom).coerceIn(1f,4f)
+                    Image(
+                        bitmap=selected,
+                        contentDescription=refs.firstOrNull { it.sha256==enlarged }?.alt,
+                        contentScale=ContentScale.Fit,
+                        modifier=Modifier.fillMaxWidth().heightIn(max=580.dp)
+                            .clipToBounds()
+                            .graphicsLayer(scaleX=scale,scaleY=scale)
+                            .pointerInput(enlarged) {
+                                detectTransformGestures { _,_,zoom,_ ->
+                                    scale=(scale*zoom).coerceIn(1f,4f)
+                                }
                             }
-                        }
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { scale = (scale / 1.5f).coerceAtLeast(1f) }, enabled = scale > 1f) { Text("Zoom out") }
-                    OutlinedButton(onClick = { scale = (scale * 1.5f).coerceAtMost(4f) }, enabled = scale < 4f) { Text("Zoom in") }
-                }
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { scale = (scale / 1.5f).coerceAtLeast(1f) }, enabled = scale > 1f) { Text("Zoom out") }
+                        OutlinedButton(onClick = { scale = (scale * 1.5f).coerceAtMost(4f) }, enabled = scale < 4f) { Text("Zoom in") }
+                    }
                 }
             },
             confirmButton={

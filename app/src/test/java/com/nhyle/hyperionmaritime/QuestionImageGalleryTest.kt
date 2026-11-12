@@ -20,6 +20,8 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
+import java.time.Duration
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
@@ -70,7 +72,12 @@ class QuestionImageGalleryTest {
         compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question") } }
         awaitImage()
         compose.onNodeWithContentDescription(ref.alt).performClick()
-        compose.onNodeWithText("Close").assertExists()
+        compose.onNodeWithText("Zoom out").assertIsNotEnabled()
+        compose.onNodeWithText("Zoom in").performClick()
+        compose.onNodeWithText("Zoom out").assertIsEnabled()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithContentDescription(ref.alt).performClick()
+        compose.onNodeWithText("Zoom out").assertIsNotEnabled()
         compose.runOnIdle { LicenseManager.setCurrentAccountUserId(context, "22222222-2222-4222-8222-222222222222") }
         compose.onNodeWithText("Close").assertDoesNotExist()
         compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
@@ -83,6 +90,23 @@ class QuestionImageGalleryTest {
         compose.runOnIdle { LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false) }
         compose.onNodeWithText("Close").assertDoesNotExist()
         compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
+    }
+
+    @Test fun localExpiryRemovesImageAndZoomWithoutEntitlementEvent() {
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false)
+        val now = System.currentTimeMillis()
+        LicenseManager.anchorOfflineTrustedTimeToServer(context, now)
+        Assert.assertTrue(LicenseManager.saveAccountEntitlements(context, owner,
+            mapOf(Track.DECK_OIC_NW to now + 3_600_000)))
+        compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question") } }
+        awaitImage()
+        compose.onNodeWithContentDescription(ref.alt).performClick()
+        val revision = LicenseManager.accountEntitlementRevisionFlow.value
+        compose.runOnIdle { ShadowSystemClock.advanceBy(Duration.ofHours(2)) }
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(ref.alt).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithText("Close").assertDoesNotExist()
+        Assert.assertEquals(revision, LicenseManager.accountEntitlementRevisionFlow.value)
     }
 
     @Test fun revisedReferenceClosesZoomAndTrackChangeDoesNotReuseBitmap() {

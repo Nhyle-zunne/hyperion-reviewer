@@ -9,3 +9,14 @@ Scope: improve existing native attachment readers without changing the shared CS
 5. Run full unit, lint and debug assemble checks using GitHub Android CI because this workspace lacks Android SDK/Gradle. Review diff, push focused branch and open PR; no merge or release.
 
 Verification evidence will be recorded below after execution.
+
+## Implemented scope and evidence
+
+- `QuestionImageGallery.kt`: keys in-memory images, failures and zoom to ID/track/placement/full references/owner; entitlement event resets plus one-second local expiry checks; Default-dispatcher decoding; missing-image Retry; labeled and bounded zoom controls.
+- `VerifiedQuestionMediaStore.kt`: unavailable session storage fails closed, cancellation propagates and is checked during bounded reads, owner/access checked before final downloaded-byte return. Blocking HTTP cancellation remains bounded by the existing timeouts.
+- Audited readers and filled actual missing placements in Mock Competence, Free Practice, expanded Mistakes cards, and Results. Explanation-only figures in Results render even with blank rationale text. Existing readers already use the shared gallery.
+- `QuestionImageGalleryTest.kt`: generated 2x2 PNG fixtures, isolated account preferences and cache cleanup; real verified local reads, account/access/expiry reset, reference/track changes, Retry, hash tampering, both placements, and zoom reset.
+- Regression-only unsigned CI [43297070691](https://github.com/Nhyle-zunne/hyperion-reviewer/actions/runs/43297070691) ran 253 tests and reproduced owner/revocation/reference stale-zoom assertions plus an uncaught session-storage error on missing cache. All other tests passed.
+- Local `node scripts/tests/agent-skills-test.mjs`, `python3 scripts/tests/question-bank-asset-safety.py`, and `git diff --check` passed. Android verification runs in the PR's unsigned Android CI; local SDK/Gradle are unavailable and were not installed.
+
+Limitations: no physical-device gesture/TalkBack or live licensed service acceptance; superseded in-flight network responses are guarded in production but are not simulated in these cache-based tests. No signed build, store release, real image upload, bank/key edit, or default smart-bank enablement.

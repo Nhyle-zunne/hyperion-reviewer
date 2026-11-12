@@ -1,5 +1,6 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -563,6 +564,9 @@ fun ResultsScreen(
                                     lineHeight = 22.sp
                                 )
 
+                                if (fullQ != null) {
+                                    QuestionImageGallery(question = fullQ, placement = "question")
+                                }
                                 Spacer(modifier = Modifier.height(12.dp))
 
                                 if (fullQ != null && fullQ.options.isNotEmpty()) {
@@ -724,6 +728,9 @@ fun ResultsScreen(
                                     }
                                 }
 
+                                if (fullQ != null) {
+                                    QuestionImageGallery(question = fullQ, placement = "explanation")
+                                }
                                 val explanation = fullQ?.rationale ?: itemResult.rationale
                                 if (!explanation.isNullOrBlank()) {
                                     Spacer(modifier = Modifier.height(12.dp))

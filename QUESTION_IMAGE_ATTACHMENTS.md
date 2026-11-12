@@ -39,3 +39,31 @@ and the workflow does not upload to Google Play automatically. **Do not
 enable the flag for standard production builds** without this device-level
 license, protected CDN and rollback verification. Internal test builds may
 use the workflow's signed AAB artifact with existing Play upload credentials.
+
+## Reader recovery and access changes
+
+The shared native gallery is used by Quick Scan, Practice, Mock Competence,
+Free Practice, Flashcards, Search, Bookmarks, Mistakes, Results and Session Review.
+Question figures follow the question; explanation figures follow the screen's
+existing answer/review visibility rules. The same image hash may appear at both
+placements with separate alternative text.
+
+Gallery images and open zoom dialogs reset when the question's references,
+track, signed-in owner or access change. Existing entitlement events update the
+view immediately; a local check every second also catches expiry while a
+figure is open. These checks do not contact the license server or download
+additional images. Bitmap decoding runs off the UI thread. Zoom supports both
+pinch gestures and labeled buttons, with the image clipped inside the dialog.
+
+A failed session lookup, cache read or download leaves the text question usable.
+Tap **Retry** after reconnecting or repairing access to retry missing images
+without leaving the question. Superseded work cannot publish a decoded bitmap;
+the loader preserves coroutine cancellation and checks access again before
+returning downloaded bytes. Blocking HTTP operations retain their existing
+15-second connection and 20-second read timeouts.
+
+Automated reader regressions use generated synthetic PNGs in the real private
+cache. They cover owner switch, access revocation, expiry without a license
+update event, revised references, track changes, Retry, hash tampering, zoom
+reset and one image at both placements. Physical-device pinch/TalkBack behavior
+and live licensed network delivery still require device acceptance testing.
