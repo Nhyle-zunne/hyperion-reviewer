@@ -8,6 +8,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.geometry.Offset
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.nhyle.hyperionmaritime.data.local.QuestionKeywords
@@ -66,11 +70,13 @@ class KeywordQuestionEditorTest {
         context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE).edit().clear().commit()
         val store = QuestionKeywords(context)
         var answers = 0
+        lateinit var inputMode: InputModeManager
         var enabled by mutableStateOf(true)
         var questionId by mutableStateOf("choices")
         var options by mutableStateOf(listOf("Ship, 12%", "Other"))
         compose.setContent {
             MaterialTheme {
+                inputMode = LocalInputModeManager.current
                 val state = rememberKeywordEditorState(enabled, "DECK", questionId, "Stem?", options)
                 Column {
                     KeywordQuestionEditor(state, "Stem?", MaterialTheme.typography.bodyLarge)
@@ -82,6 +88,7 @@ class KeywordQuestionEditorTest {
         }
         compose.onNodeWithTag("option_card_0").performClick()
         compose.runOnIdle { assertEquals(1, answers) }
+        compose.runOnIdle { inputMode.requestInputMode(InputMode.Keyboard) }
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("option_card_0").assertIsFocused()
         compose.onNodeWithText("Edit Keyword").performClick()
@@ -130,7 +137,7 @@ class KeywordQuestionEditorTest {
         tapToken("keyword_question_text", 4)
         tapToken("keyword_question_text", 11)
         compose.onNodeWithText("Save Keywords").performClick()
-        compose.runOnIdle { assertEquals(setOf(0, 2, 3), store.load(key, 4)) }
+        compose.runOnIdle { assertEquals(setOf(0, 3), store.load(key, 4)) }
     }
 
     @Test fun failedSaveRetainsEditingAndDraft() {
@@ -150,7 +157,8 @@ class KeywordQuestionEditorTest {
         val layouts = mutableListOf<TextLayoutResult>()
         val node = compose.onNodeWithTag(tag, useUnmergedTree = true)
         node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
-        node.performTouchInput { click(layouts.single().getBoundingBox(offset).center) }
+        val box = layouts.single().getBoundingBox(offset)
+        node.performTouchInput { click(Offset(box.left + box.width * 0.25f, box.center.y)) }
     }
 
     @Test fun editingRequiresSaveAndTogglePreservesSelection() {

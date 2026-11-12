@@ -34,10 +34,10 @@ class KeywordEditorState internal constructor(
 
     internal fun choiceKey(text: String): String = choiceKeys.getValue(text)
     internal fun selected(key: String): Set<Int> = draft[key].orEmpty()
-    internal fun toggle(key: String, token: Int) {
+    internal fun toggle(key: String, text: String, token: Int) {
         if (!enabled || !editing) return
         val selected = selected(key)
-        draft = draft + (key to if (token in selected) selected - token else selected + token)
+        draft = draft + (key to QuestionKeywords.toggleSelection(text, selected, token))
     }
     internal fun editOrSave() {
         if (!enabled) return
@@ -64,8 +64,10 @@ fun rememberKeywordEditorState(
     // Choice order is presentation only; navigation, revisions and disabling discard the draft.
     return remember(storage, enabled, track, questionId, text, choices.sorted()) {
         val key = storage.key(track, questionId, text)
-        KeywordEditorState(enabled, key, choices.distinct().map { storage.choiceKey(key, it) to it },
-            storage::load, storage::saveAll)
+        val choiceTexts = choices.distinct().map { storage.choiceKey(key, it) to it }
+        val texts = (choiceTexts + (key to text)).toMap()
+        KeywordEditorState(enabled, key, choiceTexts,
+            { fieldKey, _ -> storage.loadText(fieldKey, texts.getValue(fieldKey)) }, storage::saveAll)
     }
 }
 
@@ -100,11 +102,9 @@ private fun KeywordHighlightText(state: KeywordEditorState, key: String, text: S
     val annotated = remember(text, selected, state.enabled) {
         buildAnnotatedString {
             append(text)
-            tokens.forEachIndexed { id, token ->
-                if (state.enabled && id in selected) {
-                    addStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717)),
-                        token.range.first, token.range.last + 1)
-                }
+            if (state.enabled) QuestionKeywords.highlightRanges(text, selected).forEach { range ->
+                addStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717)),
+                    range.first, range.last + 1)
             }
         }
     }
@@ -112,7 +112,7 @@ private fun KeywordHighlightText(state: KeywordEditorState, key: String, text: S
         ClickableText(modifier = modifier, text = annotated, style = style, onClick = { offset ->
             // Punctuation inside a legacy compound word is selectable on its own.
             val id = tokens.indexOfLast { offset in it.range }
-            if (id >= 0) state.toggle(key, id)
+            if (id >= 0) state.toggle(key, text, id)
         })
     } else Text(text = annotated, style = style, modifier = modifier)
 }

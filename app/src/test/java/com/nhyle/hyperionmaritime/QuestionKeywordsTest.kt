@@ -40,6 +40,24 @@ class QuestionKeywordsTest {
         assertFalse(store.saveAll(mapOf("stem" to setOf(1), "choice" to setOf(0))))
         assertEquals(setOf(0), store.load("stem", 2))
         assertTrue(store.load("choice", 1).isEmpty())
+        assertEquals(setOf(0, 1), store.loadText("stem", "ship's"))
+    }
+
+    @Test fun legacyCompoundsExpandOnceAndIndependentRemovalSurvivesReload() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
+        val text = "ship's"
+        val key = store.key("DECK", "legacy-compound", text)
+        store.save(key, setOf(0))
+        val expanded = store.loadText(key, text)
+        assertEquals(setOf(0, 1), expanded)
+        assertTrue(4 in QuestionKeywords.highlightRanges(text, expanded).flatMap { it.toList() })
+        val withoutApostrophe = QuestionKeywords.toggleSelection(text, expanded, 1)
+        assertEquals(setOf(0), withoutApostrophe)
+        assertFalse(4 in QuestionKeywords.highlightRanges(text, withoutApostrophe).flatMap { it.toList() })
+        assertTrue(store.saveAll(mapOf(key to withoutApostrophe)))
+        assertEquals(setOf(0), QuestionKeywords(ApplicationProvider.getApplicationContext<Context>()).loadText(key, text))
+        assertEquals(setOf(0, 1), QuestionKeywords.toggleSelection(text, emptySet(), 0))
+        assertTrue(QuestionKeywords.toggleSelection(text, expanded, 0).isEmpty())
     }
 
     @Test fun punctuationPreservesLegacyWordPositions() {
@@ -58,7 +76,10 @@ class QuestionKeywordsTest {
         val key = store.choiceKey(stem, "Ship, 12%")
         assertTrue(store.saveAll(mapOf(key to setOf(0, 2))))
         assertEquals(setOf(0, 2), QuestionKeywords(ApplicationProvider.getApplicationContext<Context>()).load(store.choiceKey(stem, listOf("Other", "Ship, 12%")[1]), 5))
-        assertTrue(store.load(store.choiceKey(stem, "Ship, 13%"), 5).isEmpty())
+        val revisedKey = store.choiceKey(stem, "Ship, 13%")
+        assertTrue(store.load(revisedKey, 5).isEmpty())
+        assertTrue(store.saveAll(mapOf(revisedKey to setOf(1))))
+        assertEquals(setOf(0, 2), store.load(key, 5))
         assertTrue(store.load(store.choiceKey(store.key("DECK", "choice", "Revised"), "Ship, 12%"), 5).isEmpty())
     }
 
