@@ -2,6 +2,12 @@ name: Android internal-testing App Bundle
 
 on:
   workflow_dispatch:
+    inputs:
+      enable_smart_bank_updates:
+        description: "Internal testing only: download changed encrypted banks after paid account/license sync"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -91,6 +97,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           HYPERION_GOOGLE_WEB_CLIENT_ID: ${{ secrets.HYPERION_GOOGLE_WEB_CLIENT_ID }}
+          HYPERION_INTERNAL_SMART_BANK_UPDATES: ${{ inputs.enable_smart_bank_updates }}
         run: |
           set -euo pipefail
           if [[ -z "${STORE_PASSWORD:-}" || -z "${KEY_ALIAS:-}" || -z "${KEY_PASSWORD:-}" ]]; then
@@ -101,7 +108,12 @@ jobs:
             echo "::error::HYPERION_GOOGLE_WEB_CLIENT_ID is missing."
             exit 1
           fi
-          gradle --no-daemon --max-workers=2 --stacktrace bundleRelease
+          # The flag is OFF in every ordinary release build. Internal testers
+          # may explicitly enable the already verified SHA/revision-pinned
+          # downloader without enabling untested production background traffic.
+          BANK_FLAG="false"
+          if [[ "${HYPERION_INTERNAL_SMART_BANK_UPDATES:-false}" == "true" ]]; then BANK_FLAG="true"; fi
+          gradle --no-daemon --max-workers=2 --stacktrace "-PHYPERION_SMART_BANK_UPDATES_ENABLED=${BANK_FLAG}" bundleRelease
 
       - name: Verify the bundle signature
         run: |
@@ -121,6 +133,8 @@ jobs:
             echo "Package: com.nhyle.hyperionmaritime"
             echo "Version code and version name are configured in app/build.gradle.kts."
             echo "Built from commit: $GITHUB_SHA"
+            echo "Smart-bank updates enabled for internal testing: ${{ inputs.enable_smart_bank_updates || false }}"
+            echo "Internal tester: sign in with a licensed account, tap Sync License, and verify only changed encrypted banks download; test offline fallback before any public rollout."
             echo "Artifact: app-release.aab"
             echo "Upload this bundle to Play Console > Testing > Internal testing."
             echo "Do not share the upload keystore or passwords."
