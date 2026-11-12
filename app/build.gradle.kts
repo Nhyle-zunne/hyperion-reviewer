@@ -75,7 +75,8 @@ android {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+      // Never sign a production release with the debug key when upload credentials are absent.
+      signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else null
       ndk {
         debugSymbolLevel = "FULL"
       }
@@ -107,8 +108,9 @@ android {
   }
 }
 
-// Allow cloud publisher and CI to build release bundles when signing credentials are
-// managed externally (e.g. Google Play App Signing or cloud publisher environment).
+// Fail closed on release artifact tasks. The signing credentials come from
+// externally configured CI secrets (or a developer's private environment).
+// A missing/invalid key must never produce a releasable debug-signed bundle.
 tasks.matching {
   it.name in setOf(
     "assembleRelease",
@@ -120,9 +122,10 @@ tasks.matching {
 }.configureEach {
   doFirst {
     if (!releaseSigningConfigured) {
-      logger.warn(
-        "Release signing is not configured. An unsigned artifact will be generated unless " +
-          "KEYSTORE_PATH, STORE_PASSWORD, and KEY_PASSWORD are provided."
+      throw org.gradle.api.GradleException(
+        "Release signing is not configured. Set KEYSTORE_PATH to an existing keystore " +
+          "and provide STORE_PASSWORD and KEY_PASSWORD via private CI secrets or environment. " +
+          "Refusing to produce an unsigned or debug-signed release artifact."
       )
     }
   }
