@@ -11,8 +11,6 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.platform.LocalInputModeManager
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -133,14 +131,12 @@ class KeywordQuestionEditorTest {
         val store = QuestionKeywords(context)
         var answers = 0
         lateinit var inputMode: InputModeManager
-        lateinit var focusManager: FocusManager
         var enabled by mutableStateOf(true)
         var questionId by mutableStateOf("choices")
         var options by mutableStateOf(listOf("Ship, 12%", "Other"))
         compose.setContent {
             MaterialTheme {
                 inputMode = LocalInputModeManager.current
-                focusManager = LocalFocusManager.current
                 val state = rememberKeywordEditorState(enabled, "DECK", questionId, "Stem?", options)
                 Column {
                     KeywordQuestionEditor(state, "Stem?", MaterialTheme.typography.bodyLarge)
@@ -159,11 +155,14 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
         // A disabled clickable removes its focus target instead of reporting Focused=false.
         compose.onNodeWithTag("option_card_0").assert(isFocused().not())
-        // The disabled card loses keyboard focus. Keep Enter from activating the Save button.
-        compose.runOnIdle { focusManager.clearFocus(force = true) }
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("option_card_0").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals(1, answers) }
+        // Focus may move to Save after the card becomes disabled; Enter may validly save.
+        if (compose.onAllNodesWithText("Edit Keyword").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Edit Keyword").performClick()
+        }
+        compose.onNodeWithText("Save Keywords").assertExists()
         tapToken("keyword_choice_Ship, 12%", 4) // comma
         tapToken("keyword_choice_Ship, 12%", 8) // percent
         tapToken("keyword_question_text", 4) // question mark
