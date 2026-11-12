@@ -553,6 +553,10 @@ private fun IntensiveDrillScreen(
                 }
             }
 
+            if (isSubmitted) {
+                QuestionImageGallery(question = currentQuestion, placement = "explanation")
+            }
+
             // Question Attempt Stats Card
             val currentIntensiveStats by viewModel.currentQuestionStats.collectAsState()
             val isIntensiveStatsMatching = currentIntensiveStats != null &&
@@ -935,6 +939,10 @@ private fun StandardDrillScreen(
             }
 
             // Question Attempt Stats Card
+            if (isAnswerEvaluated) {
+                QuestionImageGallery(question = question, placement = "explanation")
+            }
+
             val currentStandardStats by viewModel.currentQuestionStats.collectAsState()
             val isStandardStatsMatching = currentStandardStats != null &&
                 currentStandardStats?.questionId == question.id &&
