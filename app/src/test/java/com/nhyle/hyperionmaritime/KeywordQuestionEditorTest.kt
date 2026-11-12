@@ -110,7 +110,8 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("option_card_0").assertIsFocused()
         compose.onNodeWithText("Edit Keyword").performClick()
-        compose.onNodeWithTag("option_card_0").assertIsNotEnabled().assertIsNotFocused()
+        compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
+        compose.onNodeWithTag("option_card_0").assertIsNotFocused()
         // The disabled card loses keyboard focus. Keep Enter from activating the Save button.
         compose.runOnIdle { focusManager.clearFocus(force = true) }
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
