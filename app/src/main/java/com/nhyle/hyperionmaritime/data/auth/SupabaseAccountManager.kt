@@ -116,7 +116,6 @@ object SupabaseAccountManager {
     val state: StateFlow<SupabaseAccountState> = _state.asStateFlow()
     private val learningProgressSyncMutex = Mutex()
     private val learningProgressReadCache = LearningProgressReadCache()
-    private const val LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS = 5 * 60 * 1000L
     private const val LEARNING_PROGRESS_LAST_SUCCESS_KEY = "last_successful_sync_at"
     private const val LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY = "last_verified_local_storage_hash"
 
@@ -399,12 +398,24 @@ object SupabaseAccountManager {
             val prefs = appContext.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
             val now = System.currentTimeMillis()
             val last = prefs.getLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, 0L)
-            // Avoid refreshing the auth token and contacting Supabase when a
-            // background retry follows a successful sync within five minutes.
-            // Account ownership must match; account switching must never
-            // short-circuit the protected synchronization check.
+            // Skip credential refresh/network only when this owner's *current*
+            // local study state is still the exact fingerprint acknowledged by
+            // the last successful cloud sync. New edits during the cooldown
+            // must be uploaded on the next background attempt.
             if (prefs.getString("owner_user_id", null) == saved.userId &&
-                last > 0L && now >= last && now - last < LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS) return@withContext
+                last > 0L && now >= last &&
+                now - last < LearningProgressBackgroundPolicy.RECENT_SUCCESS_COOLDOWN_MS) {
+                val currentHash = runCatching {
+                    LearningProgressSyncAdapter.localStorageFingerprint(appContext)
+                }.getOrNull()
+                if (currentHash != null && LearningProgressBackgroundPolicy.canSkipRecentSync(
+                        currentHash,
+                        prefs.getString(LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY, null),
+                        last,
+                        now
+                    )
+                ) return@withContext
+            }
             val fresh = getFreshSession(appContext, saved)
             syncLearningProgressNow(
                 appContext, fresh, enforceBackgroundCooldown = true,
@@ -422,18 +433,26 @@ object SupabaseAccountManager {
         val prefs = context.getSharedPreferences("hyperion_learning_sync", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastSuccess = prefs.getLong(LEARNING_PROGRESS_LAST_SUCCESS_KEY, 0L)
-        if (enforceBackgroundCooldown && lastSuccess > 0L && now >= lastSuccess &&
-            now - lastSuccess < LEARNING_PROGRESS_BACKGROUND_COOLDOWN_MS
-        ) {
-            return@withLock "Study progress was synchronized recently."
-        }
 
-        // This fingerprint is local-only and owner-scoped. Capture it *before*
-        // the network roundtrip, then verify it again after applying the cloud
-        // response. Concurrent study edits must never be falsely acknowledged.
+        // Capture the local fingerprint before any server request or cooldown
+        // decision. Otherwise a newly answered question within five minutes
+        // of the last sync could be silently deferred by WorkManager.
+        // Recheck under the synchronization mutex to handle concurrent edits.
         val beforeHash = runCatching {
             LearningProgressSyncAdapter.localStorageFingerprint(context)
         }.getOrNull()
+        if (enforceBackgroundCooldown &&
+            prefs.getString("owner_user_id", null) == session.userId &&
+            beforeHash != null &&
+            LearningProgressBackgroundPolicy.canSkipRecentSync(
+                beforeHash,
+                prefs.getString(LEARNING_PROGRESS_LAST_NATIVE_HASH_KEY, null),
+                lastSuccess,
+                now
+            )
+        ) {
+            return@withLock "Unchanged study progress was synchronized recently."
+        }
         if (skipUnchangedOneShot && beforeHash != null &&
             prefs.getString("owner_user_id", null) == session.userId &&
             LearningProgressBackgroundPolicy.canSkipBackgroundSync(
