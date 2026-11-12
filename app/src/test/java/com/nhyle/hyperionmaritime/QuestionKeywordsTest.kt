@@ -12,6 +12,21 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 class QuestionKeywordsTest {
+    @Test fun punctuationPreservesLegacyWordPositions() {
+        val tokens = QuestionKeywords.tokens("Ship, 12% + ⚓!")
+        assertEquals(listOf("Ship", "12", ",", "%", "+", "⚓", "!"), tokens.map { it.value })
+    }
+
+    @Test fun choicesFollowTextAndAreScopedToQuestionRevision() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val stem = store.key("DECK", "choice", "Stem?")
+        val key = store.choiceKey(stem, "Ship, 12%")
+        assertTrue(store.saveAll(mapOf(key to setOf(0, 2))))
+        assertEquals(setOf(0, 2), QuestionKeywords(ApplicationProvider.getApplicationContext()).load(store.choiceKey(stem, listOf("Other", "Ship, 12%")[1]), 5))
+        assertTrue(store.load(store.choiceKey(stem, "Ship, 13%"), 5).isEmpty())
+        assertTrue(store.load(store.choiceKey(store.key("DECK", "choice", "Revised"), "Ship, 12%"), 5).isEmpty())
+    }
+
     @Test fun persistsMultipleWordsAndRemovalAcrossInstances() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = QuestionKeywords(context)
