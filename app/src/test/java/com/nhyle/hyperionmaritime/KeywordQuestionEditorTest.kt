@@ -24,6 +24,14 @@ import org.robolectric.annotation.GraphicsMode
 class KeywordQuestionEditorTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun imageOnlyPromptDoesNotOfferEmptyKeywordEditing() {
+        compose.setContent {
+            MaterialTheme { KeywordQuestionEditor(true, "DECK", "image-only", " ", MaterialTheme.typography.bodyLarge) }
+        }
+        compose.onNodeWithText("Edit Keyword").assertDoesNotExist()
+        compose.onNodeWithTag("keyword_question_text").assertDoesNotExist()
+    }
+
     @Test fun editingRequiresSaveAndTogglePreservesSelection() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE).edit().clear().commit()

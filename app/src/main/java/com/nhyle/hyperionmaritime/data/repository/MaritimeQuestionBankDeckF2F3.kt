@@ -202,6 +202,7 @@ object MaritimeQuestionBankDeckF2F3 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -210,7 +211,7 @@ object MaritimeQuestionBankDeckF2F3 {
 
                 val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
                 val qNoInt = qNo.toIntOrNull()
-                if (qNoInt != null && qNoInt in 1..totalItems && qText.isNotEmpty() && options.size >= 2) {
+                if (qNoInt != null && qNoInt in 1..totalItems && QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                     val ansIdx = when (ansStr) {
                         "A", "1" -> 0
                         "B", "2" -> 1
@@ -237,7 +238,7 @@ object MaritimeQuestionBankDeckF2F3 {
                         correctAnswerIndex = ansIdx,
                         explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                        imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                        imageAttachments = images,
                             difficulty = diff
                     )
                 }

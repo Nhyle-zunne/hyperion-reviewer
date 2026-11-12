@@ -28,7 +28,7 @@ class ImageOnlyQuestionTest {
         imageAttachments = listOf(ref))
 
     @Test fun numberedCsvAcceptsOnlyValidPromptImagesWithoutChangingIdsOrOptions() {
-        val file = File("src/main/assets/../../../build/image-only-regression.csv").apply { parentFile.mkdirs() }
+        val file = File("src/main/assets/../../../build/image-only-regression.csv").apply { parentFile!!.mkdirs() }
         fun cell(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
         val rows = listOf(
             listOf("No.", "Question", "A", "B", "C", "D", "Answer", "Explanation", "HYPERION_MEDIA"),
@@ -67,6 +67,30 @@ class ImageOnlyQuestionTest {
         } finally { ActiveSessionSnapshotManager.getSnapshotFile(context, snapshot.sessionId).delete() }
     }
 
+    @Test fun mistakesVaultPreservesImageOnlyPromptWithoutBankLookup() {
+        val file = MistakesVaultManager.getVaultFile(context)
+        val previous = file.takeIf { it.exists() }?.readBytes()
+        try {
+            val entry = MistakeEntry(question().id, question().track.name, "C1", 1, question())
+            MistakesVaultManager.saveEntries(context, listOf(entry))
+            assertEquals(listOf(entry), MistakesVaultManager.loadEntries(context))
+        } finally { if (previous == null) file.delete() else file.writeBytes(previous) }
+    }
+
+    @Test fun corruptPromptMediaRejectsSessionRatherThanChangingQuestionOrder() {
+        val q = question()
+        val snapshot = ActiveSessionSnapshot("image-only-corrupt", q.track.name, "PRACTICE", "C1", listOf(q),
+            emptyMap(), emptyMap(), 0, 1)
+        val file = ActiveSessionSnapshotManager.getSnapshotFile(context, snapshot.sessionId)
+        try {
+            ActiveSessionSnapshotManager.saveSnapshot(context, snapshot)
+            val json = JSONObject(file.readText())
+            json.getJSONArray("questions").getJSONObject(0).put("imageAttachments", media("explanation"))
+            file.writeText(json.toString())
+            assertNull(ActiveSessionSnapshotManager.loadSnapshotById(context, snapshot.sessionId))
+        } finally { file.delete() }
+    }
+
     @Test fun cloudBookmarkRoundTripPreservesImageOnlyPromptAndRejectsMissingPromptMedia() = runBlocking {
         MaritimeQuestionBank.init(context)
         val database = HyperionDatabase.getInstance(context)
@@ -91,7 +115,7 @@ class ImageOnlyQuestionTest {
             val q = (0 until restored.length()).map { restored.getJSONObject(it) }.first { it.getString("id") == id }
             assertEquals("", q.getString("questionText"))
             assertEquals(question().options, (0 until q.getJSONArray("options").length()).map { q.getJSONArray("options").getString(it) })
-            assertEquals(media().toString(), q.getJSONArray("imageAttachments").toString())
+            assertEquals(listOf(ref), QuestionMedia.parse(q.getJSONArray("imageAttachments").toString()))
         } finally {
             for (suffix in listOf("", "-absent", "-explanation", "-malformed")) database.bookmarkDao().removeBookmark(id + suffix)
         }

@@ -96,8 +96,9 @@ object NewTrackQuestionBank {
                 }
 
                 val qText = row.getOrNull(1)?.trim() ?: ""
-                if (qText.isEmpty()) {
-                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: question text is empty")
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
+                if (!QuestionMedia.hasPrompt(qText, images)) {
+                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: question text and valid prompt images are absent")
                     continue
                 }
 
@@ -145,7 +146,7 @@ object NewTrackQuestionBank {
                         explanation = row.getOrNull(7).orEmpty(),
                         difficulty = diff,
                         isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true,
-                        imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row)
+                        imageAttachments = images
                     )
                 )
             }

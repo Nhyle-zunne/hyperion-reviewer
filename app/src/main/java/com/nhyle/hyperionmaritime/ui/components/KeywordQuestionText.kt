@@ -38,6 +38,7 @@ internal fun KeywordQuestionEditor(
     text: String,
     style: TextStyle
 ) {
+    if (text.isBlank()) return
     val context = LocalContext.current
     val storage = remember(context) { QuestionKeywords(context) }
     val key = remember(track, questionId, text) { storage.key(track, questionId, text) }
