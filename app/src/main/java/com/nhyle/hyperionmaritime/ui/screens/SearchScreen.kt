@@ -60,6 +60,7 @@ import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.ui.motion.HyperionDialog
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
@@ -625,6 +626,8 @@ private fun SearchResultCard(
                     modifier = Modifier.padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    QuestionImageGallery(question = question, placement = "question")
+                    QuestionImageGallery(question = question, placement = "explanation")
                     val letters = listOf("A", "B", "C", "D", "E", "F")
                     val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
                     val correctOptLetter = letters.getOrElse(question.correctAnswerIndex) { "?" }
