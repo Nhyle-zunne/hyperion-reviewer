@@ -1,5 +1,7 @@
 # OIC-NW C1: first 10 explanation drafts
 
+> Historical pilot. The completed 831-question bank was published on 12 November 2026; see [README.md](README.md) for current status.
+
 **Drafts only — not live in either app.**
 
 These explanations follow the existing question-bank answers. Original wording, punctuation, choices and keys are unchanged. Each draft remains tied to the exact question version; similar-looking questions are not automatically combined.
