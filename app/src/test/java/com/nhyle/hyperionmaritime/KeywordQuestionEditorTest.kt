@@ -36,7 +36,8 @@ class KeywordQuestionEditorTest {
         com.nhyle.hyperionmaritime.data.util.LicenseManager.init(app)
         val viewModel = com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel(app)
         viewModel.setTrack(com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW)
-        viewModel.startConfiguredPractice("C1", 10, false, false, false)
+        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 10,
+            shuffleQuestions = false, shuffleChoices = false, isCrpMode = false)
         assertTrue(viewModel.activeQuestions.value.isNotEmpty())
         viewModel.setHighlightKeywords(true)
         viewModel.selectOptionForQuestion(viewModel.activeQuestions.value.first().id, 0)
