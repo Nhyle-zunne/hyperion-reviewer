@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
+
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.ProQuestion
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -119,6 +121,9 @@ object ProQuestionRepository {
 
             val content = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val rows = parseCsvText(content)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
             val list = mutableListOf<ProQuestion>()
 
             // Match the PWA parser: attempt normal row records first, then
@@ -152,7 +157,8 @@ object ProQuestionRepository {
                                 options = options,
                                 correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
                                 explanation = explanation,
-                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows)
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row)
                             )
                         )
                     }
