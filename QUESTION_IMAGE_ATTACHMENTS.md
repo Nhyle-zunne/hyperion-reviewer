@@ -28,8 +28,9 @@ The optional signed internal-testing workflow now offers an explicit
 that internal AAB has the verified incremental bank updater enabled.
 
 Test with a signed-in **licensed** account: purchase or grant a track,
-tap **Sync License**, confirm the pending Wi-Fi-only bank-refresh worker runs,
-open a bank with newly attached figures, then test airplane mode and
+tap **Sync License**, confirm the Wi-Fi-only bank-refresh worker completes,
+**close and reopen the app** to reload the in-memory question bank, then open
+a bank with newly attached figures and test airplane mode and
 offline fallback. Repeat using a free account (no bank download), expired
 license, logout/account switch and a bank whose checksum changes mid-download.
 
