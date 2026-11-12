@@ -77,6 +77,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.nhyle.hyperionmaritime.ui.components.MaritimeDifficultyBadge
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionText
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.OptionCard
@@ -480,6 +481,7 @@ private fun IntensiveDrillScreen(
                             fontWeight = FontWeight.Medium
                         )
                     )
+                    QuestionImageGallery(question = currentQuestion, placement = "question")
                 }
             }
 
@@ -909,6 +911,7 @@ private fun StandardDrillScreen(
                             fontWeight = FontWeight.Medium
                         )
                     )
+                    QuestionImageGallery(question = question, placement = "question")
                 }
             }
 
