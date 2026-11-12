@@ -23,7 +23,10 @@ import com.nhyle.hyperionmaritime.ui.components.rememberKeywordEditorState
 import com.nhyle.hyperionmaritime.ui.screens.DrillOptionCard
 import androidx.compose.foundation.layout.Column
 import org.junit.Assert.*
+import org.junit.After
 import org.junit.Rule
+import androidx.lifecycle.ViewModelStore
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -36,6 +39,48 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class KeywordQuestionEditorTest {
     @get:Rule val compose = createComposeRule()
+    private val viewModels = ViewModelStore()
+    private val restoreActions = mutableListOf<() -> Unit>()
+
+    @After fun restoreFixtureState() {
+        viewModels.clear()
+        restoreActions.asReversed().forEach { it() }
+    }
+
+    private fun preserveScreenPreferences(context: Context) {
+        val names = listOf("hyperion_prefs", LicenseManager.PREFS_NAME, LicenseManager.SECURE_PREFS_NAME)
+        val snapshots = names.associateWith { name ->
+            context.getSharedPreferences(name, Context.MODE_PRIVATE).all.mapValues { (_, value) ->
+                if (value is Set<*>) value.toSet() else value
+            }
+        }
+        val originalOic = LicenseManager.isOicNwProUnlockedFlow.value
+        val originalGmdss = LicenseManager.isGmdssProUnlockedFlow.value
+        val originalEngine = LicenseManager.isEngineOicEwProUnlockedFlow.value
+        val originalDeckMgt = LicenseManager.isDeckMgtProUnlockedFlow.value
+        val originalEngineMgt = LicenseManager.isEngineMgtProUnlockedFlow.value
+        restoreActions += {
+            LicenseManager.setOicNwProUnlocked(context, originalOic)
+            LicenseManager.setGmdssProUnlocked(context, originalGmdss)
+            LicenseManager.setEngineOicEwProUnlocked(context, originalEngine)
+            LicenseManager.setDeckMgtProUnlocked(context, originalDeckMgt)
+            LicenseManager.setEngineMgtProUnlocked(context, originalEngineMgt)
+            snapshots.forEach { (name, values) ->
+                val editor = context.getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear()
+                values.forEach { (key, value) ->
+                    when (value) {
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is String -> editor.putString(key, value)
+                        is Set<*> -> editor.putStringSet(key, value.filterIsInstance<String>().toSet())
+                    }
+                }
+                assertTrue(editor.commit())
+            }
+        }
+    }
 
     @Test fun pendingDrillAnswerCannotSubmitDuringKeywordEditing() = pendingAnswer(DrillDeliveryMode.STANDARD)
 
@@ -43,11 +88,12 @@ class KeywordQuestionEditorTest {
 
     private fun pendingAnswer(mode: DrillDeliveryMode) {
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        preserveScreenPreferences(app)
         com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank.init(app)
-        com.nhyle.hyperionmaritime.data.util.LicenseManager.setActivated(app, true)
         com.nhyle.hyperionmaritime.data.util.LicenseManager.setOicNwProUnlocked(app, true)
         com.nhyle.hyperionmaritime.data.util.LicenseManager.init(app)
         val viewModel = com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel(app)
+        viewModels.put("pending-answer", viewModel)
         viewModel.setTrack(com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW)
         viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 10, deliveryMode = mode,
             shuffleQuestions = false, shuffleChoices = false, isCrpMode = false)
@@ -111,7 +157,8 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithTag("option_card_0").assertIsFocused()
         compose.onNodeWithText("Edit Keyword").performClick()
         compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
-        compose.onNodeWithTag("option_card_0").assertIsNotFocused()
+        // A disabled clickable removes its focus target instead of reporting Focused=false.
+        compose.onNodeWithTag("option_card_0").assert(isFocused().not())
         // The disabled card loses keyboard focus. Keep Enter from activating the Save button.
         compose.runOnIdle { focusManager.clearFocus(force = true) }
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
