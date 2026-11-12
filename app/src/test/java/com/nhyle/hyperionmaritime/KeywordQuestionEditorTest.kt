@@ -7,6 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.input.key.Key
+import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.nhyle.hyperionmaritime.data.local.QuestionKeywords
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionEditor
@@ -28,7 +30,11 @@ import org.robolectric.annotation.GraphicsMode
 class KeywordQuestionEditorTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun pendingDrillAnswerCannotSubmitDuringKeywordEditing() {
+    @Test fun pendingDrillAnswerCannotSubmitDuringKeywordEditing() = pendingAnswer(DrillDeliveryMode.STANDARD)
+
+    @Test fun pendingIntensiveAnswerCannotSubmitDuringKeywordEditing() = pendingAnswer(DrillDeliveryMode.INTENSIVE)
+
+    private fun pendingAnswer(mode: DrillDeliveryMode) {
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank.init(app)
         com.nhyle.hyperionmaritime.data.util.LicenseManager.setActivated(app, true)
@@ -36,11 +42,12 @@ class KeywordQuestionEditorTest {
         com.nhyle.hyperionmaritime.data.util.LicenseManager.init(app)
         val viewModel = com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel(app)
         viewModel.setTrack(com.nhyle.hyperionmaritime.data.model.Track.DECK_OIC_NW)
-        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 10,
+        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 10, deliveryMode = mode,
             shuffleQuestions = false, shuffleChoices = false, isCrpMode = false)
         assertTrue(viewModel.activeQuestions.value.isNotEmpty())
         viewModel.setHighlightKeywords(true)
-        viewModel.selectOptionForQuestion(viewModel.activeQuestions.value.first().id, 0)
+        if (mode == DrillDeliveryMode.INTENSIVE) viewModel.selectIntensiveChoice(0)
+        else viewModel.selectOptionForQuestion(viewModel.activeQuestions.value.first().id, 0)
         compose.setContent {
             MaterialTheme { com.nhyle.hyperionmaritime.ui.screens.PracticeQuizScreen(viewModel) }
         }
@@ -77,6 +84,7 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithText("Edit Keyword").performClick()
         compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithTag("option_card_0").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals(1, answers) }
         tapToken("keyword_choice_Ship, 12%", 4) // comma
         tapToken("keyword_choice_Ship, 12%", 8) // percent
