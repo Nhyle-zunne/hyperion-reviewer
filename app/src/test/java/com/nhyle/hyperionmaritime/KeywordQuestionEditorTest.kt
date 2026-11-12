@@ -114,6 +114,22 @@ class KeywordQuestionEditorTest {
         compose.runOnIdle { assertEquals(setOf(1), store.load(stem, 2)) }
     }
 
+    @Test fun internalPunctuationHasIndependentHitTargetsWithoutDuplicatingText() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
+        val text = "ship's give-way"
+        val key = store.key("DECK", "compounds", text)
+        store.save(key, setOf(0))
+        compose.setContent {
+            MaterialTheme { KeywordQuestionEditor(true, "DECK", "compounds", text, MaterialTheme.typography.bodyLarge) }
+        }
+        compose.onNodeWithText("Edit Keyword").performClick()
+        compose.onNodeWithTag("keyword_question_text").assertTextEquals(text)
+        tapToken("keyword_question_text", 4)
+        tapToken("keyword_question_text", 11)
+        compose.onNodeWithText("Save Keywords").performClick()
+        compose.runOnIdle { assertEquals(setOf(0, 2, 3), store.load(key, 4)) }
+    }
+
     @Test fun failedSaveRetainsEditingAndDraft() {
         val state = KeywordEditorState(true, "stem", emptyList(), { _, _ -> emptySet() }, { false })
         compose.setContent {
