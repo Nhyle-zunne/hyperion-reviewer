@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -274,6 +275,9 @@ private fun IntensiveDrillScreen(
     val currentQuestion = intensiveQueue.first()
     val keywordsEnabled by viewModel.highlightKeywords.collectAsState()
     val keywordState = rememberKeywordEditorState(keywordsEnabled, currentQuestion.track.name, currentQuestion.id, currentQuestion.questionText, currentQuestion.options)
+    LaunchedEffect(keywordState.editing) {
+        if (keywordState.editing) viewModel.cancelAutoAdvance()
+    }
     val selectedChoiceIndex by viewModel.selectedChoiceIndex.collectAsState()
     val isAnswerEvaluated by viewModel.isAnswerEvaluated.collectAsState()
     val isSubmitted = isAnswerEvaluated
@@ -751,6 +755,9 @@ private fun StandardDrillScreen(
     val question = activeQuestions[currentIndex]
     val keywordsEnabled by viewModel.highlightKeywords.collectAsState()
     val keywordState = rememberKeywordEditorState(keywordsEnabled, question.track.name, question.id, question.questionText, question.options)
+    LaunchedEffect(keywordState.editing) {
+        if (keywordState.editing) viewModel.cancelAutoAdvance()
+    }
     val currentState = userStates[question.id]
     val isBookmarked = bookmarkedIds.contains(question.id)
     val isFlagged = currentState?.isFlagged == true

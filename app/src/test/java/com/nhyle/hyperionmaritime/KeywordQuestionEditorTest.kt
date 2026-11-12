@@ -11,6 +11,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.InputModeManager
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.geometry.Offset
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -51,6 +53,8 @@ class KeywordQuestionEditorTest {
             shuffleQuestions = false, shuffleChoices = false, isCrpMode = false)
         assertTrue(viewModel.activeQuestions.value.isNotEmpty())
         viewModel.setHighlightKeywords(true)
+        viewModel.toggleAutoNextCorrect(true)
+        viewModel.toggleAutoNextWrong(true)
         if (mode == DrillDeliveryMode.INTENSIVE) viewModel.selectIntensiveChoice(0)
         else viewModel.selectOptionForQuestion(viewModel.activeQuestions.value.first().id, 0)
         compose.setContent {
@@ -63,6 +67,18 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithText("Save Keywords").performScrollTo().performClick()
         compose.onNodeWithText("Check Answer").performClick()
         compose.runOnIdle { assertTrue(viewModel.isAnswerEvaluated.value) }
+        val evaluatedId = if (mode == DrillDeliveryMode.INTENSIVE) viewModel.intensiveQueue.value.first().id
+            else viewModel.activeQuestions.value[viewModel.currentQuestionIndex.value].id
+        compose.onNodeWithText("Edit Keyword").performScrollTo().performClick()
+        compose.waitForIdle()
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
+            .idleFor(2, java.util.concurrent.TimeUnit.SECONDS)
+        compose.onNodeWithText("Save Keywords").assertExists()
+        compose.runOnIdle {
+            val currentId = if (mode == DrillDeliveryMode.INTENSIVE) viewModel.intensiveQueue.value.first().id
+                else viewModel.activeQuestions.value[viewModel.currentQuestionIndex.value].id
+            assertEquals(evaluatedId, currentId)
+        }
     }
 
     @Test fun choicesEditWithoutAnsweringThenSaveRestoresAnswering() {
@@ -71,12 +87,14 @@ class KeywordQuestionEditorTest {
         val store = QuestionKeywords(context)
         var answers = 0
         lateinit var inputMode: InputModeManager
+        lateinit var focusManager: FocusManager
         var enabled by mutableStateOf(true)
         var questionId by mutableStateOf("choices")
         var options by mutableStateOf(listOf("Ship, 12%", "Other"))
         compose.setContent {
             MaterialTheme {
                 inputMode = LocalInputModeManager.current
+                focusManager = LocalFocusManager.current
                 val state = rememberKeywordEditorState(enabled, "DECK", questionId, "Stem?", options)
                 Column {
                     KeywordQuestionEditor(state, "Stem?", MaterialTheme.typography.bodyLarge)
@@ -92,7 +110,9 @@ class KeywordQuestionEditorTest {
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.RequestFocus)
         compose.onNodeWithTag("option_card_0").assertIsFocused()
         compose.onNodeWithText("Edit Keyword").performClick()
-        compose.onNodeWithTag("option_card_0").assertIsNotEnabled()
+        compose.onNodeWithTag("option_card_0").assertIsNotEnabled().assertIsNotFocused()
+        // The disabled card loses keyboard focus. Keep Enter from activating the Save button.
+        compose.runOnIdle { focusManager.clearFocus(force = true) }
         compose.onNodeWithTag("option_card_0").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("option_card_0").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals(1, answers) }
