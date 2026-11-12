@@ -53,11 +53,11 @@ class QuestionKeywordsTest {
     }
 
     @Test fun choicesFollowTextAndAreScopedToQuestionRevision() {
-        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
         val stem = store.key("DECK", "choice", "Stem?")
         val key = store.choiceKey(stem, "Ship, 12%")
         assertTrue(store.saveAll(mapOf(key to setOf(0, 2))))
-        assertEquals(setOf(0, 2), QuestionKeywords(ApplicationProvider.getApplicationContext()).load(store.choiceKey(stem, listOf("Other", "Ship, 12%")[1]), 5))
+        assertEquals(setOf(0, 2), QuestionKeywords(ApplicationProvider.getApplicationContext<Context>()).load(store.choiceKey(stem, listOf("Other", "Ship, 12%")[1]), 5))
         assertTrue(store.load(store.choiceKey(stem, "Ship, 13%"), 5).isEmpty())
         assertTrue(store.load(store.choiceKey(store.key("DECK", "choice", "Revised"), "Ship, 12%"), 5).isEmpty())
     }
@@ -75,7 +75,7 @@ class QuestionKeywordsTest {
     }
 
     @Test fun isolatesTracksQuestionsAndRevisedText() {
-        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
         val key = store.key("DECK", "1", "Which vessel gives way?")
         store.save(key, setOf(1))
         assertTrue(store.load(store.key("ENGINE", "1", "Which vessel gives way?"), 4).isEmpty())
@@ -85,7 +85,7 @@ class QuestionKeywordsTest {
     }
 
     @Test fun rejectsOutOfBoundsPositions() {
-        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
         val key = store.key("DECK", "bounds", "Two words")
         store.save(key, setOf(-1, 0, 2, 100))
         assertEquals(setOf(0), store.load(key, 2))
