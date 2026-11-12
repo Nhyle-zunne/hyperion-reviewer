@@ -60,6 +60,7 @@ import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
@@ -587,6 +588,8 @@ private fun BookmarkedQuestionCard(
                     modifier = Modifier.padding(top = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    QuestionImageGallery(question = question, placement = "question")
+                    QuestionImageGallery(question = question, placement = "explanation")
                     val letters = listOf("A", "B", "C", "D", "E", "F")
                     val correctOptText = question.options.getOrNull(question.correctAnswerIndex) ?: ""
                     val correctOptLetter = letters.getOrElse(question.correctAnswerIndex) { "?" }
