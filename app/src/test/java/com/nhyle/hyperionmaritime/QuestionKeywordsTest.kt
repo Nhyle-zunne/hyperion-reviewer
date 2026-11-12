@@ -12,9 +12,44 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 class QuestionKeywordsTest {
+    @Test fun failedCommitRestoresPreviousSelectionsForLaterLoads() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("failed_keyword_commit", Context.MODE_PRIVATE)
+        prefs.edit().clear().putStringSet("stem", setOf("0")).commit()
+        var failNextCommit = true
+        val wrapped = java.lang.reflect.Proxy.newProxyInstance(
+            android.content.SharedPreferences::class.java.classLoader,
+            arrayOf(android.content.SharedPreferences::class.java)
+        ) { _, method, args ->
+            if (method.name == "edit") {
+                val editor = prefs.edit()
+                java.lang.reflect.Proxy.newProxyInstance(
+                    android.content.SharedPreferences.Editor::class.java.classLoader,
+                    arrayOf(android.content.SharedPreferences.Editor::class.java)
+                ) { proxy, editMethod, editArgs ->
+                    val result = editMethod.invoke(editor, *(editArgs ?: emptyArray()))
+                    when {
+                        editMethod.name == "commit" && failNextCommit -> { failNextCommit = false; false }
+                        result is android.content.SharedPreferences.Editor -> proxy
+                        else -> result
+                    }
+                }
+            } else method.invoke(prefs, *(args ?: emptyArray()))
+        } as android.content.SharedPreferences
+        val store = QuestionKeywords(wrapped)
+        assertFalse(store.saveAll(mapOf("stem" to setOf(1), "choice" to setOf(0))))
+        assertEquals(setOf(0), store.load("stem", 2))
+        assertTrue(store.load("choice", 1).isEmpty())
+    }
+
     @Test fun punctuationPreservesLegacyWordPositions() {
         val tokens = QuestionKeywords.tokens("Ship, 12% + ⚓!")
         assertEquals(listOf("Ship", "12", ",", "%", "+", "⚓", "!"), tokens.map { it.value })
+    }
+
+    @Test fun punctuationInsideLegacyWordsHasItsOwnToken() {
+        assertEquals(listOf("ship's", "give-way", "'", "-"),
+            QuestionKeywords.tokens("ship's give-way").map { it.value })
     }
 
     @Test fun choicesFollowTextAndAreScopedToQuestionRevision() {

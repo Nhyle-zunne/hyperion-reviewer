@@ -1,11 +1,12 @@
 package com.nhyle.hyperionmaritime.data.local
 
 import android.content.Context
+import android.content.SharedPreferences
 import java.security.MessageDigest
 
 /** Stores token positions only; question text is never duplicated into preferences. */
-class QuestionKeywords(context: Context) {
-    private val prefs = context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE)
+class QuestionKeywords internal constructor(private val prefs: SharedPreferences) {
+    constructor(context: Context) : this(context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE))
 
     fun key(track: String, questionId: String, text: String): String =
         MessageDigest.getInstance("SHA-256")
@@ -18,17 +19,24 @@ class QuestionKeywords(context: Context) {
         /** Keep all legacy word IDs; append each non-whitespace symbol after them. */
         fun tokens(text: String): List<MatchResult> {
             val words = Regex("[\\p{L}\\p{N}]+(?:['’\\-][\\p{L}\\p{N}]+)*").findAll(text).toList()
-            val symbols = Regex("[^\\s\\p{Z}]").findAll(text)
-                .filter { symbol -> words.none { symbol.range.first in it.range } }.toList()
+            val symbols = Regex("[^\\s\\p{Z}\\p{L}\\p{N}]").findAll(text).toList()
             return words + symbols
         }
     }
 
     /** Commit the complete draft together; callers keep editing when persistence fails. */
     fun saveAll(selections: Map<String, Set<Int>>): Boolean {
+        val previous = selections.keys.associateWith { prefs.getStringSet(it, null)?.toSet() }
         val editor = prefs.edit()
         selections.forEach { (key, selected) -> editor.putStringSet(key, selected.map { it.toString() }.toSet()) }
-        return editor.commit()
+        if (editor.commit()) return true
+        // A failed commit still updates Android's in-memory preferences. Restore the saved draft.
+        val restore = prefs.edit()
+        previous.forEach { (key, selected) ->
+            if (selected == null) restore.remove(key) else restore.putStringSet(key, selected)
+        }
+        restore.commit()
+        return false
     }
 
     fun load(key: String, wordCount: Int): Set<Int> =

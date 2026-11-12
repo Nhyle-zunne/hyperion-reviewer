@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
 import com.nhyle.hyperionmaritime.data.local.QuestionKeywords
 
 /** One draft and save transaction for a question and its choices. */
@@ -100,21 +99,19 @@ private fun KeywordHighlightText(state: KeywordEditorState, key: String, text: S
     val selected = state.selected(key)
     val annotated = remember(text, selected, state.enabled) {
         buildAnnotatedString {
-            // Tokens retain legacy IDs but are rendered in their original text order.
-            var cursor = 0
-            tokens.withIndex().sortedBy { it.value.range.first }.forEach { (id, token) ->
-                append(text.substring(cursor, token.range.first))
+            append(text)
+            tokens.forEachIndexed { id, token ->
                 if (state.enabled && id in selected) {
-                    withStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717))) { append(token.value) }
-                } else append(token.value)
-                cursor = token.range.last + 1
+                    addStyle(SpanStyle(background = Color(0xFFFFDF70), color = Color(0xFF171717)),
+                        token.range.first, token.range.last + 1)
+                }
             }
-            append(text.substring(cursor))
         }
     }
     if (state.enabled && state.editing) {
         ClickableText(modifier = modifier, text = annotated, style = style, onClick = { offset ->
-            val id = tokens.indexOfFirst { offset in it.range }
+            // Punctuation inside a legacy compound word is selectable on its own.
+            val id = tokens.indexOfLast { offset in it.range }
             if (id >= 0) state.toggle(key, id)
         })
     } else Text(text = annotated, style = style, modifier = modifier)
