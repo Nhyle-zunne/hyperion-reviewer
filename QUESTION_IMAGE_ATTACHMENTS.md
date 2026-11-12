@@ -20,3 +20,21 @@ Quick Scan and Practice show diagrams and can enlarge them with pinch-to-zoom. E
 **Sync caveat:** bank metadata is delivered through the existing encrypted question-bank format, but Android's `SMART_BANK_UPDATES_ENABLED` defaults **false**. A web admin edit does NOT instantly update an installed Android app. Issue a signed Android update with the refreshed encrypted CSV data, or separately validate and explicitly enable the authenticated smart-bank update route. Current users without an updated APK or remote bank update will not see new references. Uploaded images remain stored privately in Supabase, not in GitHub.
 
 The feature adds no repeated license polling and no user progress sync writes. The first image download uses protected Supabase Storage bandwidth, then the local SHA-verified copy is reused while the licensed owner remains entitled. Clearing app data removes offline copies.
+
+## Internal test of Android bank synchronization
+
+The optional signed internal-testing workflow now offers an explicit
+`enable_smart_bank_updates` checkbox (default **off**). When selected, only
+that internal AAB has the verified incremental bank updater enabled.
+
+Test with a signed-in **licensed** account: purchase or grant a track,
+tap **Sync License**, confirm the pending Wi-Fi-only bank-refresh worker runs,
+open a bank with newly attached figures, then test airplane mode and
+offline fallback. Repeat using a free account (no bank download), expired
+license, logout/account switch and a bank whose checksum changes mid-download.
+
+A successful GitHub CI compile is not proof of a working Play Store update,
+and the workflow does not upload to Google Play automatically. **Do not
+enable the flag for standard production builds** without this device-level
+license, protected CDN and rollback verification. Internal test builds may
+use the workflow's signed AAB artifact with existing Play upload credentials.
