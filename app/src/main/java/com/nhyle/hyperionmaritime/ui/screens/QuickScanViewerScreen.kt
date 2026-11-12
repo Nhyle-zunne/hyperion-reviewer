@@ -426,6 +426,11 @@ fun QuickScanViewerScreen(
                         }
                     }
                 }
+                if (currentQuestion.imageAttachments.any { it.placement == "explanation" }) {
+                    item {
+                        QuestionImageGallery(question = currentQuestion, placement = "explanation")
+                    }
+                }
             }
 
             // 3. Bottom Control Bar (Fixed)
