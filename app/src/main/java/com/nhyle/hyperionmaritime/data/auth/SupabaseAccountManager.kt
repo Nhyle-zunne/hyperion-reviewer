@@ -163,16 +163,6 @@ object SupabaseAccountManager {
                     recordAccountActivity(it)
                 }
             }
-            if (BuildConfig.SMART_BANK_UPDATES_ENABLED) {
-                // Optional background bank refresh must never turn a successful
-                // Google sign-in/license sync into a reported account failure.
-                // No question bytes are downloaded in this callback.
-                runCatching {
-                    VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(appContext)
-                }.onFailure { schedulingError ->
-                    Log.w(TAG, "Optional licensed question-bank refresh could not be queued.", schedulingError)
-                }
-            }
             _state.value = SupabaseAccountState(
                 email = session.email.ifBlank { null },
                 isLoading = true,
@@ -631,6 +621,20 @@ object SupabaseAccountManager {
                 LicenseManager.setVerifiedDeveloperAdminAccess(context, freshSession.userId, isDeveloperAdmin)
                 val playLinkResult = syncGooglePlayPurchases(context, freshSession)
                 val licenseCount = syncEntitlements(context, freshSession)
+                // The app only queues paid-bank updates AFTER the user's current
+                // website/Play license has been verified. A first sign-in may
+                // not have loaded entitlements yet, and a later manual "Sync
+                // License" must also be able to discover corrected banks.
+                // This is opt-in behind SMART_BANK_UPDATES_ENABLED; scheduler
+                // only queues once per owner/day, Wi-Fi only, and free users
+                // create no bank requests. Failures cannot block licensing.
+                if (BuildConfig.SMART_BANK_UPDATES_ENABLED) {
+                    runCatching {
+                        VerifiedBankRefreshScheduler.enqueueAfterLicensedSync(context)
+                    }.onFailure { schedulingError ->
+                        Log.w(TAG, "Optional licensed question-bank refresh could not be queued.", schedulingError)
+                    }
+                }
                 val studyProgressMessage = try {
                     syncLearningProgressNow(context, freshSession)
                 } catch (progressError: Exception) {
