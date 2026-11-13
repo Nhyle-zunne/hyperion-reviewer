@@ -46,7 +46,16 @@ import android.net.NetworkCapabilities
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.UpdateAvailability
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import androidx.activity.result.contract.ActivityResultContracts
+import com.nhyle.hyperionmaritime.data.update.PlayUpdateCoordinator
+import android.app.AlertDialog
+import android.content.Intent
+import android.content.ActivityNotFoundException
+import android.net.Network
+import android.net.Uri
+import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -104,6 +113,23 @@ import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 class MainActivity : ComponentActivity() {
     private val viewModel: ReviewerViewModel by viewModels()
     private lateinit var appUpdateManager: AppUpdateManager
+    private lateinit var playUpdates: PlayUpdateCoordinator
+    private var updateDialog: AlertDialog? = null
+    private var updateConnectivity: ConnectivityManager? = null
+    private var updateNetworkRegistered = false
+    private val updateLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        if (::playUpdates.isInitialized) playUpdates.onFlowResult(result.resultCode)
+    }
+    private val updateNetworkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) = notifyUpdateConnectivity()
+        override fun onLost(network: Network) = notifyUpdateConnectivity()
+    }
+
+    private fun notifyUpdateConnectivity() {
+        runOnUiThread {
+            if (::playUpdates.isInitialized) playUpdates.onConnectivityChanged(isOnline(this))
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,7 +146,23 @@ class MainActivity : ComponentActivity() {
         }
 
         appUpdateManager = AppUpdateManagerFactory.create(this)
-        checkForInAppUpdates()
+        playUpdates = PlayUpdateCoordinator(
+            manager = appUpdateManager,
+            isOnline = { isOnline(this) },
+            launchImmediate = { info ->
+                appUpdateManager.startUpdateFlowForResult(
+                    info, updateLauncher, AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build()
+                )
+            },
+            showStoreFallback = { showPlayStoreUpdate() },
+        )
+        updateConnectivity = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        try {
+            updateConnectivity?.registerDefaultNetworkCallback(updateNetworkCallback)
+            updateNetworkRegistered = updateConnectivity != null
+        } catch (error: Exception) {
+            Log.w("HyperionPlayUpdate", "Could not observe connectivity; foreground checks remain enabled", error)
+        }
 
         enableEdgeToEdge()
         setContent {
@@ -172,56 +214,59 @@ class MainActivity : ComponentActivity() {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val network = cm.activeNetwork ?: return false
         val capabilities = cm.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
-    private fun checkForInAppUpdates() {
-        if (!isOnline(this)) {
-            // Offline Guard: Abort update check immediately for offline / at-sea users
-            return
-        }
-
-        appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
-            ) {
+    private fun showPlayStoreUpdate() {
+        if (isFinishing || isDestroyed || updateDialog?.isShowing == true) return
+        updateDialog = AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage("A newer Hyperion Maritime version is available. Update through Google Play to get the latest questions and improvements.")
+            .setPositiveButton("Update in Google Play") { _, _ ->
                 try {
-                    appUpdateManager.startUpdateFlowForResult(
-                        appUpdateInfo,
-                        AppUpdateType.IMMEDIATE,
-                        this,
-                        REQ_CODE_IMMEDIATE_UPDATE
-                    )
-                } catch (_: Exception) {
-                    // Silently handle error to prevent blocking user
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName")).setPackage("com.android.vending"))
+                } catch (_: ActivityNotFoundException) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName")))
+                    } catch (error: ActivityNotFoundException) {
+                        Log.w("HyperionPlayUpdate", "No app can open the Play Store listing", error)
+                        Toast.makeText(this, "Open Google Play and search for Hyperion Maritime to update.", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
-        }.addOnFailureListener {
-            // Catch errors, missing Play Store, or network drops silently
-        }
+            .setNegativeButton("Not now", null)
+            .setOnDismissListener { updateDialog = null }
+            .show()
     }
 
     override fun onResume() {
         super.onResume()
         BillingManager.getInstance(applicationContext).queryPurchasesOnResume()
-        if (::appUpdateManager.isInitialized && isOnline(this)) {
-            appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
-                    try {
-                        appUpdateManager.startUpdateFlowForResult(
-                            appUpdateInfo,
-                            AppUpdateType.IMMEDIATE,
-                            this,
-                            REQ_CODE_IMMEDIATE_UPDATE
-                        )
-                    } catch (_: Exception) {
-                        // Silently handle error
-                    }
-                }
-            }.addOnFailureListener {
-                // Silently handle failure
+    }
+
+    override fun onPostResume() {
+        super.onPostResume()
+        // The activity and its result launcher are ready, including after a Play Store visit.
+        if (::playUpdates.isInitialized) playUpdates.onResume()
+    }
+
+    override fun onPause() {
+        if (::playUpdates.isInitialized) playUpdates.onPause()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (::playUpdates.isInitialized) playUpdates.close()
+        if (updateNetworkRegistered) {
+            try {
+                updateConnectivity?.unregisterNetworkCallback(updateNetworkCallback)
+            } catch (error: IllegalArgumentException) {
+                Log.w("HyperionPlayUpdate", "Update connectivity callback was already removed", error)
             }
         }
+        updateDialog?.dismiss()
+        super.onDestroy()
     }
 
     override fun onStop() {
@@ -239,9 +284,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    companion object {
-        private const val REQ_CODE_IMMEDIATE_UPDATE = 999
-    }
 }
 
 @Composable

@@ -1,0 +1,7 @@
+# Reliable Google Play update prompt
+
+The user installed from Google Play and sees an Update button in Play but no in-app prompt. Source confirms only onCreate checks new availability; onResume only resumes an existing flow, a startup connectivity miss is never retried, launch return values are ignored, and errors are swallowed. The device's exact Play API response remains unknown.
+
+Implement a small lifecycle-aware Play update coordinator and test it with Google's FakeAppUpdateManager. Query when resumed and on a validated reconnect, serialize requests, avoid launching while paused/destroyed, resume developer-triggered immediate updates, and use the Activity Result API. Retry a transient query failure once per foreground/connection, log diagnostic failures, respect cancellation until the next foreground visit, and offer a Play Store update action when an update is confirmed but its immediate flow cannot launch. Offline users must remain able to study; do not add a remote version check, backend traffic or an unconditional lockout.
+
+Verify startup, background/foreground availability, reconnect, in-progress resumption, delayed callbacks, duplicate events, cancellation, failure/retry, unavailable immediate type, failed launch, and destruction. Run Android CI (unit tests, lint, debug assembly and encrypted APK checks), obtain review and merge source for the user's AI Studio publishing workflow. Do not generate a signed bundle or publish to Play. A new installed build is necessary; source changes cannot repair the already-installed APK remotely.
