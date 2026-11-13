@@ -100,6 +100,19 @@ import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 import com.nhyle.hyperionmaritime.viewmodel.Screen
 
+// Single source of truth for per-track reviewer access. All-access products
+// flow through the same effective isTrackUnlocked flag on the dashboard.
+internal enum class ReviewerHomeMode {
+    FREE, UNLOCK, PRACTICE_ALL, QUICK_SCAN, TIMED_MOCK, FLASHCARDS, MISTAKES, SESSION_LOG, SEARCH
+}
+
+internal fun reviewerHomeModesForLicense(isTrackUnlocked: Boolean): List<ReviewerHomeMode> =
+    if (isTrackUnlocked) listOf(
+        ReviewerHomeMode.PRACTICE_ALL, ReviewerHomeMode.QUICK_SCAN, ReviewerHomeMode.TIMED_MOCK,
+        ReviewerHomeMode.FLASHCARDS, ReviewerHomeMode.MISTAKES, ReviewerHomeMode.SESSION_LOG,
+        ReviewerHomeMode.SEARCH
+    ) else listOf(ReviewerHomeMode.FREE, ReviewerHomeMode.UNLOCK)
+
 /**
  * Editorial MIAN "Spaghetti" HomeScreen:
  * Heavy grotesk typography, rules instead of boxed cards, 2dp corners, flat surfaces, tomato red accents.
@@ -123,7 +136,7 @@ fun HomeScreen(
     val isDeckMgtProUnlocked by viewModel.isDeckMgtProUnlocked.collectAsState()
     val isEngineMgtProUnlocked by viewModel.isEngineMgtProUnlocked.collectAsState()
     val isHyperionProUnlocked by viewModel.isHyperionProUnlocked.collectAsState()
-    val isTrackUnlocked = when (selectedTrack) {
+    val isTrackUnlocked = isHyperionProUnlocked || when (selectedTrack) {
         Track.DECK_OIC_NW -> isOicNwProUnlocked
         Track.GMDSS_GOC -> isGmdssProUnlocked
         Track.ENGINE_OIC_EW -> isEngineOicEwProUnlocked
@@ -331,13 +344,16 @@ fun HomeScreen(
             val qCount = if (questionBankLoaded) MaritimeCompetenceRegistry.getTotalTrackQuestionCount(selectedTrack) else 0
             val qCountStr = if (questionBankLoaded) "%,d".format(qCount) else "…"
 
-            // Row 1: Free Reviewer (Top-Left) + Practice All Questions (Top-Right)
-            item {
+            // The free tier intentionally has only two actions. Premium modes,
+            // including Timed Mock Exam, are not rendered without a track pass.
+            items(reviewerHomeModesForLicense(isTrackUnlocked).chunked(2)) { rowModes ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                    rowModes.forEach { mode ->
+                        when (mode) {
+                        ReviewerHomeMode.FREE -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = freeReviewerTitle,
                             subtitle = freeReviewerSubtitle,
@@ -355,8 +371,7 @@ fun HomeScreen(
                             }
                         )
                     }
-
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.PRACTICE_ALL -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "PRACTICE ALL QUESTIONS",
                             subtitle = "$qCountStr questions across $compCount competencies.",
@@ -374,16 +389,7 @@ fun HomeScreen(
                             }
                         )
                     }
-                }
-            }
-
-            // Row 2: Quick Scan Material (Below Free Reviewer) + Timed Mock Exam (Below Practice All)
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.QUICK_SCAN -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "QUICK SCAN MATERIAL",
                             subtitle = "Direct question & answer reference review.",
@@ -401,8 +407,7 @@ fun HomeScreen(
                             }
                         )
                     }
-
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.TIMED_MOCK -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "TIMED MOCK EXAM",
                             subtitle = "70% Cutoff • 1 min/item • Function lock-in",
@@ -420,16 +425,7 @@ fun HomeScreen(
                             }
                         )
                     }
-                }
-            }
-
-            // Row 3: Flashcards + Mistakes Notebook
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.FLASHCARDS -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "FLASHCARD REVISION",
                             subtitle = "Active recall • Tap to flip cards • Key verification",
@@ -447,8 +443,7 @@ fun HomeScreen(
                             }
                         )
                     }
-
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.MISTAKES -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "MISTAKES NOTEBOOK",
                             subtitle = "$totalMistakes questions to redeem. Cleared after 2 correct.",
@@ -466,16 +461,7 @@ fun HomeScreen(
                             }
                         )
                     }
-                }
-            }
-
-            // Row 4: Session Log + Search Bank
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.SESSION_LOG -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "SESSION LOG",
                             subtitle = "Past mock exam attempts & diagnostics.",
@@ -493,8 +479,7 @@ fun HomeScreen(
                             }
                         )
                     }
-
-                    Box(modifier = Modifier.weight(1f)) {
+                        ReviewerHomeMode.SEARCH -> Box(modifier = Modifier.weight(1f)) {
                         CompactModeBox(
                             title = "SEARCH QUESTION BANK",
                             subtitle = "Search by keyword, item code, or competence.",
@@ -511,6 +496,20 @@ fun HomeScreen(
                                 }
                             }
                         )
+                    }
+                        ReviewerHomeMode.UNLOCK -> Box(modifier = Modifier.weight(1f)) {
+                        CompactModeBox(
+                            title = "Unlock FULL reviewer",
+                            subtitle = "Get Practice All, Quick Scan, Timed Mock Exam, Flashcards and all licensed study tools.",
+                            badge = "FULL ACCESS",
+                            badgeColor = colors.accent,
+                            icon = Icons.Default.Lock,
+                            accentColor = colors.accent,
+                            isLocked = false,
+                            onClick = { viewModel.triggerPaywall(selectedTrack) }
+                        )
+                    }
+                        }
                     }
                 }
             }

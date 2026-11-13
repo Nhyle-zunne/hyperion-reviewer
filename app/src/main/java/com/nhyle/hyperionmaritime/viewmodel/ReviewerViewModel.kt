@@ -2479,6 +2479,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         track: Track = _selectedTrack.value,
         selectedFunctions: Set<String>? = _selectedMockFunctions.value
     ) {
+        // Mock is a premium feature even when entered outside the track home.
+        if (!isTrackUnlocked(track)) {
+            triggerPaywall(track)
+            return
+        }
         _selectedTrack.value = track
         _selectedMockFunctions.value = selectedFunctions
         startQuizSession(QuizMode.MOCK_EXAM, selectedFunctions = selectedFunctions)
@@ -4121,6 +4126,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openMockCompetence(competenceId: String) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         _activeCompetenceId.value = competenceId
         if (!_isExamSubmitted.value && competenceId !in _completedCompetences.value) {
             timerJob?.cancel()

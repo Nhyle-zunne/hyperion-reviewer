@@ -258,6 +258,22 @@ private fun PopupPlanBox(
     }
 }
 
+/**
+ * The nine benefits of a licensed reviewer track, matching the Bond Store on
+ * hyperionmaritime.org. No free access is promised for timed mock examinations.
+ */
+internal fun premiumFeaturesForTrack(competencies: String): List<String> = listOf(
+    "Unlimited practice sessions",
+    "Unlimited timed mock exams",
+    "Full question bank across $competencies competencies",
+    "Custom drills and question ranges",
+    "Quick Scan Mode",
+    "Mistakes Notebook and bookmarks",
+    "Full-text question search",
+    "Offline review after downloading",
+    "Study history and cross-device progress sync"
+)
+
 @Composable
 internal fun StorePopupCard(
     productId: String,
@@ -330,13 +346,8 @@ internal fun StorePopupCard(
     val activeCycle = selectedCardCycle ?: BillingCycle.YEARLY
     val activeItem = billingManager.getProductItem(productId, activeCycle)
 
-    val perks = listOf(
-        "Full question bank unlocked",
-        "All $competencies competencies, nothing locked",
-        "Mock exams with competence-by-competence scoring",
-        "Works 100% offline, study at sea",
-        "Manage or cancel anytime in Google Play"
-    )
+    val perks = premiumFeaturesForTrack(competencies)
+    var showAllPerks by remember(productId) { mutableStateOf(false) }
 
     AnimatedVisibility(
         visible = shown,
@@ -438,7 +449,7 @@ internal fun StorePopupCard(
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        perks.forEach { perk ->
+                        (if (showAllPerks) perks else perks.take(3)).forEach { perk ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
@@ -457,6 +468,21 @@ internal fun StorePopupCard(
                                 )
                             }
                         }
+                    }
+
+                    // Preserve the existing native store popup and scroll behavior.
+                    // All nine lines can be read in the card; collapse is optional.
+                    OutlinedButton(
+                        onClick = { showAllPerks = !showAllPerks },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("store_perks_toggle_$productId")
+                    ) {
+                        Text(
+                            text = if (showAllPerks) "Show fewer features ↑" else "See all 9 premium features ↓",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 2
+                        )
                     }
 
                     Text(
