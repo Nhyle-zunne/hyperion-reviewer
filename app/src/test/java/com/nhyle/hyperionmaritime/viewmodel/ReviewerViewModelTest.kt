@@ -176,7 +176,7 @@ class ReviewerViewModelTest {
         // 2. Also verify persistent entitlement cache survives
         val reloadedItem = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS)
         assertTrue("Product item must report isOwned = true", reloadedItem.isOwned)
-        assertEquals("₱350 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_OIC_NW_PASS])
+        assertEquals("₱499 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_OIC_NW_PASS])
     }
 
     /**
@@ -212,7 +212,7 @@ class ReviewerViewModelTest {
 
         val reloadedItem = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS)
         assertTrue("Product item must report isOwned = true", reloadedItem.isOwned)
-        assertEquals("₱250 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_GMDSS_PASS])
+        assertEquals("₱399 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_GMDSS_PASS])
     }
 
     /**
@@ -589,22 +589,22 @@ class ReviewerViewModelTest {
         assertEquals("₱500/yr", yearlyAllAccess.shortFormattedPrice)
 
         val weeklyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.WEEKLY)
-        assertEquals("₱20 / week", weeklyOic.formattedPrice)
+        assertEquals("₱29 / week", weeklyOic.formattedPrice)
 
         val monthlyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.MONTHLY)
-        assertEquals("₱50 / month", monthlyOic.formattedPrice)
+        assertEquals("₱79 / month", monthlyOic.formattedPrice)
 
         val yearlyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.YEARLY)
-        assertEquals("₱350 / year", yearlyOic.formattedPrice)
+        assertEquals("₱499 / year", yearlyOic.formattedPrice)
 
         val weeklyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.WEEKLY)
-        assertEquals("₱15 / week", weeklyGmdss.formattedPrice)
+        assertEquals("₱25 / week", weeklyGmdss.formattedPrice)
 
         val monthlyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.MONTHLY)
-        assertEquals("₱40 / month", monthlyGmdss.formattedPrice)
+        assertEquals("₱59 / month", monthlyGmdss.formattedPrice)
 
         val yearlyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.YEARLY)
-        assertEquals("₱250 / year", yearlyGmdss.formattedPrice)
+        assertEquals("₱399 / year", yearlyGmdss.formattedPrice)
     }
 
     /**
