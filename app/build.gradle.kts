@@ -52,8 +52,8 @@ android {
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$escapedGoogleWebClientId\"")
     minSdk = 24
     targetSdk = 36
-    versionCode = 76
-    versionName = "2.0.6"
+    versionCode = 74
+    versionName = "2.0.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
