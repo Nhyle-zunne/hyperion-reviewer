@@ -155,7 +155,10 @@ fun QuestionImageGallery(question: Question, placement: String) {
                         )
                     }
                     Text(ref.alt, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-                    Text("Tap image to zoom", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
+                    OutlinedButton(
+                        onClick = { enlarged = ref.sha256 },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) { Text("🔍 Zoom") }
                 }
             } else if (failures[ref.sha256] == true) {
                 Column {
