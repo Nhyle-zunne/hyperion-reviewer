@@ -73,20 +73,20 @@ class QuestionImageGalleryTest {
 
     @Test fun thumbnailUsesRelativeBoundsAndPreservesAspectRatioAcrossDevices() {
         val phoneLandscape = questionDiagramThumbnailSize(400.dp, 800.dp, 1200, 600)
-        Assert.assertEquals(288f, phoneLandscape.width.value, 0.01f)
-        Assert.assertEquals(144f, phoneLandscape.height.value, 0.01f)
+        Assert.assertEquals(400f, phoneLandscape.width.value, 0.01f)
+        Assert.assertEquals(200f, phoneLandscape.height.value, 0.01f)
 
         val phonePortrait = questionDiagramThumbnailSize(400.dp, 800.dp, 600, 1200)
-        Assert.assertEquals(152f, phonePortrait.width.value, 0.01f)
-        Assert.assertEquals(304f, phonePortrait.height.value, 0.01f)
+        Assert.assertEquals(192f, phonePortrait.width.value, 0.01f)
+        Assert.assertEquals(384f, phonePortrait.height.value, 0.01f)
 
         val tabletLandscape = questionDiagramThumbnailSize(1400.dp, 1100.dp, 3000, 1000)
-        Assert.assertEquals(520f, tabletLandscape.width.value, 0.01f)
-        Assert.assertTrue(tabletLandscape.height <= 360.dp)
+        Assert.assertEquals(900f, tabletLandscape.width.value, 0.01f)
+        Assert.assertTrue(tabletLandscape.height <= 528.dp)
 
         val splitScreen = questionDiagramThumbnailSize(240.dp, 500.dp, 1024, 768)
-        Assert.assertTrue(splitScreen.width <= 240.dp * 0.72f)
-        Assert.assertTrue(splitScreen.height <= 500.dp * 0.38f)
+        Assert.assertEquals(240f, splitScreen.width.value, 0.01f)
+        Assert.assertTrue(splitScreen.height <= 500.dp * 0.48f)
 
         Assert.assertEquals(1f, boundedDiagramZoom(0.3f), 0.001f)
         Assert.assertEquals(2.5f, boundedDiagramZoom(9f), 0.001f)
@@ -96,11 +96,20 @@ class QuestionImageGalleryTest {
     @Test fun ownerChangeRemovesImageAndOpenZoom() {
         compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question") } }
         awaitImage()
+        compose.onNodeWithText("🔍 Zoom").assertDoesNotExist()
+        compose.onNodeWithText(ref.alt).assertDoesNotExist()
         compose.onNodeWithContentDescription(ref.alt).performClick()
+        compose.onNodeWithText("Question diagram").assertDoesNotExist()
+        compose.onNodeWithTag("diagram_zoom_controls").assertExists()
+        compose.onNodeWithContentDescription("Close image").assertExists()
+        compose.onNodeWithText("Reset").assertExists()
         compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
         compose.onNodeWithText("100%").assertExists()
         compose.onNodeWithContentDescription("Zoom in").performClick()
         compose.onNodeWithText("125%").assertExists()
+        compose.onNodeWithText("Reset").performClick()
+        compose.onNodeWithText("100%").assertExists()
+        compose.onNodeWithContentDescription("Zoom in").performClick()
         compose.onNodeWithContentDescription("Zoom out").assertIsEnabled()
         repeat(5) { compose.onNodeWithContentDescription("Zoom in").performClick() }
         compose.onNodeWithText("250%").assertExists()
@@ -108,12 +117,12 @@ class QuestionImageGalleryTest {
         repeat(6) { compose.onNodeWithContentDescription("Zoom out").performClick() }
         compose.onNodeWithText("100%").assertExists()
         compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
-        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithContentDescription("Close image").performClick()
         compose.onNodeWithContentDescription(ref.alt).performClick()
         compose.onNodeWithText("100%").assertExists()
         compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
         compose.runOnIdle { LicenseManager.setCurrentAccountUserId(context, "22222222-2222-4222-8222-222222222222") }
-        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
         compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
     }
 
@@ -122,7 +131,7 @@ class QuestionImageGalleryTest {
         awaitImage()
         compose.onNodeWithContentDescription(ref.alt).performClick()
         compose.runOnIdle { LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false) }
-        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
         compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
     }
 
@@ -139,7 +148,7 @@ class QuestionImageGalleryTest {
         compose.runOnIdle { ShadowSystemClock.advanceBy(Duration.ofHours(2)) }
         compose.mainClock.advanceTimeBy(1_500)
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(ref.alt).fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
         Assert.assertEquals(revision, LicenseManager.accountEntitlementRevisionFlow.value)
     }
 
@@ -149,7 +158,7 @@ class QuestionImageGalleryTest {
         awaitImage()
         compose.onNodeWithContentDescription(ref.alt).performClick()
         compose.runOnIdle { current = current.copy(imageAttachments = listOf(ref.copy(alt = "Revised chart"))) }
-        compose.onNodeWithText("Close").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
         compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription("Revised chart").fetchSemanticsNodes().isNotEmpty() }
         compose.runOnIdle { current = current.copy(track = Track.ENGINE_MGT) }
         compose.onAllNodesWithContentDescription("Revised chart").assertCountEquals(0)
