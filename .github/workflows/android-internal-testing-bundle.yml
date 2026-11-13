@@ -1,6 +1,13 @@
 name: Android internal-testing App Bundle
 
 on:
+  # Publish a signed, reviewable AAB artifact whenever a release-relevant Android price or version changes.
+  # This workflow NEVER uploads or publishes to Google Play automatically.
+  push:
+    branches: [main]
+    paths:
+      - 'app/src/main/java/com/nhyle/hyperionmaritime/data/billing/BillingManager.kt'
+      - 'app/build.gradle.kts'
   workflow_dispatch:
     inputs:
       enable_smart_bank_updates:
