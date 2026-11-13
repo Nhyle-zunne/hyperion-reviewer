@@ -5,11 +5,11 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object PrivacyPolicyText {
     const val TITLE = "PRIVACY POLICY"
-    const val LAST_UPDATED = "Effective Date: October 31, 2026 · Last Updated: October 31, 2026"
+    const val LAST_UPDATED = "Effective Date: October 31, 2026 · Last Updated: November 14, 2026"
 
     const val CONTENT = """HYPERION MARITIME REVIEWER
 PRIVACY POLICY
-Effective Date: October 31, 2026 · Last Updated: October 31, 2026
+Effective Date: October 31, 2026 · Last Updated: November 14, 2026
 
 PERSONAL INFORMATION CONTROLLER / DEVELOPER
 Hyperion Maritime
@@ -25,6 +25,7 @@ Hyperion Maritime ("Hyperion", "we", "our", or "us") provides Hyperion Maritime 
 • Website/PWA users can sign in with Google. Supported website learning progress can be synchronized with the signed-in Hyperion account across supported browsers and devices.
 • Google Play subscriptions are billed and managed by Google Play. Website/PWA licenses are purchased through the website and processed through PayMongo or reviewed after a manual QR-payment submission. These are separate billing products, although eligible entitlements can be linked to the same Hyperion account when you sign in and synchronize.
 • Hyperion does not display third-party advertisements or sell personal information for advertising.
+• Free Reviewer on the website/PWA requires an internet connection. Full-reviewer tools such as Timed Mock Exam, Quick Scan, and licensed offline question-bank downloads require an active license for the selected track. Signing in alone does not unlock paid access.
 • You can permanently delete a signed-in Hyperion account from the website or Android app. Account deletion does not cancel Google Play billing or erase Android study data stored locally on your device.
 
 2. INFORMATION PROCESSED
@@ -55,7 +56,7 @@ Manual QR-payment submissions: your account, name, selected product and term, am
 
 Account-linked learning progress: Android currently synchronizes bookmarks, mistakes/review records, per-question correct/incorrect attempt history, completed session history and metadata, and study-time entries after optional sign-in when online. Website/PWA learning progress also includes its supported saved/resumable sessions, answers and progress state, mock-exam progress, and daily check-in/streak information. The learning-progress service validates access to saved question content before it stores or returns a snapshot.
 
-Browser storage and cookies: the website/PWA uses browser storage such as localStorage, IndexedDB, and service-worker caches for sign-in state, settings, learning progress, and offline application/content data. These are browser storage mechanisms and are not advertising cookies. Hyperion does not intentionally use cookies for advertising or cross-site behavioral tracking. A third-party hosted payment page may use its own cookies or similar technologies under that provider's policy. Clearing browser storage can remove local-only data or require you to sign in again.
+Browser storage and cookies: the website/PWA uses browser storage such as localStorage, IndexedDB, and service-worker caches for sign-in state, settings, learning progress, and offline application/content data. Free-reviewer questions on the PWA require an internet connection; locally saved encrypted question-bank packs are restricted to licensed tracks and may be removed when the license or device cache no longer permits access. These are browser storage mechanisms and are not advertising cookies. Hyperion does not intentionally use cookies for advertising or cross-site behavioral tracking. A third-party hosted payment page may use its own cookies or similar technologies under that provider's policy. Clearing browser storage can remove local-only data or require you to sign in again.
 
 Account activity timestamps: the website records recent authenticated activity and the signed-in Android app reports account activity when a saved Hyperion session is restored or synchronized. The backend limits activity timestamp updates to at most once every 15 minutes per account. These timestamps support account security, last-activity display, and the disclosed inactivity-retention process; they are not precise location tracking.
 
@@ -89,7 +90,7 @@ Hyperion does not display third-party advertisements and does not sell personal 
 7. DATA RETENTION
 Android study data remains in the app's private storage until you clear app storage or uninstall the app. When you are signed in, supported bookmarks, mistakes/review records, per-question correct/incorrect attempt history, study-time segments, and completed session history are also stored in your private account-linked learning-progress snapshot. Records that have not synchronized remain only on the device. Account deletion removes the linked cloud copy but does not erase local Android study records. Android sign-in sessions and cached account entitlements remain in encrypted app storage while needed for sign-in and license recognition. Signing out clears the Hyperion account session and linked entitlement cache. Google Play's purchase records remain subject to Google's retention practices.
 
-Website account and learning progress are retained while the account and service are active, until you delete the account, or until the automated inactivity-retention process completes, subject to necessary security, audit, backup, payment, or legal exceptions. For an account with no active website or linked Google Play entitlement, 30 consecutive days without a recorded authenticated account-activity timestamp marks it inactive, followed by a separate 30-day grace period. A valid active website or linked Google Play entitlement defers inactivity-based deletion. After a license expires, a renewal grace period of at least 30 days applies; automated deletion is considered only after both the expiry-based grace period and inactivity-plus-grace deadline have passed, using the later deadline. Pending or unresolved website payments, administrator status, or a need to preserve administrative audit records can defer or exclude automated deletion.
+Website account and account-linked learning progress, including supported synchronized Android learning records, are retained while the account and service are active, until you delete the account, or until the automated inactivity-retention process completes, subject to necessary security, audit, backup, payment, or legal exceptions. For an account with no active website or linked Google Play entitlement, 30 consecutive days without a recorded authenticated account-activity timestamp marks it inactive, followed by a separate 30-day grace period. A valid active website or linked Google Play entitlement defers inactivity-based deletion. After a license expires, a renewal grace period of at least 30 days applies; automated deletion is considered only after both the expiry-based grace period and inactivity-plus-grace deadline have passed, using the later deadline. Pending or unresolved website payments, administrator status, or a need to preserve administrative audit records can defer or exclude automated deletion.
 
 Website payment and license records are used to grant access, verify payments, manage expiry, resolve payment questions, prevent duplicate transactions, and meet legal or accounting obligations. The account-deletion flow removes account-linked website orders and entitlements when it completes, but some provider records, backups, security logs, or records required or permitted by law may remain.
 
