@@ -259,7 +259,7 @@ private fun PopupPlanBox(
 }
 
 /**
- * The nine benefits of a licensed reviewer track, matching the Bond Store on
+ * The ten benefits of a licensed reviewer track, matching the Bond Store on
  * hyperionmaritime.org. No free access is promised for timed mock examinations.
  */
 internal fun premiumFeaturesForTrack(competencies: String): List<String> = listOf(
@@ -270,8 +270,9 @@ internal fun premiumFeaturesForTrack(competencies: String): List<String> = listO
     "Quick Scan Mode",
     "Mistakes Notebook and bookmarks",
     "Full-text question search",
-    "Offline review after downloading",
-    "Study history and cross-device progress sync"
+    "Offline access",
+    "Study history and cross-device progress sync",
+    "Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."
 )
 
 @Composable
@@ -447,7 +448,7 @@ internal fun StorePopupCard(
                         PopupStat("MOCK EXAM", mockItems, colors, Modifier.weight(1f))
                     }
 
-                    // All nine benefits are present immediately in both the Bond Store
+                    // All ten benefits are present immediately in both the Bond Store
                     // and locked-feature popup; only the card scrolls on small screens.
                     Column(
                         modifier = Modifier.testTag("store_perks_list_$productId"),

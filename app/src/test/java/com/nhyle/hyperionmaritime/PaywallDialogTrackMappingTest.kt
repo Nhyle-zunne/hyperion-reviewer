@@ -52,16 +52,17 @@ class PaywallDialogTrackMappingTest {
     }
 
     @Test
-    fun everyProductPopupContainsNineRelevantBenefits() {
+    fun everyProductPopupContainsTenRelevantBenefits() {
         for (count in listOf("12", "2", "13", "18", "14")) {
             val perks = premiumFeaturesForTrack(count)
-            assertEquals(9, perks.size)
-            assertEquals(9, perks.distinct().size)
+            assertEquals(10, perks.size)
+            assertEquals(10, perks.distinct().size)
             assertTrue(perks.contains("Unlimited timed mock exams"))
             assertTrue(perks.contains("Full question bank across $count competencies"))
             assertTrue(perks.contains("Quick Scan Mode"))
             assertTrue(perks.contains("Mistakes Notebook and bookmarks"))
-            assertTrue(perks.contains("Offline review after downloading"))
+            assertTrue(perks.contains("Offline access"))
+            assertTrue(perks.contains("Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."))
             assertTrue(perks.contains("Study history and cross-device progress sync"))
         }
     }
