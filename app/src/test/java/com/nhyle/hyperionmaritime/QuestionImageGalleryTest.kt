@@ -10,6 +10,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.model.*
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
+import com.nhyle.hyperionmaritime.ui.components.questionDiagramThumbnailSize
+import com.nhyle.hyperionmaritime.ui.components.boundedDiagramZoom
+import androidx.compose.ui.unit.dp
 import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
 import kotlinx.coroutines.runBlocking
 import org.junit.*
@@ -68,16 +71,47 @@ class QuestionImageGalleryTest {
         "Read chart", listOf("A", "B"), 0, "Explanation", Difficulty.EASY, imageAttachments = listOf(ref))
     private fun awaitImage() { compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(ref.alt).fetchSemanticsNodes().isNotEmpty() } }
 
+    @Test fun thumbnailUsesRelativeBoundsAndPreservesAspectRatioAcrossDevices() {
+        val phoneLandscape = questionDiagramThumbnailSize(400.dp, 800.dp, 1200, 600)
+        Assert.assertEquals(288f, phoneLandscape.width.value, 0.01f)
+        Assert.assertEquals(144f, phoneLandscape.height.value, 0.01f)
+
+        val phonePortrait = questionDiagramThumbnailSize(400.dp, 800.dp, 600, 1200)
+        Assert.assertEquals(152f, phonePortrait.width.value, 0.01f)
+        Assert.assertEquals(304f, phonePortrait.height.value, 0.01f)
+
+        val tabletLandscape = questionDiagramThumbnailSize(1400.dp, 1100.dp, 3000, 1000)
+        Assert.assertEquals(520f, tabletLandscape.width.value, 0.01f)
+        Assert.assertTrue(tabletLandscape.height <= 360.dp)
+
+        val splitScreen = questionDiagramThumbnailSize(240.dp, 500.dp, 1024, 768)
+        Assert.assertTrue(splitScreen.width <= 240.dp * 0.72f)
+        Assert.assertTrue(splitScreen.height <= 500.dp * 0.38f)
+
+        Assert.assertEquals(1f, boundedDiagramZoom(0.3f), 0.001f)
+        Assert.assertEquals(2.5f, boundedDiagramZoom(9f), 0.001f)
+        Assert.assertEquals(1.75f, boundedDiagramZoom(1.75f), 0.001f)
+    }
+
     @Test fun ownerChangeRemovesImageAndOpenZoom() {
         compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question") } }
         awaitImage()
         compose.onNodeWithContentDescription(ref.alt).performClick()
-        compose.onNodeWithText("Zoom out").assertIsNotEnabled()
-        compose.onNodeWithText("Zoom in").performClick()
-        compose.onNodeWithText("Zoom out").assertIsEnabled()
+        compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
+        compose.onNodeWithText("100%").assertExists()
+        compose.onNodeWithContentDescription("Zoom in").performClick()
+        compose.onNodeWithText("125%").assertExists()
+        compose.onNodeWithContentDescription("Zoom out").assertIsEnabled()
+        repeat(5) { compose.onNodeWithContentDescription("Zoom in").performClick() }
+        compose.onNodeWithText("250%").assertExists()
+        compose.onNodeWithContentDescription("Zoom in").assertIsNotEnabled()
+        repeat(6) { compose.onNodeWithContentDescription("Zoom out").performClick() }
+        compose.onNodeWithText("100%").assertExists()
+        compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithContentDescription(ref.alt).performClick()
-        compose.onNodeWithText("Zoom out").assertIsNotEnabled()
+        compose.onNodeWithText("100%").assertExists()
+        compose.onNodeWithContentDescription("Zoom out").assertIsNotEnabled()
         compose.runOnIdle { LicenseManager.setCurrentAccountUserId(context, "22222222-2222-4222-8222-222222222222") }
         compose.onNodeWithText("Close").assertDoesNotExist()
         compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
