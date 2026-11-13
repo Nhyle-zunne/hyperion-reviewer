@@ -20,3 +20,17 @@ Verification evidence will be recorded below after execution.
 - Local `node scripts/tests/agent-skills-test.mjs`, `python3 scripts/tests/question-bank-asset-safety.py`, and `git diff --check` passed. Android verification runs in the PR's unsigned Android CI; local SDK/Gradle are unavailable and were not installed.
 
 Limitations: no physical-device gesture/TalkBack or live licensed service acceptance; superseded in-flight network responses are guarded in production but are not simulated in these cache-based tests. No signed build, store release, real image upload, bank/key edit, or default smart-bank enablement.
+
+## Image-only compatibility follow-up
+
+- All numbered native CSV readers and normalized GMDSS rows accept blank stems
+  only with validated question-placement media; explanation-only media is rejected.
+- Explicit normalized headers set the first data row even in one- and two-question
+  GMDSS files. Existing encrypted synthetic fixtures exposed the previous short-file
+  skip in CI runs 43334401847 and 43334401886; the parser row-start rule is corrected.
+- Session snapshots, mistakes and cloud bookmarks retain image references; Room
+  7-to-8 adds the column without deleting legacy questions or bookmarks.
+- Regression coverage includes malformed/missing prompt media, answer/ID retention,
+  saved-question round trips, corrupt-session rejection and a real SQLite migration.
+- Final unsigned verification is tracked on PR #22; physical-device and live
+  licensed delivery acceptance remain outside the automated checks above.

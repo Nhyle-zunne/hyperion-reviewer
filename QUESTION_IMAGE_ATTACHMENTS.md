@@ -67,3 +67,16 @@ cache. They cover owner switch, access revocation, expiry without a license
 update event, revised references, track changes, Retry, hash tampering, zoom
 reset and one image at both placements. Physical-device pinch/TalkBack behavior
 and live licensed network delivery still require device acceptance testing.
+
+## Image-only prompts and saved progress
+
+Native numbered CSV readers and normalized GMDSS readers accept a blank question
+stem only when `HYPERION_MEDIA` contains a validated `question` image reference.
+Missing, malformed or explanation-only media cannot supply the prompt. Explicitly
+headed normalized GMDSS files also support one- and two-question banks. Existing
+question IDs, option order and correct-answer indices keep their existing rules.
+
+Active-session snapshots, mistake entries and cloud bookmark snapshots preserve
+image references. The Room version-7-to-8 migration adds the image-reference
+column with an empty-array default and preserves existing questions and bookmarks.
+Image-only saved questions require a valid prompt image when restored.
