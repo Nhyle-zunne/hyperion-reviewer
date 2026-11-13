@@ -55,6 +55,20 @@ class ImageOnlyQuestionTest {
         } finally { file.delete(); MaritimeQuestionBank.appContext = previousContext }
     }
 
+    @Test fun shortNormalizedGmdssFilesPreserveImageOnlyRowsAndOrdinalIds() {
+        for ((part, count) in listOf(9991 to 1, 9992 to 2)) {
+            val parsed = ProQuestionRepository.loadRawPartQuestions(context, "C1", part)
+            assertEquals("Explicit normalized header must admit $count prompt rows", count, parsed.size)
+            assertEquals((1..count).map { "C1-P$part-$it" }, parsed.map { it.id })
+            parsed.forEach { q ->
+                assertEquals("", q.questionText)
+                assertEquals(listOf("North", "South", "East", "West"), q.options)
+                assertEquals(2, q.correctAnswerIndex)
+                assertEquals(listOf(ref.copy(alt = "Synthetic GMDSS chart")), q.imageAttachments)
+            }
+        }
+    }
+
     @Test fun sessionSnapshotPreservesImageOnlyQuestionAndAnswerOrder() {
         val q = question()
         val snapshot = ActiveSessionSnapshot("image-only-test", q.track.name, "PRACTICE", "C1", listOf(q),
