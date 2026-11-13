@@ -50,6 +50,17 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.ui.semantics.Role
+import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.Track
+import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
+
 /**
  * Keep diagrams proportionate on phones, tablets and split-screen windows.
  * The bounds use percentages, while caps prevent oversized tablets or tall diagrams.
@@ -64,16 +75,6 @@ internal fun questionDiagramThumbnailSize(availableWidth: Dp, screenHeight: Dp, 
 }
 
 internal fun boundedDiagramZoom(value: Float): Float = value.coerceIn(1f, 2.5f)
-import androidx.compose.ui.semantics.Role
-import com.nhyle.hyperionmaritime.data.model.Question
-import com.nhyle.hyperionmaritime.data.model.Track
-import com.nhyle.hyperionmaritime.data.util.LicenseManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
 
 private fun decodeBounded(bytes: ByteArray): ImageBitmap? {
     val probe = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -221,7 +222,7 @@ fun QuestionImageGallery(question: Question, placement: String) {
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedButton(
