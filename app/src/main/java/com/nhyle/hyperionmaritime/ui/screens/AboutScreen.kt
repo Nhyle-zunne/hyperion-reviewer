@@ -145,12 +145,12 @@ fun AboutScreen(
             MianSectionHeader(title = "STUDY TOOLS")
             AboutItemCard(
                 title = "PRACTICE AND QUICK SCAN",
-                description = "Practice sessions, competence-focused drills, Quick Scan, and targeted question review.",
+                description = "Free Reviewer offers a limited study pool. Practice All, Quick Scan and question-bank search require an active track license.",
                 icon = Icons.Default.Search
             )
             AboutItemCard(
                 title = "MOCK EXAMINATIONS",
-                description = "Timed exam-style practice with results and review tools.",
+                description = "Timed mock examinations, scores and exam review are available with an active license for the selected track.",
                 icon = Icons.Default.Description
             )
             AboutItemCard(
@@ -160,14 +160,14 @@ fun AboutScreen(
             )
             AboutItemCard(
                 title = "LOCAL-FIRST AND OFFLINE USE",
-                description = "Android study records are stored locally. Supported question content and licensed features can be used offline subject to the app's current access checks.",
+                description = "Android study records are saved locally. Licensed question content can be studied offline when available on this device and allowed by the active track license.",
                 icon = Icons.Default.Storage
             )
 
             MianSectionHeader(title = "ACCOUNTS AND LICENSES")
             AboutItemCard(
                 title = "OPTIONAL ANDROID SIGN-IN",
-                description = "Google sign-in is optional on Android. When signed in with the same Hyperion account on the website, eligible website and Google Play entitlements can be synchronized across platforms.",
+                description = "Google sign-in is optional on Android. It can synchronize eligible website and Play licenses with the same Hyperion account, but signing in alone does not unlock paid features.",
                 icon = Icons.Default.Info
             )
             AboutItemCard(

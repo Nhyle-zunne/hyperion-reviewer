@@ -6,13 +6,13 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object LegalAgreementText {
     const val TITLE = "TERMS OF USE"
-    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: October 31, 2026"
+    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: November 14, 2026"
     const val TERMS_VERSION = "2026-10-31-2"
 
     const val DISCLAIMER_SUMMARY = """Hyperion Maritime Reviewer is an independent educational resource. It is not MARINA, a government service, a maritime administration, a licensing board, or an examination authority, and it is not affiliated with, endorsed by, or authorized by those bodies. It does not guarantee examination results, a Certificate of Competency, an endorsement, or employment."""
 
     const val FULL_AGREEMENT_TEXT = """TERMS OF USE
-Effective Date: October 30, 2026 · Last Updated: October 31, 2026
+Effective Date: October 30, 2026 · Last Updated: November 14, 2026
 Service / Developer: Hyperion Maritime
 Website: https://hyperionmaritime.org
 Contact: hyperionmaritimex@gmail.com
@@ -37,7 +37,7 @@ Website/PWA: sign-in is required for account-based features, website checkout, l
 Accounts and access are personal. Do not impersonate another person, access another user's account or data, sell or share account credentials, or use Hyperion for deceptive or unlawful purposes.
 
 4. FREE ACCESS, LICENSES, AND PURCHASES
-Some tracks, sample questions, or features may be available without payment. Other access may require a paid entitlement, an approved manual license, or a valid offline activation pass. Check the platform, track, price, term, renewal information, and access conditions displayed before confirming a purchase.
+The Free Reviewer is available without a paid license for the selected track. Users without an active track license see Free Reviewer and an option to unlock the full reviewer; Timed Mock Exam, Practice All, Quick Scan, Flashcards, Mistakes Notebook, question-bank search, and licensed offline downloads are full-reviewer features. An active license must cover the selected track; signing in alone does not grant premium access. Other access may be granted by an approved manual license or a valid offline activation pass where offered. Check the platform, track, price, term, renewal information, and access conditions displayed before confirming a purchase.
 
 4.1 Google Play subscriptions (Android)
 Purchases made through the Android app's Google Play checkout are processed and billed by Google Play. The exact product, price, subscription duration, introductory offer, renewal timing, and conditions are those shown in the Google Play purchase flow. Subscriptions renew automatically when the selected Play offer is an auto-renewing subscription, unless cancelled through Google Play before its applicable renewal deadline.
@@ -74,7 +74,7 @@ Android study activity is stored locally first, and Google sign-in remains optio
 
 Android active or resumable sessions, app preferences, and other unsupported or device-specific records are not currently part of cross-platform progress synchronization. Clearing app storage or uninstalling the app may permanently remove Android-only records and any progress that has not yet synchronized. Account deletion removes the account-linked cloud copy but does not erase Android records that remain on the device.
 
-The website/PWA uses browser storage and service-worker caches for local state and offline operation. When signed in and online, supported website learning data may be synchronized with your Hyperion account. Not every browser-local item, setting, cache, or device-specific record is synchronized or recoverable. Clearing browser storage may remove local-only data or require you to sign in again.
+The website/PWA uses browser storage and service-worker caches for local state and licensed offline operation. Its Free Reviewer requires an internet connection; downloadable offline question-bank packs are limited to active licenses for the selected track. When signed in and online, supported website learning data may be synchronized with your Hyperion account. Not every browser-local item, setting, cache, or device-specific record is synchronized or recoverable. Clearing browser storage may remove local-only data or require you to sign in again.
 
 License synchronization and study-progress synchronization are separate services. Study-progress synchronization is limited to the record types described above; it does not transfer every Android or browser-local record, preference, active session, or offline cache between platforms.
 
