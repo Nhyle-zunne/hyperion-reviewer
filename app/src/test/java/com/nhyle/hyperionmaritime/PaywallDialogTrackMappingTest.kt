@@ -5,6 +5,7 @@ import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.ui.components.paywallProductIdForTrack
 import com.nhyle.hyperionmaritime.ui.screens.ReviewerHomeMode
 import com.nhyle.hyperionmaritime.ui.screens.reviewerHomeModesForLicense
+import com.nhyle.hyperionmaritime.ui.screens.unlockReviewerCardCopy
 import com.nhyle.hyperionmaritime.ui.store.premiumFeaturesForTrack
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,6 +42,13 @@ class PaywallDialogTrackMappingTest {
         assertFalse(modes.contains(ReviewerHomeMode.FREE))
         assertFalse(modes.contains(ReviewerHomeMode.UNLOCK))
         assertEquals(reviewerHomeModesForLicense(false), reviewerHomeModesForLicense(false))
+    }
+
+    @Test
+    fun unlicensedUnlockCardUsesUppercaseTitleAndBuyNowAction() {
+        val copy = unlockReviewerCardCopy()
+        assertEquals("UNLOCK FULL REVIEWER", copy.title)
+        assertEquals("BUY NOW", copy.actionText)
     }
 
     @Test
