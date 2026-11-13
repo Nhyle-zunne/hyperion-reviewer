@@ -41,6 +41,8 @@ Google Play purchases: Google Play Billing processes Android purchases and subsc
 
 Device-bound activation and promo-code checks: Some offline activation or licensing features use a terminal code derived from Android's secure device identifier. That code is used for local device binding and may be shared with Hyperion support if you choose to provide it. Online promo-code and activation-status checks use Firebase Remote Config. Firebase Remote Config uses a Firebase Installation ID to select configuration values for the app; Google/Firebase may also process app identifiers and technical service information, such as IP address, to provide and secure that service. The current Android app version does not use Cloud Firestore to record promo-code activations.
 
+Licensed question diagrams: Questions may include images fetched through authenticated media delivery. The Android app can cache verified images in private, account- and track-scoped files; the website/PWA can use its private IndexedDB cache. Current track-license checks still apply when cached images are opened. Clearing app or browser storage removes the local copies. Ordinary review does not request camera or photo-library access.
+
 Permissions and sensors: The current Android manifest requests Internet and network-state access. It removes the Google advertising ID permission and does not request contacts, photos, camera, microphone, or location permissions. If you voluntarily send us a screenshot, device code, or other support information, we process what you choose to share.
 
 2.2 WEBSITE AND PWA
