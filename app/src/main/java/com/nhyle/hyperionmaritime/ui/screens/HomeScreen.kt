@@ -113,6 +113,12 @@ internal fun reviewerHomeModesForLicense(isTrackUnlocked: Boolean): List<Reviewe
         ReviewerHomeMode.SEARCH
     ) else listOf(ReviewerHomeMode.FREE, ReviewerHomeMode.UNLOCK)
 
+internal data class UnlockReviewerCardCopy(val title: String, val actionText: String)
+internal fun unlockReviewerCardCopy() = UnlockReviewerCardCopy(
+    title = "UNLOCK FULL REVIEWER",
+    actionText = "BUY NOW"
+)
+
 /**
  * Editorial MIAN "Spaghetti" HomeScreen:
  * Heavy grotesk typography, rules instead of boxed cards, 2dp corners, flat surfaces, tomato red accents.
@@ -498,14 +504,16 @@ fun HomeScreen(
                         )
                     }
                         ReviewerHomeMode.UNLOCK -> Box(modifier = Modifier.weight(1f)) {
+                        val copy = unlockReviewerCardCopy()
                         CompactModeBox(
-                            title = "Unlock FULL reviewer",
+                            title = copy.title,
                             subtitle = "Get Practice All, Quick Scan, Timed Mock Exam, Flashcards and all licensed study tools.",
                             badge = "FULL ACCESS",
                             badgeColor = colors.accent,
                             icon = Icons.Default.Lock,
                             accentColor = colors.accent,
                             isLocked = false,
+                            actionText = copy.actionText,
                             onClick = { viewModel.triggerPaywall(selectedTrack) }
                         )
                     }
@@ -1162,6 +1170,7 @@ private fun CompactModeBox(
     icon: ImageVector,
     accentColor: Color,
     isLocked: Boolean = false,
+    actionText: String? = null,
     onClick: () -> Unit
 ) {
     val colors = LocalSpaghettiColors.current
@@ -1283,7 +1292,7 @@ private fun CompactModeBox(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isLocked) "REQUIRES UPGRADES" else "SELECT MODE",
+                        text = actionText ?: if (isLocked) "REQUIRES UPGRADES" else "SELECT MODE",
                         fontFamily = FontFamily.Monospace,
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.SemiBold,
