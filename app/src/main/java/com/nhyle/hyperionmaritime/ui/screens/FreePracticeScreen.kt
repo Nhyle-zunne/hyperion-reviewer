@@ -1,5 +1,6 @@
 package com.nhyle.hyperionmaritime.ui.screens
 
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -174,6 +175,8 @@ fun FreePracticeScreen(
                 )
             }
 
+            QuestionImageGallery(question = question, placement = "question")
+
             // Options
             question.options.forEachIndexed { optIndex, optionText ->
                 val isSelected = currentState?.selectedIndex == optIndex
@@ -212,6 +215,7 @@ fun FreePracticeScreen(
                     containerColor = colors.surface2
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
+                        QuestionImageGallery(question = question, placement = "explanation")
                         Text(
                             text = if (isAnswerCorrect) "CORRECT (+1 PT)" else "INCORRECT (0 PTS)",
                             style = MaterialTheme.typography.labelSmall,

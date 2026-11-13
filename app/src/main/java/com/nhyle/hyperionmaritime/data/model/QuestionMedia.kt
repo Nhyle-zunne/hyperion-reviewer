@@ -2,6 +2,7 @@ package com.nhyle.hyperionmaritime.data.model
 
 import org.json.JSONArray
 import org.json.JSONException
+import org.json.JSONObject
 
 /**
  * Shared CSV HYPERION_MEDIA column contract for Android and PWA.
@@ -26,6 +27,18 @@ object QuestionMedia {
     private val shaPattern = Regex("^[a-f0-9]{64}$")
     private val validMime = setOf("image/webp", "image/png", "image/jpeg")
     private val validPlacement = setOf("question", "explanation")
+
+    fun hasPrompt(text: String, images: List<QuestionImageRef>): Boolean =
+        text.isNotBlank() || images.any { it.placement == "question" }
+
+    fun toJson(images: List<QuestionImageRef>): JSONArray = JSONArray().apply {
+        images.forEach { ref -> put(JSONObject().apply {
+            put("sha256", ref.sha256)
+            put("mime", ref.mime)
+            put("placement", ref.placement)
+            put("alt", ref.alt)
+        }) }
+    }
 
     fun fromCsvRow(header: List<String>, row: List<String>): List<QuestionImageRef> {
         val index = header.indexOfFirst { it.trim().equals(COLUMN, ignoreCase = true) }

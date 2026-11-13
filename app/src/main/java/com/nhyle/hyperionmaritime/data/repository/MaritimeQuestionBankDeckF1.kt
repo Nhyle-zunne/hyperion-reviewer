@@ -128,6 +128,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -135,12 +136,13 @@ object MaritimeQuestionBankDeckF1 {
                 val ansStr = row[6].trim().uppercase()
 
                 val qNoInt = qNo.toIntOrNull()
-                val isHeader = qText.equals("Question", ignoreCase = true) || qText.isBlank()
+                val isHeader = qText.equals("Question", ignoreCase = true)
                 val isDummyOptions = optA == "A" && optB == "B" && optC == "C" && optD == "D"
+                val isImageOnly = qText.isBlank() && images.any { it.placement == "question" }
 
-                if (qNoInt != null && qNoInt > 0 && !isHeader && !isDummyOptions) {
+                if (qNoInt != null && qNoInt > 0 && !isHeader && (!isDummyOptions || isImageOnly)) {
                     val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
-                    if (qText.isNotEmpty() && options.size >= 2) {
+                    if (QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                         val ansIdx = when (ansStr) {
                             "A", "1" -> 0
                             "B", "2" -> 1
@@ -168,7 +170,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                             )
                         )
@@ -302,6 +304,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -309,12 +312,13 @@ object MaritimeQuestionBankDeckF1 {
                 val ansStr = row[6].trim().uppercase()
 
                 val qNoInt = qNo.toIntOrNull()
-                val isHeader = qText.equals("Question", ignoreCase = true) || qText.isBlank()
+                val isHeader = qText.equals("Question", ignoreCase = true)
                 val isDummyOptions = optA == "A" && optB == "B" && optC == "C" && optD == "D"
+                val isImageOnly = qText.isBlank() && images.any { it.placement == "question" }
 
-                if (qNoInt != null && qNoInt > 0 && !isHeader && !isDummyOptions) {
+                if (qNoInt != null && qNoInt > 0 && !isHeader && (!isDummyOptions || isImageOnly)) {
                     val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
-                    if (qText.isNotEmpty() && options.size >= 2) {
+                    if (QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                         val ansIdx = when (ansStr) {
                             "A", "1" -> 0
                             "B", "2" -> 1
@@ -342,7 +346,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                             )
                         )
@@ -427,6 +431,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -434,12 +439,13 @@ object MaritimeQuestionBankDeckF1 {
                 val ansStr = row[6].trim().uppercase()
 
                 val qNoInt = qNo.toIntOrNull()
-                val isHeader = qText.equals("Question", ignoreCase = true) || qText.isBlank()
+                val isHeader = qText.equals("Question", ignoreCase = true)
                 val isDummyOptions = optA == "A" && optB == "B" && optC == "C" && optD == "D"
+                val isImageOnly = qText.isBlank() && images.any { it.placement == "question" }
 
-                if (qNoInt != null && qNoInt > 0 && !isHeader && !isDummyOptions) {
+                if (qNoInt != null && qNoInt > 0 && !isHeader && (!isDummyOptions || isImageOnly)) {
                     val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
-                    if (qText.isNotEmpty() && options.size >= 2) {
+                    if (QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                         val ansIdx = when (ansStr) {
                             "A", "1" -> 0
                             "B", "2" -> 1
@@ -467,7 +473,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                             )
                         )
@@ -552,6 +558,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -559,12 +566,13 @@ object MaritimeQuestionBankDeckF1 {
                 val ansStr = row[6].trim().uppercase()
 
                 val qNoInt = qNo.toIntOrNull()
-                val isHeader = qText.equals("Question", ignoreCase = true) || qText.isBlank()
+                val isHeader = qText.equals("Question", ignoreCase = true)
                 val isDummyOptions = optA == "A" && optB == "B" && optC == "C" && optD == "D"
+                val isImageOnly = qText.isBlank() && images.any { it.placement == "question" }
 
-                if (qNoInt != null && qNoInt > 0 && !isHeader && !isDummyOptions) {
+                if (qNoInt != null && qNoInt > 0 && !isHeader && (!isDummyOptions || isImageOnly)) {
                     val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
-                    if (qText.isNotEmpty() && options.size >= 2) {
+                    if (QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                         val ansIdx = when (ansStr) {
                             "A", "1" -> 0
                             "B", "2" -> 1
@@ -592,7 +600,7 @@ object MaritimeQuestionBankDeckF1 {
                                 correctAnswerIndex = ansIdx,
                                 explanation = row.getOrNull(7).orEmpty(),
                                 isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                             )
                         )
@@ -685,6 +693,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -693,7 +702,7 @@ object MaritimeQuestionBankDeckF1 {
 
                 val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
                 val qNoInt = qNo.toIntOrNull()
-                if (qNoInt != null && qNoInt > 0 && qText.isNotEmpty() && options.size >= 2) {
+                if (qNoInt != null && qNoInt > 0 && QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                     val ansIdx = when (ansStr) {
                         "A", "1" -> 0
                         "B", "2" -> 1
@@ -721,7 +730,7 @@ object MaritimeQuestionBankDeckF1 {
                             correctAnswerIndex = ansIdx,
                             explanation = row.getOrNull(7).orEmpty(),
                             isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                         )
                     )
@@ -829,6 +838,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -837,7 +847,7 @@ object MaritimeQuestionBankDeckF1 {
 
                 val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
                 val qNoInt = qNo.toIntOrNull()
-                if (qNoInt != null && qNoInt in 1..533 && qText.isNotEmpty() && options.size >= 2) {
+                if (qNoInt != null && qNoInt in 1..533 && QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                     val ansIdx = when (ansStr) {
                         "A", "1" -> 0
                         "B", "2" -> 1
@@ -864,7 +874,7 @@ object MaritimeQuestionBankDeckF1 {
                         correctAnswerIndex = ansIdx,
                         explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                     )
                 }
@@ -999,6 +1009,7 @@ object MaritimeQuestionBankDeckF1 {
             if (row.size >= 7) {
                 val qNo = row[0].trim()
                 val qText = row[1].trim()
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                 val optA = row[2].trim()
                 val optB = row[3].trim()
                 val optC = row[4].trim()
@@ -1007,7 +1018,7 @@ object MaritimeQuestionBankDeckF1 {
 
                 val options = listOf(optA, optB, optC, optD).filter { it.isNotEmpty() }
                 val qNoInt = qNo.toIntOrNull()
-                if (qNoInt != null && qNoInt in 1..508 && qText.isNotEmpty() && options.size >= 2) {
+                if (qNoInt != null && qNoInt in 1..508 && QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                     val ansIdx = when (ansStr) {
                         "A", "1" -> 0
                         "B", "2" -> 1
@@ -1034,7 +1045,7 @@ object MaritimeQuestionBankDeckF1 {
                         correctAnswerIndex = ansIdx,
                         explanation = row.getOrNull(7).orEmpty(),
                         isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
-                                imageAttachments = QuestionMedia.fromCsvRow(mediaHeader, row),
+                                imageAttachments = images,
                             difficulty = diff
                     )
                 }

@@ -6,6 +6,9 @@ import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.QuestionImageRef
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -58,13 +61,14 @@ internal object VerifiedQuestionMediaStore {
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 255) } == ref.sha256
 
-    private fun boundedBytes(connection: HttpURLConnection): ByteArray {
+    private suspend fun boundedBytes(connection: HttpURLConnection): ByteArray {
         val declared = connection.contentLength
         if (declared > MAX_BYTES) throw IllegalStateException("Image exceeds private media limit")
         val output = ByteArrayOutputStream()
         connection.inputStream.use { input ->
             val part = ByteArray(8192)
             while (true) {
+                currentCoroutineContext().ensureActive()
                 val len = input.read(part)
                 if (len < 0) break
                 if (output.size() + len > MAX_BYTES) throw IllegalStateException("Oversized image")
@@ -95,8 +99,15 @@ internal object VerifiedQuestionMediaStore {
                 destination.delete()
             }
 
-            val (authenticatedOwner, jwt) = SupabaseAccountManager.authenticatedQuestionMediaSession(app)
-                ?: return@withContext null
+            val session = try {
+                SupabaseAccountManager.authenticatedQuestionMediaSession(app)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val (authenticatedOwner, jwt) = session ?: return@withContext null
+            currentCoroutineContext().ensureActive()
             if (authenticatedOwner != owner) return@withContext null
             val endpoint = BuildConfig.SUPABASE_URL.trimEnd('/') +
                 "/functions/v1/question-media?track=${track.name}&sha256=${ref.sha256}&mime=${java.net.URLEncoder.encode(ref.mime,"UTF-8")}"
@@ -114,6 +125,7 @@ internal object VerifiedQuestionMediaStore {
                     return@withContext null
                 }
                 val bytes = boundedBytes(connection)
+                currentCoroutineContext().ensureActive()
                 if (!verifies(bytes,ref) ||
                     !LicenseManager.isTrackProUnlocked(app,track) ||
                     LicenseManager.getCurrentAccountUserId(app) != owner) return@withContext null
@@ -132,7 +144,11 @@ internal object VerifiedQuestionMediaStore {
                         }
                     } finally { tmp.delete() }
                 }
-                bytes
+                currentCoroutineContext().ensureActive()
+                if (LicenseManager.getCurrentAccountUserId(app) == owner &&
+                    LicenseManager.isTrackProUnlocked(app, track)) bytes else null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 null
             } finally {

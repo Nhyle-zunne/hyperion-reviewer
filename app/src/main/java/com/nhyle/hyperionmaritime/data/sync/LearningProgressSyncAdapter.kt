@@ -13,6 +13,7 @@ import com.nhyle.hyperionmaritime.data.local.QuestionAttemptRecord
 import com.nhyle.hyperionmaritime.data.local.QuestionHistoryEntry
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.studytime.StudyTimeSegmentEntity
@@ -23,7 +24,7 @@ import java.time.ZoneId
 
 /**
  * Bridges Android's existing offline-first stores to the PWA's version-1
- * learning-progress snapshot. No Room schema changes are required.
+ * learning-progress snapshot, including optional validated image references.
  *
  * Cloud reads/writes remain in SupabaseAccountManager and go through the
  * authenticated learning-progress Edge Function, which verifies saved-question
@@ -599,6 +600,7 @@ object LearningProgressSyncAdapter {
         put("competenceId", competenceId)
         put("topic", topic)
         put("questionText", questionText)
+        if (imageAttachments.isNotEmpty()) put("imageAttachments", QuestionMedia.toJson(imageAttachments))
         put("options", JSONArray(options))
         put("correctAnswerIndex", correctAnswerIndex)
         put("explanation", explanation)
@@ -609,9 +611,10 @@ object LearningProgressSyncAdapter {
         val id = optString("id").takeIf { it.isNotBlank() } ?: return null
         val track = runCatching { Track.valueOf(optString("track")) }.getOrNull() ?: return null
         val text = optString("questionText")
+        val images = QuestionMedia.parse(optJSONArray("imageAttachments")?.toString())
         val optionsJson = optJSONArray("options") ?: return null
         val options = (0 until optionsJson.length()).map { optionsJson.optString(it) }
-        if (text.isBlank() || options.isEmpty()) return null
+        if (!QuestionMedia.hasPrompt(text, images) || options.isEmpty()) return null
         val correct = optInt("correctAnswerIndex", -1)
         if (correct !in options.indices) return null
         val difficulty = runCatching { Difficulty.valueOf(optString("difficulty")) }.getOrDefault(Difficulty.EASY)
@@ -625,7 +628,8 @@ object LearningProgressSyncAdapter {
             options = options,
             correctAnswerIndex = correct,
             explanation = optString("explanation"),
-            difficulty = difficulty
+            difficulty = difficulty,
+            imageAttachments = images
         )
     }
 
@@ -634,7 +638,8 @@ object LearningProgressSyncAdapter {
         val options = runCatching { JSONArray(optionsJson) }.getOrNull() ?: return null
         val difficulty = runCatching { Difficulty.valueOf(difficulty) }.getOrDefault(Difficulty.EASY)
         val values = (0 until options.length()).map { options.optString(it) }
-        if (questionText.isBlank() || values.isEmpty() || correctAnswerIndex !in values.indices) return null
+        val images = QuestionMedia.parse(imageAttachmentsJson)
+        if (!QuestionMedia.hasPrompt(questionText, images) || values.isEmpty() || correctAnswerIndex !in values.indices) return null
         return Question(
             id = id,
             track = track,
@@ -645,7 +650,8 @@ object LearningProgressSyncAdapter {
             options = values,
             correctAnswerIndex = correctAnswerIndex,
             explanation = explanation,
-            difficulty = difficulty
+            difficulty = difficulty,
+            imageAttachments = images
         )
     }
 
@@ -659,6 +665,7 @@ object LearningProgressSyncAdapter {
         optionsJson = JSONArray(options).toString(),
         correctAnswerIndex = correctAnswerIndex,
         explanation = explanation,
-        difficulty = difficulty.name
+        difficulty = difficulty.name,
+        imageAttachmentsJson = QuestionMedia.toJson(imageAttachments).toString()
     )
 }

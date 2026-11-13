@@ -3,6 +3,7 @@ package com.nhyle.hyperionmaritime.data.local
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import org.json.JSONArray
@@ -50,6 +51,8 @@ object MistakesVaultManager {
                     val competenceId = qObj.optString("competenceId", competenceOrPart)
                     val topic = qObj.optString("topic", "")
                     val questionText = qObj.optString("questionText", "")
+                    val images = QuestionMedia.parse(qObj.optJSONArray("imageAttachments")?.toString())
+                    if (!QuestionMedia.hasPrompt(questionText, images)) continue
                     val optsArray = qObj.optJSONArray("options") ?: JSONArray()
                     val options = mutableListOf<String>()
                     for (j in 0 until optsArray.length()) {
@@ -74,7 +77,8 @@ object MistakesVaultManager {
                         explanation = explanation,
                         difficulty = difficulty,
                         isBookmarked = isBookmarked,
-                        isWrongInVault = isWrongInVault
+                        isWrongInVault = isWrongInVault,
+                        imageAttachments = images
                     )
                 } else {
                     MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == questionId } ?: Question(
@@ -127,6 +131,7 @@ object MistakesVaultManager {
                         put("competenceId", q.competenceId)
                         put("topic", q.topic)
                         put("questionText", q.questionText)
+                        if (q.imageAttachments.isNotEmpty()) put("imageAttachments", QuestionMedia.toJson(q.imageAttachments))
                         val opts = JSONArray()
                         q.options.forEach { opts.put(it) }
                         put("options", opts)
