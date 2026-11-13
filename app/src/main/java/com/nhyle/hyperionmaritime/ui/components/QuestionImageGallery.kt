@@ -67,8 +67,8 @@ import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
  */
 internal fun questionDiagramThumbnailSize(availableWidth: Dp, screenHeight: Dp, imageWidth: Int, imageHeight: Int): DpSize {
     if (imageWidth <= 0 || imageHeight <= 0) return DpSize(0.dp, 0.dp)
-    val maxWidth = minOf(availableWidth * 0.72f, 520.dp)
-    val maxHeight = minOf(screenHeight * 0.38f, 360.dp)
+    val maxWidth = minOf(availableWidth, 900.dp)
+    val maxHeight = minOf(screenHeight * 0.48f, 540.dp)
     val aspect = imageWidth.toFloat() / imageHeight
     val width = minOf(maxWidth, maxHeight * aspect)
     return DpSize(width, width / aspect)
