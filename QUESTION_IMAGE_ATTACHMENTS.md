@@ -13,13 +13,13 @@ Example one-image value:
 [{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mime":"image/webp","placement":"question","alt":"Example radar chart"}]
 ```
 
-The actual images are NEVER packaged into CSV files, URLs are NEVER placed inside bank records, and premium image downloads are authenticated through the Supabase `question-media` Edge Function. Native images are stored in app-private `filesDir`, keyed by owner/track/SHA and verified on every read; local access also requires the current device entitlement.
+Images are NEVER embedded in CSV files, and URLs are NEVER stored in bank records. The encrypted media files are stored alongside the encrypted questions under `app/src/main/assets/question-media/<TRACK>/<SHA>.<ext>.enc` and bundled directly into the APK. Android decrypts and verifies locally, with the existing device license or official Free Reviewer membership enforced before display. Previously downloaded images in app-private `filesDir` remain a verified backward-compatible fallback. **Android does not make network requests to load question images.**
 
 Quick Scan and Practice show diagrams and can enlarge them with pinch-to-zoom. Explanation diagrams are shown only after answering in practice review, while Quick Scan already displays the answer by design.
 
-**Sync caveat:** bank metadata is delivered through the existing encrypted question-bank format, but Android's `SMART_BANK_UPDATES_ENABLED` defaults **false**. A web admin edit does NOT instantly update an installed Android app. Issue a signed Android update with the refreshed encrypted CSV data, or separately validate and explicitly enable the authenticated smart-bank update route. Current users without an updated APK or remote bank update will not see new references. Uploaded images remain stored privately in Supabase, not in GitHub.
+**Sync caveat:** bank metadata remains in the encrypted question-bank CSV, and `SMART_BANK_UPDATES_ENABLED` defaults **false**. Admin image uploads are encrypted and staged in the `hyperion-reviewer` GitHub repository; publication promotes images and banks together to `main`. An installed APK does **not** automatically receive new files. Issue a signed app update containing the new bank and media assets, or explicitly validate an update mechanism that delivers and verifies both before enabling it. No Supabase Storage is used for new image uploads, publishing or Android image loading.
 
-The feature adds no repeated license polling and no user progress sync writes. The first image download uses protected Supabase Storage bandwidth, then the local SHA-verified copy is reused while the licensed owner remains entitled. Clearing app data removes offline copies.
+The feature adds no repeated license polling, no user progress sync writes and **zero image-delivery network traffic** on Android. APK-bundled encrypted media remains available offline for licensed users with valid local entitlement and for officially free questions. Clearing app data only removes the optional legacy private-file cache, not the encrypted images packaged in the app.
 
 ## Internal test of Android bank synchronization
 
@@ -80,3 +80,7 @@ Active-session snapshots, mistake entries and cloud bookmark snapshots preserve
 image references. The Room version-7-to-8 migration adds the image-reference
 column with an empty-array default and preserves existing questions and bookmarks.
 Image-only saved questions require a valid prompt image when restored.
+
+## Current media pipeline
+
+Admin uploads are authenticated through the existing PWA question-bank administration gate. Images are encrypted and staged in GitHub; validated publishing commits encrypted media files to this Android repository alongside encrypted bank updates. The Android app loads those bundled encrypted bytes directly from the APK and SHA-verifies each image. Paid access still requires a valid local entitlement; the official Free Reviewer only displays images belonging to its approved question pool. The existing Supabase Auth/licensing system is separate from media storage and image delivery.
