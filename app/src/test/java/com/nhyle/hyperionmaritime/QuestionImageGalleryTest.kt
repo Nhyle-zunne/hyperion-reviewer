@@ -93,6 +93,21 @@ class QuestionImageGalleryTest {
         Assert.assertEquals(1.75f, boundedDiagramZoom(1.75f), 0.001f)
     }
 
+    @Test fun freeReviewerDisplaysTrackUpgradeNoticeUntilLicensed() {
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false)
+        LicenseManager.setOicNwProUnlocked(context, false)
+        compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question", freeReviewer = true) } }
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertExists()
+        compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
+        compose.runOnIdle { LicenseManager.setOicNwProUnlocked(context, true) }
+        awaitImage()
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertDoesNotExist()
+        compose.runOnIdle { LicenseManager.setOicNwProUnlocked(context, false) }
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertExists()
+        compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
+    }
+
     @Test fun ownerChangeRemovesImageAndOpenZoom() {
         compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question") } }
         awaitImage()
