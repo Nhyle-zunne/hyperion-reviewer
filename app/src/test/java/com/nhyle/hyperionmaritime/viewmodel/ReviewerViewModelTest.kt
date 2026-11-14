@@ -126,6 +126,41 @@ class ReviewerViewModelTest {
         }
     }
 
+    @Test
+    fun unlicensedUserCannotOpenFullReviewerPagesOrStartARestrictedQuiz() {
+        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateTo(Screen.PracticeCompetenceSelect())
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C1"))
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+
+        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 5)
+        assertEquals("Paid practice must not fall back to a five-question quiz", Screen.Home, viewModel.currentScreen.value)
+
+        // Free Reviewer remains independent of paid Full Reviewer access.
+        val freeCompetences = Screen.PracticeCompetenceSelect(isCrpMode = true)
+        viewModel.navigateTo(freeCompetences)
+        assertEquals(freeCompetences, viewModel.currentScreen.value)
+        val freeConfig = Screen.PracticeConfig(competenceId = "C1", isCrpMode = true)
+        viewModel.navigateTo(freeConfig)
+        assertEquals(freeConfig, viewModel.currentScreen.value)
+    }
+
+    @Test
+    fun entitlementLossBlocksFurtherFullReviewerNavigationFromAnOpenConfig() {
+        LicenseManager.setOicNwProUnlocked(context, true)
+        viewModel.refreshUnlockStates()
+        val paidConfig = Screen.PracticeConfig(competenceId = "C1")
+        viewModel.navigateTo(paidConfig)
+        assertEquals(paidConfig, viewModel.currentScreen.value)
+
+        LicenseManager.setOicNwProUnlocked(context, false)
+        viewModel.refreshUnlockStates()
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C2"))
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+    }
+
     @After
     fun tearDown() {
         LicenseManager.setActivated(context, false)
