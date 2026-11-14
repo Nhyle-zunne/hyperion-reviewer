@@ -2219,7 +2219,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun canOpenPracticeScreen(screen: Screen): Boolean {
         val track = (screen as? Screen.PracticeConfig)?.track ?: _selectedTrack.value
         val isGmdssFreeReview = track == Track.GMDSS_GOC
-        val protected = when (screen) {
+        val isProtected = when (screen) {
             is Screen.PracticeCompetenceSelect ->
                 !screen.isCrpMode && !(isGmdssFreeReview && screen.isOperationalReview)
             is Screen.PracticeConfig ->
@@ -2233,7 +2233,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                     !(isGmdssFreeReview && _lastPracticeDrillConfig?.isOperationalReview == true)
             else -> false
         }
-        return !protected || isTrackUnlocked(track)
+        return !isProtected || isTrackUnlocked(track)
     }
 
     fun enforceActivePracticeAccess() {
