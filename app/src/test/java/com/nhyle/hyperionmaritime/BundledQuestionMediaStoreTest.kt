@@ -93,7 +93,7 @@ class BundledQuestionMediaStoreTest {
                 }
             }
         }
-        assertFalse(opened, "Free Reviewer image references must never open encrypted assets without a license")
+        assertFalse("Free Reviewer image references must never open encrypted assets without a license", opened)
     }
 
     @Test fun anotherTrackLicenseDoesNotUnlockThisTracksImages() {
@@ -107,7 +107,7 @@ class BundledQuestionMediaStoreTest {
                 }
             }
         }
-        assertFalse(opened, "A management license must not unlock OIC-NW question diagrams")
+        assertFalse("A management license must not unlock OIC-NW question diagrams", opened)
         LicenseManager.setEngineMgtProUnlocked(context, false)
     }
 
