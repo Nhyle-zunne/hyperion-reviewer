@@ -3260,9 +3260,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             shuffleQuestions = if (isGmdssOpReview) false else shuffleQuestions
         )
 
-        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode and NOT GMDSS Op Review and NOT MTestM Drill
-        if (!isPro && !isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value) {
-            questions = questions.take(5)
+        // Recheck at launch in case the license expired while the pool loaded.
+        // Full Reviewer must not turn into a five-question preview.
+        if (!isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value &&
+            !isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
         }
 
         if (shuffleChoices) {
