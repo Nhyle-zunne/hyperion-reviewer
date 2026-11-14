@@ -30,6 +30,7 @@ import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.data.util.calculateOfflineTrustedTime
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
+import com.nhyle.hyperionmaritime.viewmodel.Screen
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
