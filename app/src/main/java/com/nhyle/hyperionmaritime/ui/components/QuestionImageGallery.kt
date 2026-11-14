@@ -103,7 +103,7 @@ private fun decodeBounded(bytes: ByteArray): ImageBitmap? {
  * URI is ever exposed. Missing media never makes a text question unusable.
  */
 @Composable
-fun QuestionImageGallery(question: Question, placement: String) {
+fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Boolean = false) {
     val refs = question.imageAttachments.filter { it.placement == placement }
     if (refs.isEmpty()) return
     val context = LocalContext.current
@@ -126,8 +126,8 @@ fun QuestionImageGallery(question: Question, placement: String) {
         }
     }
     val owner = access.first
-    if (!access.second) return
-    val scope = listOf(question.id, question.track, placement, refs, owner)
+    if (!access.second && !freeReviewer) return
+    val scope = listOf(question.id, question.track, placement, refs, owner, freeReviewer)
     val bitmaps = remember(scope) { mutableStateMapOf<String, ImageBitmap>() }
     val failures = remember(scope) { mutableStateMapOf<String, String>() }
     var enlarged by remember(scope) { mutableStateOf<String?>(null) }
@@ -138,7 +138,9 @@ fun QuestionImageGallery(question: Question, placement: String) {
             failures.remove(ref.sha256)
             var failure: String? = null
             val bytes = try {
-                VerifiedQuestionMediaStore.loadForDisplay(context, question.track, ref)
+                VerifiedQuestionMediaStore.loadForDisplay(
+                    context, question.track, ref, freeQuestion = if (freeReviewer) question else null
+                )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: QuestionMediaException) {
@@ -147,7 +149,7 @@ fun QuestionImageGallery(question: Question, placement: String) {
             }
             val decoded = withContext(Dispatchers.Default) { bytes?.let(::decodeBounded) }
             currentCoroutineContext().ensureActive()
-            if (currentAccess() != (owner to true)) return@LaunchedEffect
+            if (!freeReviewer && currentAccess() != (owner to true)) return@LaunchedEffect
             if (decoded != null) bitmaps[ref.sha256] = decoded
             else failures[ref.sha256] = failure ?: "Diagram unavailable. This image could not be displayed. Retry or update the app."
         }
