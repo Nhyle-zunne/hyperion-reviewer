@@ -1,0 +1,25 @@
+name: Track UI UX Pro Max catalog (one-time)
+on:
+  push:
+    branches: [chore/install-ui-ux-pro-max-20261114]
+    paths: [.github/workflows/complete-uiux-data.yml]
+permissions:
+  contents: write
+jobs:
+  complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Restore CSV files ignored by Android's generic gitignore
+        run: |
+          npx --yes ui-ux-pro-max-cli@2.15.0 init --ai codex --force
+          rm -rf .agents/skills/banner-design .agents/skills/brand .agents/skills/design-system .agents/skills/design .agents/skills/slides .agents/skills/ui-styling
+          node scripts/tests/agent-skills-test.mjs
+          git add -f .agents/skills/ui-ux-pro-max
+          git rm .github/workflows/complete-uiux-data.yml
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "fix: track UI/UX Pro Max catalog CSV assets"
+          git push origin HEAD:chore/install-ui-ux-pro-max-20261114
