@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,6 +36,7 @@ import com.nhyle.hyperionmaritime.ui.components.DailyCheckInDialog
 import com.nhyle.hyperionmaritime.ui.components.ResultsLoadingDialog
 import com.nhyle.hyperionmaritime.ui.components.HyperionDrawerContent
 import com.nhyle.hyperionmaritime.ui.components.PaywallDialog
+import com.nhyle.hyperionmaritime.ui.components.LocalQuestionImagePaywall
 import com.nhyle.hyperionmaritime.ui.screens.*
 import com.nhyle.hyperionmaritime.ui.store.StoreScreen
 import com.nhyle.hyperionmaritime.ui.theme.AppTheme
@@ -328,6 +330,10 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
             modifier = Modifier.fillMaxSize()
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
+            // All question readers reuse the existing track-specific Google Play popup.
+            CompositionLocalProvider(
+                LocalQuestionImagePaywall provides { track -> viewModel.triggerPaywall(track) }
+            ) {
             AnimatedContent(
                 targetState = currentScreen,
                 modifier = Modifier.fillMaxSize(),
@@ -454,6 +460,7 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                         viewModel = viewModel
                     )
                 }
+            }
             }
 
             AnimatedVisibility(
