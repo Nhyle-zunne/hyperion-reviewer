@@ -36,14 +36,37 @@ def logical_to_asset_path(logical: str) -> str:
     return logical
 
 
+def verify_tracked_csv_policy(files: set[str], root: Path = ROOT) -> None:
+    """Reject plaintext banks; allow only hash-pinned, non-runtime UI design tables."""
+    plaintext = sorted(path for path in files if path.lower().endswith(".csv"))
+    if not plaintext:
+        return
+    manifest_path = root / ".agents/upstream-lock.json"
+    verify(manifest_path.is_file(), "Plaintext CSV files require a pinned UI/UX catalog manifest.")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    sources = [source for source in manifest.get("sources", [])
+               if source.get("name") == "ui-ux-pro-max"]
+    verify(len(sources) == 1, "UI/UX catalog provenance must be unique.")
+    entries = sources[0].get("files", [])
+    pins = {entry.get("destination"): entry.get("sha256") for entry in entries
+            if isinstance(entry, dict) and str(entry.get("destination", "")).endswith(".csv")}
+    for name in plaintext:
+        verify(name.startswith(".agents/skills/ui-ux-pro-max/") and name in pins,
+               f"Unencrypted .csv outside a verified design catalog: {name}")
+        expected = pins[name]
+        verify(isinstance(expected, str) and re.fullmatch(r"[a-f0-9]{64}", expected) is not None,
+               f"Invalid catalog checksum: {name}")
+        verify(hashlib.sha256((root / name).read_bytes()).hexdigest() == expected,
+               f"Modified or untrusted UI/UX catalog: {name}")
+
+
 def verify_tracked_files() -> set[str]:
     result = subprocess.run(["git", "ls-files", "--cached", "-z"],
                             cwd=ROOT, capture_output=True, check=True)
     files = {raw.decode("utf-8") for raw in result.stdout.split(b"\0") if raw}
     verify(not any(path.startswith("tmp/") for path in files),
            "Temporary question generation files must not be tracked: remove tmp/")
-    verify(not any(path.lower().endswith(".csv") for path in files),
-           "Unencrypted .csv files found in Git. Keep only encrypted *.csv.enc question banks.")
+    verify_tracked_csv_policy(files)
     for path in files:
         if path.startswith(MEDIA_ROOT.as_posix() + "/"):
             relative = path[len(MEDIA_ROOT.as_posix()) + 1:]
