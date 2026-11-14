@@ -17,6 +17,8 @@ from zipfile import BadZipFile, ZipFile
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSET_ROOT = Path("app/src/main/assets/questions")
+MEDIA_ROOT = Path("app/src/main/assets/question-media")
+ENCRYPTED_MEDIA = re.compile(r"^(?:DECK_OIC_NW|GMDSS_GOC|ENGINE_OIC_EW|DECK_MGT|ENGINE_MGT)/[a-f0-9]{64}\.(?:webp|png|jpg)\.enc$")
 ALLOWED_METADATA = {"hyperion-manifest.json", "hyperion-release.json"}
 LOGICAL_BANK = re.compile(r"^(?:deck|deck_mgt|engine_ew|engine_mgt|gmdss)/[a-z0-9_]+\.csv\.enc$")
 ENCRYPTED_BANK = re.compile(r"^(?:deck|deck_mgt|engine_ew|engine_mgt|pro)/[a-z0-9_]+\.csv\.enc$")
@@ -43,6 +45,10 @@ def verify_tracked_files() -> set[str]:
     verify(not any(path.lower().endswith(".csv") for path in files),
            "Unencrypted .csv files found in Git. Keep only encrypted *.csv.enc question banks.")
     for path in files:
+        if path.startswith(MEDIA_ROOT.as_posix() + "/"):
+            relative = path[len(MEDIA_ROOT.as_posix()) + 1:]
+            verify(bool(ENCRYPTED_MEDIA.fullmatch(relative)),
+                   f"Unexpected or plaintext diagram asset: {path}")
         if not path.startswith(ASSET_ROOT.as_posix() + "/"):
             continue
         relative = path[len(ASSET_ROOT.as_posix()) + 1:]
@@ -89,7 +95,27 @@ def expected_bank_hashes(tracked: set[str]) -> dict[str, str]:
     return expected
 
 
-def verify_artifact(artifact: Path, expected: dict[str, str]) -> None:
+def expected_media_hashes(tracked: set[str]) -> dict[str, str]:
+    # Decrypt only in memory to verify every reference has authenticated image bytes.
+    result = subprocess.run(["node", "scripts/bundle-question-media.mjs", "--verify"],
+                            cwd=ROOT, capture_output=True, text=True)
+    verify(result.returncode == 0, result.stderr.strip() or "Bundled diagram verification failed.")
+    prefix = MEDIA_ROOT.as_posix() + "/"
+    expected = {}
+    for path in tracked:
+        if not path.startswith(prefix):
+            continue
+        file_path = ROOT / path
+        verify(28 < file_path.stat().st_size <= 524288 + 28,
+               f"Invalid encrypted diagram size: {path}")
+        expected[path[len(prefix):]] = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    actual = {file.relative_to(ROOT / MEDIA_ROOT).as_posix()
+              for file in (ROOT / MEDIA_ROOT).rglob("*") if file.is_file()}
+    verify(actual == set(expected), "All bundled diagrams must be tracked in source.")
+    return expected
+
+
+def verify_artifact(artifact: Path, expected: dict[str, str], media: dict[str, str]) -> None:
     verify(artifact.is_file(), f"Android artifact not found: {artifact}")
     try:
         with ZipFile(artifact) as archive:
@@ -97,7 +123,14 @@ def verify_artifact(artifact: Path, expected: dict[str, str]) -> None:
             verify(not any(name.lower().endswith(".csv") for name in names),
                    "Android APK/AAB contains an unencrypted CSV!")
             packaged: dict[str, str] = {}
+            packaged_media: dict[str, str] = {}
             for name in names:
+                if not name.endswith("/") and "assets/question-media/" in name:
+                    relative = name.split("assets/question-media/", 1)[1]
+                    verify(bool(ENCRYPTED_MEDIA.fullmatch(relative)),
+                           f"Unexpected or plaintext packaged diagram: {name}")
+                    verify(relative not in packaged_media, f"Duplicate packaged diagram: {relative}")
+                    packaged_media[relative] = hashlib.sha256(archive.read(name)).hexdigest()
                 if name.endswith("/") or "assets/questions/" not in name:
                     continue
                 relative = name.split("assets/questions/", 1)[1]
@@ -110,6 +143,8 @@ def verify_artifact(artifact: Path, expected: dict[str, str]) -> None:
             verify(packaged == expected,
                    "Android artifact question banks differ from verified encrypted manifest. "
                    "Ensure all banks are encrypted and included exactly once.")
+            verify(packaged_media == media,
+                   "Android artifact diagrams differ from the verified encrypted source assets.")
     except BadZipFile as exc:
         raise ValueError("The Android artifact is not a valid ZIP-based APK/AAB.") from exc
 
@@ -121,12 +156,13 @@ def main() -> int:
     try:
         tracked = verify_tracked_files()
         expected = expected_bank_hashes(tracked)
+        media = expected_media_hashes(tracked)
         if args.artifact:
-            verify_artifact(args.artifact, expected)
+            verify_artifact(args.artifact, expected, media)
     except (OSError, ValueError, subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         print(f"QUESTION-BANK SECURITY CHECK FAILED: {exc}", file=sys.stderr)
         return 1
-    print(f"Question-bank security check passed: {len(expected)} encrypted banks; "
+    print(f"Question-bank security check passed: {len(expected)} encrypted banks, {len(media)} encrypted diagrams; "
           f"no tracked temporary/plaintext CSV banks."
           + (" APK/AAB contents also verified." if args.artifact else ""))
     return 0

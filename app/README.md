@@ -100,3 +100,25 @@ The GitHub Actions workflow **Android internal-testing App Bundle** builds and v
 Signing files, Firebase configuration, exported certificates, APKs, and AABs are excluded by `.gitignore`. A file removed in a later commit can still exist in older Git history. Do not put a private keystore or password into source control; restrict repository-history access and decide whether history cleanup is needed before relying on a signing key that was previously committed.
 
 Before uploading to Play Console, verify the new upload-key reset is effective and that the bundle's version code is greater than the latest version already accepted for this app.
+
+## Question diagrams
+
+Diagrams referenced by packaged question banks must also be present under
+`app/src/main/assets/question-media/TRACK/SHA256.webp.enc` (or `.png.enc` / `.jpg.enc`).
+They use the existing authenticated AES-GCM asset format. The app checks the same
+track license as the question bank, decrypts locally and verifies image signatures
+and SHA-256 before display. Bundled diagrams require no account session, internet,
+or Supabase request. Account changes and license expiration still clear the viewer.
+
+Admin publication from the PWA commits diagrams and encrypted banks together.
+Pull that commit before building the next Android version. Existing installations
+receive new packaged diagrams through an app update; saved sessions referencing
+newer, unbundled images retain the authenticated, account-isolated download cache.
+
+Run `node scripts/bundle-question-media.mjs --verify` for offline reference and
+image-integrity checks. `python3 scripts/tests/question-bank-asset-safety.py`
+also rejects missing, untracked or plaintext assets; its `--artifact` option checks
+the packaged APK/AAB against source. For a historical backfill, the script without
+`--verify` uses a real GitHub maintainer login to request encrypted image assets
+from the private build endpoint. A workspace proxy placeholder is not a transferable
+GitHub credential. Never supply database service keys or put credentials in source.
