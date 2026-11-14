@@ -1,8 +1,6 @@
 package com.nhyle.hyperionmaritime.data.repository
 
 import android.content.Context
-import com.nhyle.hyperionmaritime.BuildConfig
-import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.QuestionImageRef
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -13,32 +11,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.FileNotFoundException
 import java.io.InputStream
 import java.io.IOException
 import com.nhyle.hyperionmaritime.data.util.AssetCrypto
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
-import java.util.UUID
 
 internal enum class QuestionMediaFailure(val description: String) {
     LICENSE_REQUIRED("Diagram unavailable. An active license for this track is required."),
-    SIGN_IN_REQUIRED("Diagram unavailable. This image is not bundled in this app version. Sign in to download the newer diagram, or update the app."),
-    SESSION_EXPIRED("Diagram unavailable. Your saved sign-in could not be refreshed. Open Account to reconnect, or update the app to use its bundled diagrams."),
-    NOT_AUTHORIZED("Diagram unavailable. The image service could not verify this account’s track access. Sync your license or update the app."),
-    NOT_FOUND("Diagram unavailable. This diagram is not included in this app version and could not be found online. Update the app."),
-    CONNECTION_FAILED("Diagram unavailable. This image is not bundled in this app version and the download failed. Retry when connected, or update the app."),
+    NOT_BUNDLED("Diagram unavailable. Update the app to install this diagram for offline study."),
     INTEGRITY_FAILED("Diagram unavailable. The image failed verification. Retry or update the app."),
     BUNDLE_DAMAGED("Diagram unavailable. This app’s bundled image is damaged. Install the latest app update."),
     ACCOUNT_CHANGED("Diagram unavailable. The active account or track access changed. Reopen the question."),
-    SERVICE_UNAVAILABLE("Diagram unavailable. The image service is temporarily unavailable. Retry or update the app."),
 }
 
 internal class QuestionMediaException(val reason: QuestionMediaFailure) : IOException(reason.description)
 
-/** Encrypted APK diagrams first; owner-scoped cache/network only for newer refs.
+/** Encrypted APK diagrams first; owner-scoped legacy cache for newer refs. No image network requests.
  * Bundled images use the same local paid-track gate as the packaged questions,
  * including verified admin, Google Play and device licenses without a sign-in.
  */
@@ -77,23 +66,6 @@ internal object VerifiedQuestionMediaStore {
         signatureMatches(bytes, ref.mime) &&
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 255) } == ref.sha256
-
-    private suspend fun boundedBytes(connection: HttpURLConnection): ByteArray {
-        val declared = connection.contentLength
-        if (declared > MAX_BYTES) throw IllegalStateException("Image exceeds private media limit")
-        val output = ByteArrayOutputStream()
-        connection.inputStream.use { input ->
-            val part = ByteArray(8192)
-            while (true) {
-                currentCoroutineContext().ensureActive()
-                val len = input.read(part)
-                if (len < 0) break
-                if (output.size() + len > MAX_BYTES) throw IllegalStateException("Oversized image")
-                output.write(part,0,len)
-            }
-        }
-        return output.toByteArray()
-    }
 
     internal fun bundledPath(track: Track, ref: QuestionImageRef): String {
         if (!sha.matches(ref.sha256)) throw QuestionMediaException(QuestionMediaFailure.INTEGRITY_FAILED)
@@ -157,67 +129,23 @@ internal object VerifiedQuestionMediaStore {
             if (!stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
             return@withContext bundled
         }
-        // Old saved sessions can refer to images added after this APK was built.
-        // Only that optional fallback needs an authenticated account and network.
+        // Preserve previously verified images from older app versions locally.
+        // New diagrams arrive in app updates, never through an image service.
+        currentCoroutineContext().ensureActive()
+        if (!stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
         val validOwner = owner?.takeIf { uuid.matches(it) }
-            ?: throw QuestionMediaException(QuestionMediaFailure.SIGN_IN_REQUIRED)
+            ?: throw QuestionMediaException(QuestionMediaFailure.NOT_BUNDLED)
         val destination = fileFor(app, validOwner, track, ref)
         if (destination.isFile) {
             val local = runCatching {
                 if (destination.length() !in 16L..MAX_BYTES.toLong()) null else destination.readBytes()
             }.getOrNull()
-            if (local != null && verifies(local, ref) && stillAllowed()) return@withContext local
+            val verified = local != null && verifies(local, ref)
+            currentCoroutineContext().ensureActive()
+            if (!stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
+            if (verified) return@withContext local!!
             destination.delete()
         }
-
-        val session = try {
-            SupabaseAccountManager.authenticatedQuestionMediaSession(app)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) { null }
-        val (authenticatedOwner, jwt) = session ?: throw QuestionMediaException(QuestionMediaFailure.SESSION_EXPIRED)
-        currentCoroutineContext().ensureActive()
-        if (authenticatedOwner != validOwner || !stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
-        val endpoint = BuildConfig.SUPABASE_URL.trimEnd('/') +
-            "/functions/v1/question-media?track=${track.name}&sha256=${ref.sha256}&mime=${java.net.URLEncoder.encode(ref.mime,"UTF-8")}"
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection)
-        try {
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 15000
-            connection.readTimeout = 20000
-            connection.setRequestProperty("Authorization", "Bearer $jwt")
-            connection.setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-            connection.setRequestProperty("Accept", ref.mime)
-            when (connection.responseCode) {
-                200 -> Unit
-                401 -> throw QuestionMediaException(QuestionMediaFailure.SESSION_EXPIRED)
-                403 -> throw QuestionMediaException(QuestionMediaFailure.NOT_AUTHORIZED)
-                404 -> throw QuestionMediaException(QuestionMediaFailure.NOT_FOUND)
-                else -> throw QuestionMediaException(QuestionMediaFailure.SERVICE_UNAVAILABLE)
-            }
-            if (connection.getHeaderField("X-Hyperion-Media-SHA256") != ref.sha256 ||
-                connection.contentType?.substringBefore(';') != ref.mime) throw QuestionMediaException(QuestionMediaFailure.INTEGRITY_FAILED)
-            val bytes = boundedBytes(connection)
-            currentCoroutineContext().ensureActive()
-            if (!verifies(bytes, ref)) throw QuestionMediaException(QuestionMediaFailure.INTEGRITY_FAILED)
-            if (!stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
-            runCatching {
-                destination.parentFile?.mkdirs()
-                val tmp = File(destination.parentFile, "${UUID.randomUUID()}.part")
-                try {
-                    FileOutputStream(tmp).use { out -> out.write(bytes); out.fd.sync() }
-                    if (!tmp.renameTo(destination) && !destination.exists()) throw IOException("Image could not be cached")
-                } finally { tmp.delete() }
-            }
-            currentCoroutineContext().ensureActive()
-            if (!stillAllowed()) throw QuestionMediaException(QuestionMediaFailure.ACCOUNT_CHANGED)
-            bytes
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: QuestionMediaException) {
-            throw error
-        } catch (_: Exception) {
-            throw QuestionMediaException(QuestionMediaFailure.CONNECTION_FAILED)
-        } finally { connection.disconnect() }
+        throw QuestionMediaException(QuestionMediaFailure.NOT_BUNDLED)
     }
 }

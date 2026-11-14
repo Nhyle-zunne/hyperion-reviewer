@@ -128,11 +128,14 @@ class BundledQuestionMediaStoreTest {
         }
     }
 
-    @Test fun missingAssetPermitsFallbackButUnsignedUserGetsActionableError() {
+    @Test fun missingLocalAssetRequiresAppUpdateForUnsignedAndSignedInUsers() {
         assertNull(VerifiedQuestionMediaStore.readBundled(track, ref) { throw FileNotFoundException() })
         LicenseManager.setOicNwProUnlocked(context, true)
-        expectFailure(QuestionMediaFailure.SIGN_IN_REQUIRED) {
-            runBlocking { VerifiedQuestionMediaStore.loadForDisplay(context, track, ref) { throw FileNotFoundException() } }
+        for (account in listOf(null, owner)) {
+            LicenseManager.setCurrentAccountUserId(context, account)
+            expectFailure(QuestionMediaFailure.NOT_BUNDLED) {
+                runBlocking { VerifiedQuestionMediaStore.loadForDisplay(context, track, ref) { throw FileNotFoundException() } }
+            }
         }
     }
 
