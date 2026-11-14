@@ -22,6 +22,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -291,6 +292,22 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HyperionApp(viewModel: ReviewerViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val selectedTrack by viewModel.selectedTrack.collectAsStateWithLifecycle()
+    val isTrackLicensed by viewModel.isTrackLicensed.collectAsStateWithLifecycle()
+    val entitlementRevision by LicenseManager.accountEntitlementRevisionFlow.collectAsStateWithLifecycle()
+
+    // Keep protected pages closed after sign-out or offline expiry, even if the
+    // user never leaves the configuration page. All checks are local.
+    LaunchedEffect(currentScreen, selectedTrack, isTrackLicensed, entitlementRevision) {
+        if (currentScreen is Screen.PracticeCompetenceSelect ||
+            currentScreen is Screen.PracticeConfig || currentScreen is Screen.Quiz) {
+            while (true) {
+                viewModel.enforceActivePracticeAccess()
+                delay(1_000)
+            }
+        }
+    }
+    val displayScreen = if (viewModel.canOpenPracticeScreen(currentScreen)) currentScreen else Screen.Home
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -335,13 +352,17 @@ fun HyperionApp(viewModel: ReviewerViewModel) {
                 LocalQuestionImagePaywall provides { track -> viewModel.triggerPaywall(track) }
             ) {
             AnimatedContent(
-                targetState = currentScreen,
+                targetState = displayScreen,
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.TopCenter,
                 transitionSpec = { hyperionPageTransition() },
                 label = "screen_transition"
             ) { screen ->
-                when (screen) {
+                // AnimatedContent can retain an outgoing page briefly. Never
+                // render paid question data from a stale transition.
+                if (!viewModel.canOpenPracticeScreen(screen)) {
+                    HomeScreen(viewModel = viewModel)
+                } else when (screen) {
                     is Screen.TermsOnboarding -> TermsOnboardingScreen(
                         viewModel = viewModel
                     )
