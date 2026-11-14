@@ -66,6 +66,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
+import com.nhyle.hyperionmaritime.data.repository.QuestionMediaException
+import kotlinx.coroutines.CancellationException
 
 /**
  * Keep diagrams proportionate on phones, tablets and split-screen windows.
@@ -124,22 +126,30 @@ fun QuestionImageGallery(question: Question, placement: String) {
         }
     }
     val owner = access.first
-    if (owner == null || !access.second) return
+    if (!access.second) return
     val scope = listOf(question.id, question.track, placement, refs, owner)
     val bitmaps = remember(scope) { mutableStateMapOf<String, ImageBitmap>() }
-    val failures = remember(scope) { mutableStateMapOf<String, Boolean>() }
+    val failures = remember(scope) { mutableStateMapOf<String, String>() }
     var enlarged by remember(scope) { mutableStateOf<String?>(null) }
     var retry by remember(scope) { mutableStateOf(0) }
     LaunchedEffect(scope, retry) {
         for (ref in refs) {
             if (bitmaps.containsKey(ref.sha256)) continue
             failures.remove(ref.sha256)
-            val bytes = VerifiedQuestionMediaStore.load(context, question.track, ref)
+            var failure: String? = null
+            val bytes = try {
+                VerifiedQuestionMediaStore.loadForDisplay(context, question.track, ref)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: QuestionMediaException) {
+                failure = error.reason.description
+                null
+            }
             val decoded = withContext(Dispatchers.Default) { bytes?.let(::decodeBounded) }
             currentCoroutineContext().ensureActive()
             if (currentAccess() != (owner to true)) return@LaunchedEffect
             if (decoded != null) bitmaps[ref.sha256] = decoded
-            else failures[ref.sha256] = true
+            else failures[ref.sha256] = failure ?: "Diagram unavailable. This image could not be displayed. Retry or update the app."
         }
     }
 
@@ -159,10 +169,10 @@ fun QuestionImageGallery(question: Question, placement: String) {
                             .clickable(onClickLabel = "Enlarge diagram", role = Role.Button) { enlarged = ref.sha256 }
                     )
                 }
-            } else if (failures[ref.sha256] == true) {
+            } else if (failures.containsKey(ref.sha256)) {
                 Column {
                     Text(
-                        "Diagram unavailable. Sign in and connect once to download this licensed image.",
+                        failures.getValue(ref.sha256),
                         style=MaterialTheme.typography.bodySmall
                     )
                     OutlinedButton(onClick = { retry++ }) { Text("Retry") }
