@@ -126,7 +126,16 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
         }
     }
     val owner = access.first
-    if (!access.second && !freeReviewer) return
+    // Even official Free Reviewer questions require this track's active license
+    // before any bundled or previously cached diagram may be decoded.
+    if (!access.second) {
+        Text(
+            "UNLOCK FULL REVIEWER TO VIEW IMAGES",
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            style = MaterialTheme.typography.bodyMedium
+        )
+        return
+    }
     val scope = listOf(question.id, question.track, placement, refs, owner, freeReviewer)
     val bitmaps = remember(scope) { mutableStateMapOf<String, ImageBitmap>() }
     val failures = remember(scope) { mutableStateMapOf<String, String>() }
@@ -138,9 +147,7 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
             failures.remove(ref.sha256)
             var failure: String? = null
             val bytes = try {
-                VerifiedQuestionMediaStore.loadForDisplay(
-                    context, question.track, ref, freeQuestion = if (freeReviewer) question else null
-                )
+                VerifiedQuestionMediaStore.loadForDisplay(context, question.track, ref)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: QuestionMediaException) {
@@ -149,7 +156,7 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
             }
             val decoded = withContext(Dispatchers.Default) { bytes?.let(::decodeBounded) }
             currentCoroutineContext().ensureActive()
-            if (!freeReviewer && currentAccess() != (owner to true)) return@LaunchedEffect
+            if (currentAccess() != (owner to true)) return@LaunchedEffect
             if (decoded != null) bitmaps[ref.sha256] = decoded
             else failures[ref.sha256] = failure ?: "Diagram unavailable. This image could not be displayed. Retry or update the app."
         }
