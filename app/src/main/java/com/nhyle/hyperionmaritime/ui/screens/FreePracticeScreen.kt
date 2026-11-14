@@ -175,7 +175,7 @@ fun FreePracticeScreen(
                 )
             }
 
-            QuestionImageGallery(question = question, placement = "question")
+            QuestionImageGallery(question = question, placement = "question", freeReviewer = true)
 
             // Options
             question.options.forEachIndexed { optIndex, optionText ->
@@ -215,7 +215,7 @@ fun FreePracticeScreen(
                     containerColor = colors.surface2
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        QuestionImageGallery(question = question, placement = "explanation")
+                        QuestionImageGallery(question = question, placement = "explanation", freeReviewer = true)
                         Text(
                             text = if (isAnswerCorrect) "CORRECT (+1 PT)" else "INCORRECT (0 PTS)",
                             style = MaterialTheme.typography.labelSmall,
