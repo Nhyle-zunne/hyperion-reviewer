@@ -113,7 +113,9 @@ or Supabase request. Account changes and license expiration still clear the view
 Admin publication from the PWA commits diagrams and encrypted banks together.
 Pull that commit before building the next Android version. Existing installations
 receive new packaged diagrams through an app update; saved sessions referencing
-newer, unbundled images retain the authenticated, account-isolated download cache.
+newer, unbundled images can use their existing verified, account-isolated local cache.
+If no local image is available, the app asks for an update. Android never downloads
+question diagrams or refreshes an account session to display them.
 
 Run `node scripts/bundle-question-media.mjs --verify` for offline reference and
 image-integrity checks. `python3 scripts/tests/question-bank-asset-safety.py`
