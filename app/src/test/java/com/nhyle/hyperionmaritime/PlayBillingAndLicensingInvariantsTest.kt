@@ -789,8 +789,7 @@ class PlayBillingAndLicensingInvariantsTest {
         )
     }
     @Test
-    fun test4_freeTierStrict5QuestionCeiling() = runBlocking {
-        // Ensure user is completely unentitled
+    fun test4_fullReviewerRequiresLicenseInsteadOfFiveQuestionPreview() = runBlocking {
         LicenseManager.setActivated(context, false)
         LicenseManager.setOicNwProUnlocked(context, false)
         LicenseManager.setGmdssProUnlocked(context, false)
@@ -799,8 +798,8 @@ class PlayBillingAndLicensingInvariantsTest {
 
         assertFalse(viewModel.isTrackUnlocked(Track.DECK_OIC_NW))
 
-        // Start practice requesting 20 questions
         viewModel.setTrack(Track.DECK_OIC_NW)
+        viewModel.navigateTo(Screen.Home)
         viewModel.startConfiguredPractice(
             competenceId = "C1",
             questionCount = 20,
@@ -809,26 +808,9 @@ class PlayBillingAndLicensingInvariantsTest {
             isCrpMode = false
         )
 
-        // Strictly capped to 5 preview questions
-        val activeQuestions = viewModel.activeQuestions.value
-        assertEquals("Free tier practice must be strictly capped at 5 preview items", 5, activeQuestions.size)
-
-        // User answers all 5 preview items
-        for (i in 0 until 5) {
-            val q = activeQuestions[i]
-            viewModel.selectOption(i, q.correctAnswerIndex)
-            viewModel.confirmOrNextQuestion() // evaluates
-            if (i < 4) {
-                viewModel.confirmOrNextQuestion() // advances
-            }
-        }
-
-        // On submitting/evaluating the 5th item, paywall dialog MUST be triggered
-        viewModel.confirmOrNextQuestion()
-        assertTrue(
-            "Paywall dialog must be triggered when reaching free preview ceiling",
-            viewModel.showPaywallDialog.value
-        )
+        assertEquals("Unlicensed Full Reviewer cannot launch a quiz", Screen.Home, viewModel.currentScreen.value)
+        assertTrue("Unlicensed Full Reviewer must expose no preview questions", viewModel.activeQuestions.value.isEmpty())
+        assertTrue("Offer the matching track's existing purchase popup", viewModel.showPaywallDialog.value)
     }
 
     @Test
