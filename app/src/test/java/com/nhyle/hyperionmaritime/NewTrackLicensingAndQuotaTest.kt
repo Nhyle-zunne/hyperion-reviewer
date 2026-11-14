@@ -3,6 +3,7 @@ package com.nhyle.hyperionmaritime
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.data.repository.RetiredQuestionPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -17,22 +18,24 @@ class NewTrackLicensingAndQuotaTest {
         for (track in newTracks) {
             val competences = MaritimeCompetenceRegistry.getCompetencesForTrack(track)
             for (comp in competences) {
-                val fullList = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = true)
-                val unlicensedList = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = false)
-                
-                // Retiring later C10 questions must not remove the already
-                // released 166-question free sample or its saved references.
-                val expectedQuota = if (track == Track.ENGINE_MGT && comp.competenceId == "C10") {
-                    166
-                } else {
-                    (fullList.size * 0.40).roundToInt().coerceAtLeast(1)
+                val original = MaritimeQuestionBank.ALL_QUESTIONS.filter {
+                    it.track == track && it.competenceId == comp.competenceId
                 }
-                
+                val unlicensedList = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = false)
+
+                // Quotas are anchored to original published positions, not to the
+                // active paid count. Retired items inside the boundary disappear
+                // without silently promoting previously paid questions into free.
+                val publishedQuota = (original.size * 0.40).roundToInt().coerceAtLeast(1)
+                val expectedFreeIds = RetiredQuestionPolicy.active(original.take(publishedQuota)).map { it.id }
                 assertEquals(
-                    "Unlicensed quota for ${track.name} competence ${comp.competenceId} must preserve its published free sample",
-                    expectedQuota,
-                    unlicensedList.size
+                    "Free question IDs for ${track.name} ${comp.competenceId} must retain the published boundary and exclude retired items",
+                    expectedFreeIds,
+                    unlicensedList.map { it.id }
                 )
+                if (track == Track.ENGINE_MGT && comp.competenceId == "C10") {
+                    assertEquals("The original C10 sample is 166 items", 166, publishedQuota)
+                }
                 
                 // Assert consistent sampling
                 val secondSample = MaritimeQuestionBank.getQuestionsByCompetence(comp.competenceId, track, isProUnlocked = false)
