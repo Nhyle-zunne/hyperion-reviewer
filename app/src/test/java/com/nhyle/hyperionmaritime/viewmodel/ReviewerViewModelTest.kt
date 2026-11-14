@@ -161,6 +161,24 @@ class ReviewerViewModelTest {
         assertEquals(Screen.Home, viewModel.currentScreen.value)
     }
 
+    @Test
+    fun activeFullReviewerConfigClosesOnLicenseExpiryWithoutNavigation() {
+        LicenseManager.setOicNwProUnlocked(context, true)
+        viewModel.refreshUnlockStates()
+        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateTo(Screen.PracticeCompetenceSelect())
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C1"))
+        assertTrue(viewModel.currentScreen.value is Screen.PracticeConfig)
+
+        // Expiry/sign-out invalidates the same local source checked on every page.
+        LicenseManager.setOicNwProUnlocked(context, false)
+        viewModel.refreshUnlockStates()
+        viewModel.enforceActivePracticeAccess()
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+        assertFalse(viewModel.canOpenPracticeScreen(Screen.PracticeConfig(competenceId = "C1")))
+        assertTrue(viewModel.canOpenPracticeScreen(Screen.PracticeConfig(competenceId = "C1", isCrpMode = true)))
+    }
+
     @After
     fun tearDown() {
         LicenseManager.setActivated(context, false)
