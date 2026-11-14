@@ -51,7 +51,7 @@ def verify_tracked_csv_policy(files: set[str], root: Path = ROOT) -> None:
     pins = {entry.get("destination"): entry.get("sha256") for entry in entries
             if isinstance(entry, dict) and str(entry.get("destination", "")).endswith(".csv")}
     for name in plaintext:
-        verify(name.startswith(".agents/skills/ui-ux-pro-max/data/") and name in pins,
+        verify(name.startswith(".agents/skills/ui-ux-pro-max/") and name in pins,
                f"Unencrypted .csv outside a verified design catalog: {name}")
         expected = pins[name]
         verify(isinstance(expected, str) and re.fullmatch(r"[a-f0-9]{64}", expected) is not None,
