@@ -1,6 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
 import android.content.Context
+import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuestionImageRef
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -67,6 +68,27 @@ internal object VerifiedQuestionMediaStore {
         MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it.toInt() and 255) } == ref.sha256
 
+    /** Unlicensed diagrams are available only when the installed official Free Reviewer
+     * contains this exact question ID and image reference. This never opens a
+     * paid-only image on the basis of a caller-supplied free-mode flag alone.
+     */
+    internal fun isOfficialFreeImageReference(question: Question, ref: QuestionImageRef, officialPool: List<Question>): Boolean {
+        if (question.isRetired || question.imageAttachments.none { it.sha256 == ref.sha256 && it.mime == ref.mime && it.placement == ref.placement }) return false
+        return officialPool.any { free ->
+            free.id == question.id && free.track == question.track && !free.isRetired &&
+            free.imageAttachments.any { it.sha256 == ref.sha256 && it.mime == ref.mime && it.placement == ref.placement }
+        }
+    }
+
+    private fun freePoolFor(context: Context, question: Question): List<Question> = when (question.track) {
+        Track.DECK_OIC_NW -> MaritimeQuestionBank.getMarinaCrpQuestions(question.competenceId)
+        Track.GMDSS_GOC -> MaritimeQuestionBank.getMarinaCrpGmdssQuestions(
+            context, question.competenceId, isProUnlocked = false
+        )
+        Track.ENGINE_OIC_EW, Track.DECK_MGT, Track.ENGINE_MGT ->
+            MaritimeQuestionBank.getNewTrackStandardReviewQuestions(question.track, isProUnlocked = false)
+    }
+
     internal fun bundledPath(track: Track, ref: QuestionImageRef): String {
         if (!sha.matches(ref.sha256)) throw QuestionMediaException(QuestionMediaFailure.INTEGRITY_FAILED)
         val ext = extension(ref.mime) ?: throw QuestionMediaException(QuestionMediaFailure.INTEGRITY_FAILED)
@@ -116,13 +138,17 @@ internal object VerifiedQuestionMediaStore {
         context: Context,
         track: Track,
         ref: QuestionImageRef,
+        freeQuestion: Question? = null,
         openBundledAsset: (String) -> InputStream = { context.assets.open(it) },
     ): ByteArray = withContext(Dispatchers.IO) {
         val app = context.applicationContext
-        if (!LicenseManager.isTrackProUnlocked(app, track)) throw QuestionMediaException(QuestionMediaFailure.LICENSE_REQUIRED)
+        val paid = LicenseManager.isTrackProUnlocked(app, track)
+        val allowedFree = !paid && freeQuestion?.track == track &&
+            runCatching { isOfficialFreeImageReference(freeQuestion, ref, freePoolFor(app, freeQuestion)) }.getOrDefault(false)
+        if (!paid && !allowedFree) throw QuestionMediaException(QuestionMediaFailure.LICENSE_REQUIRED)
         val owner = LicenseManager.getCurrentAccountUserId(app)
-        fun stillAllowed() = LicenseManager.isTrackProUnlocked(app, track) &&
-            LicenseManager.getCurrentAccountUserId(app) == owner
+        fun stillAllowed() = allowedFree || (LicenseManager.isTrackProUnlocked(app, track) &&
+            LicenseManager.getCurrentAccountUserId(app) == owner)
 
         readBundled(track, ref, openBundledAsset)?.let { bundled ->
             currentCoroutineContext().ensureActive()
