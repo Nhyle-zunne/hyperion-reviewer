@@ -13,13 +13,13 @@ Example one-image value:
 [{"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","mime":"image/webp","placement":"question","alt":"Example radar chart"}]
 ```
 
-Images are NEVER embedded in CSV files, and URLs are NEVER stored in bank records. The encrypted media files are stored alongside the encrypted questions under `app/src/main/assets/question-media/<TRACK>/<SHA>.<ext>.enc` and bundled directly into the APK. Android decrypts and verifies locally, with the existing device license or official Free Reviewer membership enforced before display. Previously downloaded images in app-private `filesDir` remain a verified backward-compatible fallback. **Android does not make network requests to load question images.**
+Images are NEVER embedded in CSV files, and URLs are NEVER stored in bank records. The encrypted media files are stored alongside the encrypted questions under `app/src/main/assets/question-media/<TRACK>/<SHA>.<ext>.enc` and bundled directly into the APK. Android decrypts and verifies locally, only with an active entitlement for the image's track (or existing verified administrator access), including when the diagram belongs to a Free Reviewer question. Previously downloaded images in app-private `filesDir` remain a verified backward-compatible fallback. **Android does not make network requests to load question images.**
 
 Quick Scan and Practice show diagrams and can enlarge them with pinch-to-zoom. Explanation diagrams are shown only after answering in practice review, while Quick Scan already displays the answer by design.
 
 **Sync caveat:** bank metadata remains in the encrypted question-bank CSV, and `SMART_BANK_UPDATES_ENABLED` defaults **false**. Admin image uploads are encrypted and staged in the `hyperion-reviewer` GitHub repository; publication promotes images and banks together to `main`. An installed APK does **not** automatically receive new files. Issue a signed app update containing the new bank and media assets, or explicitly validate an update mechanism that delivers and verifies both before enabling it. No Supabase Storage is used for new image uploads, publishing or Android image loading.
 
-The feature adds no repeated license polling, no user progress sync writes and **zero image-delivery network traffic** on Android. APK-bundled encrypted media remains available offline for licensed users with valid local entitlement and for officially free questions. Clearing app data only removes the optional legacy private-file cache, not the encrypted images packaged in the app.
+The feature adds no repeated license polling, no user progress sync writes and **zero image-delivery network traffic** on Android. APK-bundled encrypted media remains available offline only while the matching track entitlement is active. Free Reviewer questions remain accessible, but their images are locked without a license. Clearing app data only removes the optional legacy private-file cache, not the encrypted images packaged in the app.
 
 ## Internal test of Android bank synchronization
 
@@ -48,7 +48,7 @@ Question figures follow the question; explanation figures follow the screen's
 existing answer/review visibility rules. The same image hash may appear at both
 placements with separate alternative text.
 
-Gallery images and open zoom dialogs reset when the question's references,
+An image attached to a Free Reviewer question is still a premium image. A license for another track is insufficient. Gallery images and open zoom dialogs reset when the question's references,
 track, signed-in owner or access change. Existing entitlement events update the
 view immediately; a local check every second also catches expiry while a
 figure is open. These checks do not contact the license server or download
@@ -83,4 +83,4 @@ Image-only saved questions require a valid prompt image when restored.
 
 ## Current media pipeline
 
-Admin uploads are authenticated through the existing PWA question-bank administration gate. Images are encrypted and staged in GitHub; validated publishing commits encrypted media files to this Android repository alongside encrypted bank updates. The Android app loads those bundled encrypted bytes directly from the APK and SHA-verifies each image. Paid access still requires a valid local entitlement; the official Free Reviewer only displays images belonging to its approved question pool. The existing Supabase Auth/licensing system is separate from media storage and image delivery.
+Admin uploads are authenticated through the existing PWA question-bank administration gate. Images are encrypted and staged in GitHub; validated publishing commits encrypted media files to this Android repository alongside encrypted bank updates. The Android app loads those bundled encrypted bytes directly from the APK and SHA-verifies each image. Every image requires a valid local entitlement for that track; Free Reviewer references no longer unlock images. Unlicensed readers display **UNLOCK FULL REVIEWER TO VIEW IMAGES** instead of the diagram. The existing Supabase Auth/licensing system is separate from media storage and image delivery.
