@@ -325,23 +325,21 @@ class ReviewerViewModelTest {
     }
 
     /**
-     * Requirement e: Unentitled users cannot advance past question index 4 (5-question limit boundary).
+     * Requirement e: Full Reviewer must never degrade to an unlicensed five-question preview.
      */
     @Test
-    fun testE_unentitledUsersCannotAdvancePastQuestionIndex4() = runBlocking {
+    fun testE_unentitledUsersCannotStartFullReviewer() {
         LicenseManager.setActivated(context, false)
         LicenseManager.setOicNwProUnlocked(context, false)
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.init(context)
 
-        val secPrefs = context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-        secPrefs.edit().clear().apply()
-
+        context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE).edit().clear().apply()
         assertFalse(viewModel.isTrackUnlocked(Track.DECK_OIC_NW))
 
-        // Start practice requesting 20 questions
         viewModel.setTrack(Track.DECK_OIC_NW)
+        viewModel.navigateTo(Screen.Home)
         viewModel.startConfiguredPractice(
             competenceId = "C1",
             questionCount = 20,
@@ -350,32 +348,9 @@ class ReviewerViewModelTest {
             isCrpMode = false
         )
 
-        val activeQuestions = viewModel.activeQuestions.value
-        assertEquals("Free preview must be strictly capped at 5 questions", 5, activeQuestions.size)
-
-        // Out-of-bounds navigation attempts must fail
-        viewModel.jumpToQuestion(5)
-        assertTrue("Index must remain <= 4", viewModel.currentQuestionIndex.value <= 4)
-
-        viewModel.jumpToQuestion(15)
-        assertTrue("Index must remain <= 4", viewModel.currentQuestionIndex.value <= 4)
-
-        // Walk through the 5 allowed questions (index 0..4)
-        for (i in 0 until 5) {
-            val q = activeQuestions[i]
-            viewModel.selectOption(i, q.correctAnswerIndex)
-            viewModel.confirmOrNextQuestion() // evaluates
-            if (i < 4) {
-                viewModel.confirmOrNextQuestion() // advances
-            }
-        }
-
-        // On submitting the 5th question (index 4), paywall dialog MUST be triggered
-        viewModel.confirmOrNextQuestion()
-        assertTrue(
-            "Paywall dialog must trigger when reaching the 5-question limit ceiling",
-            viewModel.showPaywallDialog.value
-        )
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+        assertTrue("No Full Reviewer questions may be exposed without a license", viewModel.activeQuestions.value.isEmpty())
+        assertTrue("Offer the existing track-specific purchase popup", viewModel.showPaywallDialog.value)
     }
 
     /**
