@@ -2,6 +2,8 @@ package com.nhyle.hyperionmaritime
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.QuestionImageRef
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.QuestionMediaException
@@ -69,6 +71,37 @@ class BundledQuestionMediaStoreTest {
     private fun expectFailure(reason: QuestionMediaFailure, action: () -> Unit) {
         try { action(); fail("Expected $reason") }
         catch (error: QuestionMediaException) { assertEquals(reason, error.reason) }
+    }
+
+    private fun syntheticFreeQuestion() = Question(
+        id = "synthetic-free-q1", track = track, functionId = "F1", competenceId = "C1",
+        topic = "Practice", questionText = "What does the diagram show?",
+        options = listOf("A", "B"), correctAnswerIndex = 0,
+        explanation = "Synthetic explanation", difficulty = Difficulty.EASY,
+        imageAttachments = listOf(ref)
+    )
+
+    @Test fun freeImageEligibilityMatchesOnlyTheOriginalPublishedFreePoolReference() {
+        val item = syntheticFreeQuestion()
+        assertTrue(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item)))
+        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, emptyList()))
+        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item.copy(id = "paid-only"))))
+        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item.copy(isRetired = true), ref, listOf(item)))
+        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref.copy(sha256 = "b".repeat(64)), listOf(item)))
+        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item.copy(imageAttachments = emptyList()))))
+    }
+
+    @Test fun supplyingAnArbitraryFreeQuestionCannotBypassPaidMediaGate() {
+        var opened = false
+        expectFailure(QuestionMediaFailure.LICENSE_REQUIRED) {
+            runBlocking {
+                VerifiedQuestionMediaStore.loadForDisplay(context, track, ref, freeQuestion = syntheticFreeQuestion()) {
+                    opened = true
+                    throw AssertionError("Fake Free Reviewer question must never open bundled media")
+                }
+            }
+        }
+        assertFalse(opened)
     }
 
     @Test fun deviceLicenseLoadsBundledImageWithoutAccountOrNetwork() = runBlocking {
