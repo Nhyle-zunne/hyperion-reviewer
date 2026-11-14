@@ -52,3 +52,6 @@ google-services.json
 # Valid packaged banks use app/src/main/assets/questions/**/*.csv.enc.
 tmp/
 *.csv
+
+# Generated local Graphify map (CI uploads it as a short-lived artifact)
+graphify-out/
