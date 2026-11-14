@@ -2214,7 +2214,46 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
+    // Full Reviewer routes must never silently downgrade to a five-question trial.
+    // The separate Free Reviewer and imported-sheet flows remain accessible.
+    fun canOpenPracticeScreen(screen: Screen): Boolean {
+        val track = (screen as? Screen.PracticeConfig)?.track ?: _selectedTrack.value
+        val isGmdssFreeReview = track == Track.GMDSS_GOC
+        val isProtected = when (screen) {
+            is Screen.PracticeCompetenceSelect ->
+                !screen.isCrpMode && !(isGmdssFreeReview && screen.isOperationalReview)
+            is Screen.PracticeConfig ->
+                (screen.isBookmarksMode || screen.isMistakesMode || (
+                    !screen.isCrpMode &&
+                    !(isGmdssFreeReview && screen.isOperationalReview) &&
+                    !_isMTestMDrillActive.value
+                ))
+            is Screen.Quiz ->
+                !_isCrpMode.value && !_isMTestMDrillActive.value &&
+                    !(isGmdssFreeReview && _lastPracticeDrillConfig?.isOperationalReview == true)
+            else -> false
+        }
+        return !isProtected || isTrackUnlocked(track)
+    }
+
+    fun enforceActivePracticeAccess() {
+        if (canOpenPracticeScreen(_currentScreen.value)) return
+        if (_currentScreen.value is Screen.Quiz) {
+            // Keep the session for later renewal; never discard answers on expiry.
+            autoSaveCurrentSession()
+            timerJob?.cancel()
+            studyTimeTracker.pauseTimer()
+        }
+        backStack.removeAll { it is Screen.PracticeCompetenceSelect || it is Screen.PracticeConfig || it is Screen.Quiz }
+        _currentScreen.value = Screen.Home
+    }
+
     fun navigateTo(screen: Screen) {
+        if (!canOpenPracticeScreen(screen)) {
+            enforceActivePracticeAccess()
+            triggerPaywall((screen as? Screen.PracticeConfig)?.track ?: _selectedTrack.value)
+            return
+        }
         val current = _currentScreen.value
         if (current == screen) return
 
@@ -2586,6 +2625,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         shuffleQuestions: Boolean = false,
         shuffleChoices: Boolean = true
     ) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
@@ -2684,6 +2728,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         shuffleChoices: Boolean = true,
         requiredPasses: Int = _requiredMistakePasses.value
     ) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         setRequiredMistakePasses(requiredPasses)
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
@@ -3096,6 +3145,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         seenIds: Set<String> = emptySet(),
         isOperationalReview: Boolean = false
     ) {
+        val isFreeReviewer = isCrpMode ||
+            (_selectedTrack.value == Track.GMDSS_GOC && isOperationalReview)
+        if (!isFreeReviewer && !_isMTestMDrillActive.value && !isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         timerJob?.cancel()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
         _isExamSubmitted.value = false
@@ -3204,9 +3260,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             shuffleQuestions = if (isGmdssOpReview) false else shuffleQuestions
         )
 
-        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode and NOT GMDSS Op Review and NOT MTestM Drill
-        if (!isPro && !isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value) {
-            questions = questions.take(5)
+        // Recheck at launch in case the license expired while the pool loaded.
+        // Full Reviewer must not turn into a five-question preview.
+        if (!isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value &&
+            !isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
         }
 
         if (shuffleChoices) {

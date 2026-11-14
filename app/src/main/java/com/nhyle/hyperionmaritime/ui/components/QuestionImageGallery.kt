@@ -138,6 +138,7 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
         if (openPaywall != null) {
             OutlinedButton(
                 onClick = { openPaywall(question.track) },
+                shape = RectangleShape,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
                     .heightIn(min = 48.dp).testTag("locked_question_image_upgrade")
             ) {
