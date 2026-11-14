@@ -143,7 +143,7 @@ internal object VerifiedQuestionMediaStore {
     ): ByteArray = withContext(Dispatchers.IO) {
         val app = context.applicationContext
         val paid = LicenseManager.isTrackProUnlocked(app, track)
-        val allowedFree = !paid && freeQuestion?.track == track &&
+        val allowedFree = !paid && freeQuestion != null && freeQuestion.track == track &&
             runCatching { isOfficialFreeImageReference(freeQuestion, ref, freePoolFor(app, freeQuestion)) }.getOrDefault(false)
         if (!paid && !allowedFree) throw QuestionMediaException(QuestionMediaFailure.LICENSE_REQUIRED)
         val owner = LicenseManager.getCurrentAccountUserId(app)
