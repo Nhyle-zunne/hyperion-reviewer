@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -28,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -68,6 +70,9 @@ import kotlinx.coroutines.withContext
 import com.nhyle.hyperionmaritime.data.repository.VerifiedQuestionMediaStore
 import com.nhyle.hyperionmaritime.data.repository.QuestionMediaException
 import kotlinx.coroutines.CancellationException
+
+/** Opens the existing track-specific purchase dialog; provided by HyperionApp. */
+internal val LocalQuestionImagePaywall = staticCompositionLocalOf<((Track) -> Unit)?> { null }
 
 /**
  * Keep diagrams proportionate on phones, tablets and split-screen windows.
@@ -126,7 +131,28 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
         }
     }
     val owner = access.first
-    if (!access.second && !freeReviewer) return
+    // Even official Free Reviewer questions require this track's active license
+    // before any bundled or previously cached diagram may be decoded.
+    if (!access.second) {
+        val openPaywall = LocalQuestionImagePaywall.current
+        if (openPaywall != null) {
+            OutlinedButton(
+                onClick = { openPaywall(question.track) },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                    .heightIn(min = 48.dp).testTag("locked_question_image_upgrade")
+            ) {
+                Text("UNLOCK FULL REVIEWER TO VIEW IMAGES")
+            }
+        } else {
+            // Standalone gallery previews without the app-level purchase handler.
+            Text(
+                "UNLOCK FULL REVIEWER TO VIEW IMAGES",
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+        return
+    }
     val scope = listOf(question.id, question.track, placement, refs, owner, freeReviewer)
     val bitmaps = remember(scope) { mutableStateMapOf<String, ImageBitmap>() }
     val failures = remember(scope) { mutableStateMapOf<String, String>() }
@@ -138,9 +164,7 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
             failures.remove(ref.sha256)
             var failure: String? = null
             val bytes = try {
-                VerifiedQuestionMediaStore.loadForDisplay(
-                    context, question.track, ref, freeQuestion = if (freeReviewer) question else null
-                )
+                VerifiedQuestionMediaStore.loadForDisplay(context, question.track, ref)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: QuestionMediaException) {
@@ -149,7 +173,7 @@ fun QuestionImageGallery(question: Question, placement: String, freeReviewer: Bo
             }
             val decoded = withContext(Dispatchers.Default) { bytes?.let(::decodeBounded) }
             currentCoroutineContext().ensureActive()
-            if (!freeReviewer && currentAccess() != (owner to true)) return@LaunchedEffect
+            if (currentAccess() != (owner to true)) return@LaunchedEffect
             if (decoded != null) bitmaps[ref.sha256] = decoded
             else failures[ref.sha256] = failure ?: "Diagram unavailable. This image could not be displayed. Retry or update the app."
         }

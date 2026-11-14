@@ -81,27 +81,34 @@ class BundledQuestionMediaStoreTest {
         imageAttachments = listOf(ref)
     )
 
-    @Test fun freeImageEligibilityMatchesOnlyTheOriginalPublishedFreePoolReference() {
-        val item = syntheticFreeQuestion()
-        assertTrue(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item)))
-        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, emptyList()))
-        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item.copy(id = "paid-only"))))
-        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item.copy(isRetired = true), ref, listOf(item)))
-        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref.copy(sha256 = "b".repeat(64)), listOf(item)))
-        assertFalse(VerifiedQuestionMediaStore.isOfficialFreeImageReference(item, ref, listOf(item.copy(imageAttachments = emptyList()))))
-    }
-
-    @Test fun supplyingAnArbitraryFreeQuestionCannotBypassPaidMediaGate() {
+    @Test fun evenAnOfficialFreeReviewerImageIsLockedWithoutItsTrackLicense() {
+        val freeQuestion = syntheticFreeQuestion()
+        assertTrue(freeQuestion.imageAttachments.contains(ref))
         var opened = false
         expectFailure(QuestionMediaFailure.LICENSE_REQUIRED) {
             runBlocking {
-                VerifiedQuestionMediaStore.loadForDisplay(context, track, ref, freeQuestion = syntheticFreeQuestion()) {
+                VerifiedQuestionMediaStore.loadForDisplay(context, track, ref) {
                     opened = true
-                    throw AssertionError("Fake Free Reviewer question must never open bundled media")
+                    ByteArrayInputStream(encrypt())
                 }
             }
         }
-        assertFalse(opened)
+        assertFalse("Free Reviewer image references must never open encrypted assets without a license", opened)
+    }
+
+    @Test fun anotherTrackLicenseDoesNotUnlockThisTracksImages() {
+        LicenseManager.setEngineMgtProUnlocked(context, true)
+        var opened = false
+        expectFailure(QuestionMediaFailure.LICENSE_REQUIRED) {
+            runBlocking {
+                VerifiedQuestionMediaStore.loadForDisplay(context, track, ref) {
+                    opened = true
+                    ByteArrayInputStream(encrypt())
+                }
+            }
+        }
+        assertFalse("A management license must not unlock OIC-NW question diagrams", opened)
+        LicenseManager.setEngineMgtProUnlocked(context, false)
     }
 
     @Test fun deviceLicenseLoadsBundledImageWithoutAccountOrNetwork() = runBlocking {

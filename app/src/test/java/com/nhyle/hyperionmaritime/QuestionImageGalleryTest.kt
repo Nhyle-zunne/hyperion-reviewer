@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.nhyle.hyperionmaritime.data.model.*
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
+import com.nhyle.hyperionmaritime.ui.components.LocalQuestionImagePaywall
 import com.nhyle.hyperionmaritime.ui.components.questionDiagramThumbnailSize
 import com.nhyle.hyperionmaritime.ui.components.boundedDiagramZoom
 import androidx.compose.ui.unit.dp
@@ -91,6 +92,47 @@ class QuestionImageGalleryTest {
         Assert.assertEquals(1f, boundedDiagramZoom(0.3f), 0.001f)
         Assert.assertEquals(2.5f, boundedDiagramZoom(9f), 0.001f)
         Assert.assertEquals(1.75f, boundedDiagramZoom(1.75f), 0.001f)
+    }
+
+    @Test fun freeReviewerDisplaysTrackUpgradeNoticeUntilLicensed() {
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false)
+        LicenseManager.setOicNwProUnlocked(context, false)
+        compose.setContent { MaterialTheme { QuestionImageGallery(question(), "question", freeReviewer = true) } }
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertExists()
+        compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
+        compose.onNodeWithContentDescription("Close image").assertDoesNotExist()
+        compose.runOnIdle { LicenseManager.setOicNwProUnlocked(context, true) }
+        awaitImage()
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertDoesNotExist()
+        compose.runOnIdle { LicenseManager.setOicNwProUnlocked(context, false) }
+        compose.onNodeWithText("UNLOCK FULL REVIEWER TO VIEW IMAGES").assertExists()
+        compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
+    }
+
+    @Test fun lockedImageButtonOpensMatchingTrackAndFollowsQuestionChanges() {
+        LicenseManager.setVerifiedDeveloperAdminAccess(context, owner, false)
+        LicenseManager.setOicNwProUnlocked(context, false)
+        var current by mutableStateOf(question())
+        var requestedTrack: Track? = null
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalQuestionImagePaywall provides { track ->
+                    requestedTrack = track
+                }) {
+                    QuestionImageGallery(current, "question", freeReviewer = true)
+                }
+            }
+        }
+        val unlock = compose.onNodeWithTag("locked_question_image_upgrade")
+        unlock.assertExists().assertHasClickAction()
+        unlock.assertTextContains("UNLOCK FULL REVIEWER TO VIEW IMAGES")
+        unlock.performClick()
+        compose.runOnIdle { Assert.assertEquals(Track.DECK_OIC_NW, requestedTrack) }
+
+        compose.runOnIdle { current = current.copy(track = Track.ENGINE_MGT) }
+        unlock.assertExists().performClick()
+        compose.runOnIdle { Assert.assertEquals(Track.ENGINE_MGT, requestedTrack) }
+        compose.onAllNodesWithContentDescription(ref.alt).assertCountEquals(0)
     }
 
     @Test fun ownerChangeRemovesImageAndOpenZoom() {
