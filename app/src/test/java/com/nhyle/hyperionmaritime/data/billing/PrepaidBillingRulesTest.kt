@@ -87,4 +87,12 @@ class PrepaidBillingRulesTest {
         assertFalse(canExtendPlayPurchase("mock_sandbox_sub_token_123"))
         assertTrue(canExtendPlayPurchase("verified-play-purchase-token"))
     }
+    @Test
+    fun legacyAllAccessPurchaseCannotBeReplacedWithASingleTrackExtension() {
+        assertFalse(canExtendTrackPlayPurchase("legacy-all-access-token", "legacy-all-access-token"))
+        assertTrue(canExtendTrackPlayPurchase("individual-oic-token", "legacy-all-access-token"))
+        assertTrue(canExtendTrackPlayPurchase("individual-oic-token", null))
+        assertFalse(canExtendTrackPlayPurchase("mock_sandbox_sub_token_123", null))
+    }
+
 }
