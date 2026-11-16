@@ -95,7 +95,7 @@ KEY_PASSWORD=your-key-password
 
 Never put actual values in a repository-committed file. The debug build uses Android Gradle Plugin's generated debug key; do not commit a custom debug keystore.
 
-The GitHub Actions workflow **Android internal-testing App Bundle** builds and verifies a signed `.aab` using repository Actions secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON`, and `HYPERION_GOOGLE_WEB_CLIENT_ID`. It writes the keystore only to the temporary runner directory and uploads the signed bundle as an artifact. To build the account-linking feature, select branch `feature/android-account-signin-and-web-licenses` in the workflow's **Run workflow** dropdown; this does not merge or publish that branch automatically.
+GitHub Actions only runs source checks, unit tests, static analysis, and debug builds. It does not build, sign, or upload release APKs or AABs. The maintainer handles Android version numbers, release signing, bundle generation, and Play Console publishing manually through Android Studio.
 
 Signing files, Firebase configuration, exported certificates, APKs, and AABs are excluded by `.gitignore`. A file removed in a later commit can still exist in older Git history. Do not put a private keystore or password into source control; restrict repository-history access and decide whether history cleanup is needed before relying on a signing key that was previously committed.
 
