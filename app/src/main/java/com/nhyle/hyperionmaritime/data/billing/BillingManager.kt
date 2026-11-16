@@ -109,7 +109,9 @@ internal fun matchesPlanOffer(
     basePlanId: String,
     billingPeriods: List<String>
 ): Boolean = when (mode) {
-    PlayPlanMode.PREPAID -> basePlanId == prepaidBasePlanId(productId, cycle)
+    PlayPlanMode.PREPAID ->
+        basePlanId == prepaidBasePlanId(productId, cycle) &&
+            cycle.matchesPlayOffer(basePlanId, billingPeriods)
     PlayPlanMode.AUTO_RENEWING ->
         !basePlanId.contains("prepaid", ignoreCase = true) &&
             cycle.matchesPlayOffer(basePlanId, billingPeriods)
@@ -129,6 +131,13 @@ internal fun resolvePurchasedPlanMode(
 
 internal fun canExtendPlayPurchase(purchaseToken: String?): Boolean =
     !purchaseToken.isNullOrBlank() && !purchaseToken.startsWith("mock_sandbox_sub_token_")
+
+/** A legacy All-Access token must not be used to replace a single-track purchase. */
+internal fun canExtendTrackPlayPurchase(
+    trackToken: String?,
+    allAccessToken: String?
+): Boolean = canExtendPlayPurchase(trackToken) &&
+    (allAccessToken.isNullOrBlank() || trackToken != allAccessToken)
 
 /**
  * Matches the recurring billing period of a Play subscription offer. When an offer
@@ -1694,7 +1703,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> ent.engineMgtPlan
             else -> null
         }
-        return plan?.takeUnless { it.isExpired }?.takeIf { canExtendPlayPurchase(it.purchaseToken) }
+        return plan?.takeUnless { it.isExpired }?.takeIf {
+            canExtendTrackPlayPurchase(it.purchaseToken, ent.allAccessPlan?.purchaseToken)
+        }
     }
 
     fun launchBillingFlow(
