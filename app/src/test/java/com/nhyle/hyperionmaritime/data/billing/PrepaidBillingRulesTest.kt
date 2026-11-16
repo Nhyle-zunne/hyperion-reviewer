@@ -78,6 +78,15 @@ class PrepaidBillingRulesTest {
             PlayPlanMode.AUTO_RENEWING,
             resolvePurchasedPlanMode(PlayPlanMode.AUTO_RENEWING, null, false, false)
         )
+        // A plan switch made directly in Google Play must not inherit stale UI metadata.
+        assertEquals(
+            PlayPlanMode.PREPAID,
+            resolvePurchasedPlanMode(PlayPlanMode.AUTO_RENEWING, null, true, false)
+        )
+        assertEquals(
+            PlayPlanMode.AUTO_RENEWING,
+            resolvePurchasedPlanMode(PlayPlanMode.PREPAID, null, true, true)
+        )
     }
 
     @Test
