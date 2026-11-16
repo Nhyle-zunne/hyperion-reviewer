@@ -2,6 +2,7 @@ package com.nhyle.hyperionmaritime
 
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
+import com.nhyle.hyperionmaritime.data.model.Track
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -56,4 +57,26 @@ class BillingFallbackPriceTest {
             assertEquals("Price unavailable", BillingConstants.getFallbackShortPrice("missing_product", cycle))
         }
     }
+    @Test
+    fun lifetimeProductsAreOneTimeOnlyAndNeverIncludedInSubscriptions() {
+        val expected = mapOf(
+            Track.DECK_OIC_NW to "hyperion_oic_nw_lifetime",
+            Track.ENGINE_OIC_EW to "hyperion_engine_oic_ew_lifetime",
+            Track.GMDSS_GOC to "hyperion_gmdss_lifetime",
+            Track.DECK_MGT to "hyperion_deck_mgt_lifetime",
+            Track.ENGINE_MGT to "hyperion_engine_mgt_lifetime"
+        )
+        for ((track, lifetimeId) in expected) {
+            assertEquals(lifetimeId, BillingConstants.lifetimeProductForTrack(track))
+        }
+        assertEquals(expected.values.toSet(), BillingConstants.LIFETIME_PRODUCT_IDS.toSet())
+        assertEquals(5, BillingConstants.LIFETIME_PRODUCT_IDS.size)
+        assertEquals(5, BillingConstants.LIFETIME_PRODUCT_IDS.distinct().size)
+        for (productId in BillingConstants.LIFETIME_PRODUCT_IDS) {
+            org.junit.Assert.assertFalse("One-time products must never be queried as SUBS",
+                BillingConstants.ALL_PRODUCT_IDS.contains(productId))
+        }
+        org.junit.Assert.assertFalse(BillingConstants.LIFETIME_PRODUCT_IDS.any { it.contains("all_access") })
+    }
+
 }

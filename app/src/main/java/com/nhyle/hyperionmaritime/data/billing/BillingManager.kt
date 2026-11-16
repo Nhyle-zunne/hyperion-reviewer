@@ -393,6 +393,28 @@ object BillingConstants {
     const val PRODUCT_DECK_MGT_PASS = "hyperion_deck_mgt_pass"
     const val PRODUCT_ENGINE_MGT_PASS = "hyperion_engine_mgt_pass"
 
+    // Staged non-consumable INAPP products; NOT included in active subscription
+    // catalog or selectable until verified server fulfillment and Play Console setup.
+    const val PRODUCT_OIC_NW_LIFETIME = "hyperion_oic_nw_lifetime"
+    const val PRODUCT_ENGINE_OIC_EW_LIFETIME = "hyperion_engine_oic_ew_lifetime"
+    const val PRODUCT_GMDSS_LIFETIME = "hyperion_gmdss_lifetime"
+    const val PRODUCT_DECK_MGT_LIFETIME = "hyperion_deck_mgt_lifetime"
+    const val PRODUCT_ENGINE_MGT_LIFETIME = "hyperion_engine_mgt_lifetime"
+
+    val LIFETIME_PRODUCT_IDS = listOf(
+        PRODUCT_OIC_NW_LIFETIME, PRODUCT_ENGINE_OIC_EW_LIFETIME,
+        PRODUCT_GMDSS_LIFETIME, PRODUCT_DECK_MGT_LIFETIME,
+        PRODUCT_ENGINE_MGT_LIFETIME
+    )
+
+    fun lifetimeProductForTrack(track: Track): String = when (track) {
+        Track.DECK_OIC_NW -> PRODUCT_OIC_NW_LIFETIME
+        Track.ENGINE_OIC_EW -> PRODUCT_ENGINE_OIC_EW_LIFETIME
+        Track.GMDSS_GOC -> PRODUCT_GMDSS_LIFETIME
+        Track.DECK_MGT -> PRODUCT_DECK_MGT_LIFETIME
+        Track.ENGINE_MGT -> PRODUCT_ENGINE_MGT_LIFETIME
+    }
+
     val ALL_PRODUCT_IDS = listOf(
         PRODUCT_OIC_NW_PASS,
         PRODUCT_GMDSS_PASS,
