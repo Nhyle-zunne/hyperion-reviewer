@@ -43,6 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
+import com.nhyle.hyperionmaritime.viewmodel.AUTO_NEXT_MIN_DELAY_MS
+import com.nhyle.hyperionmaritime.viewmodel.AUTO_NEXT_MAX_DELAY_MS
+import com.nhyle.hyperionmaritime.viewmodel.AUTO_NEXT_CORRECT_DEFAULT_MS
+import com.nhyle.hyperionmaritime.viewmodel.AUTO_NEXT_WRONG_DEFAULT_MS
 import kotlin.math.roundToInt
 
 @Composable
@@ -58,6 +62,8 @@ fun QuestionSettingsMenu(
     val isDirectAnswer by viewModel.isDirectAnswer.collectAsState()
     val isAutoNextCorrect by viewModel.isAutoNextCorrect.collectAsState()
     val isAutoNextWrong by viewModel.isAutoNextWrong.collectAsState()
+    val correctDelayMs by viewModel.autoNextCorrectDelayMs.collectAsState()
+    val wrongDelayMs by viewModel.autoNextWrongDelayMs.collectAsState()
     val highlightKeywords by viewModel.highlightKeywords.collectAsState()
     val colors = LocalSpaghettiColors.current
 
@@ -324,6 +330,86 @@ fun QuestionSettingsMenu(
                     },
                     onClick = { viewModel.toggleAutoNextWrong(!isAutoNextWrong) }
                 )
+
+                AutoNextDelaySetting(
+                    viewModel = viewModel,
+                    isCorrect = true,
+                    currentDelayMs = correctDelayMs,
+                    defaultDelayMs = AUTO_NEXT_CORRECT_DEFAULT_MS
+                )
+                AutoNextDelaySetting(
+                    viewModel = viewModel,
+                    isCorrect = false,
+                    currentDelayMs = wrongDelayMs,
+                    defaultDelayMs = AUTO_NEXT_WRONG_DEFAULT_MS
+                )
+            }
+        }
+    }
+}
+
+private fun formatAutoNextDelay(delayMs: Int): String =
+    (delayMs / 1000).toString() + "." + ((delayMs % 1000) / 100) + "s"
+
+@Composable
+private fun AutoNextDelaySetting(
+    viewModel: ReviewerViewModel,
+    isCorrect: Boolean,
+    currentDelayMs: Int,
+    defaultDelayMs: Int
+) {
+    val colors = LocalSpaghettiColors.current
+    val name = if (isCorrect) "Correct Answer Delay" else "Wrong Answer Delay"
+    val tag = if (isCorrect) "correct" else "wrong"
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(name, style = MaterialTheme.typography.bodyMedium, color = colors.foreground)
+            Text(
+                formatAutoNextDelay(currentDelayMs),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.primary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            OutlinedButton(
+                onClick = { viewModel.adjustAutoNextDelayMillis(isCorrect, -1) },
+                enabled = currentDelayMs > AUTO_NEXT_MIN_DELAY_MS,
+                shape = RectangleShape,
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).testTag("auto_next_" + tag + "_delay_decrease")
+            ) {
+                Text("−", fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+                onClick = { viewModel.setAutoNextDelayMillis(isCorrect, defaultDelayMs) },
+                shape = RectangleShape,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).testTag("auto_next_" + tag + "_delay_reset")
+            ) {
+                Text(formatAutoNextDelay(defaultDelayMs), style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+                onClick = { viewModel.adjustAutoNextDelayMillis(isCorrect, 1) },
+                enabled = currentDelayMs < AUTO_NEXT_MAX_DELAY_MS,
+                shape = RectangleShape,
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).testTag("auto_next_" + tag + "_delay_increase")
+            ) {
+                Text("+", fontWeight = FontWeight.Bold)
             }
         }
     }

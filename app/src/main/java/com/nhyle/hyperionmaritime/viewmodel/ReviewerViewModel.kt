@@ -80,8 +80,18 @@ enum class DrillDeliveryMode {
 }
 
 // Keep feedback visible briefly without slowing either practice delivery mode.
-internal fun practiceAutoAdvanceDelayMillis(isCorrect: Boolean): Long =
-    if (isCorrect) 300L else 500L
+internal const val AUTO_NEXT_MIN_DELAY_MS = 100
+internal const val AUTO_NEXT_MAX_DELAY_MS = 5000
+internal const val AUTO_NEXT_STEP_MS = 100
+internal const val AUTO_NEXT_CORRECT_DEFAULT_MS = 300
+internal const val AUTO_NEXT_WRONG_DEFAULT_MS = 500
+
+internal fun practiceAutoAdvanceDelayMillis(
+    isCorrect: Boolean,
+    correctDelayMs: Int = AUTO_NEXT_CORRECT_DEFAULT_MS,
+    wrongDelayMs: Int = AUTO_NEXT_WRONG_DEFAULT_MS
+): Long = (if (isCorrect) correctDelayMs else wrongDelayMs)
+    .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS).toLong()
 
 data class DrillConfiguration(
     val competenceId: String? = null,
@@ -1747,6 +1757,35 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     fun toggleAutoNextWrong(enabled: Boolean) {
         _isAutoNextWrong.value = enabled
         prefs.edit().putBoolean("drill_auto_next_wrong", enabled).apply()
+    }
+
+    // Like Text Size, these preferences remain local and work offline.
+    private val _autoNextCorrectDelayMs = MutableStateFlow(
+        prefs.getInt("drill_auto_next_correct_delay_ms", AUTO_NEXT_CORRECT_DEFAULT_MS)
+            .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+    )
+    val autoNextCorrectDelayMs: StateFlow<Int> = _autoNextCorrectDelayMs.asStateFlow()
+
+    private val _autoNextWrongDelayMs = MutableStateFlow(
+        prefs.getInt("drill_auto_next_wrong_delay_ms", AUTO_NEXT_WRONG_DEFAULT_MS)
+            .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+    )
+    val autoNextWrongDelayMs: StateFlow<Int> = _autoNextWrongDelayMs.asStateFlow()
+
+    fun setAutoNextDelayMillis(isCorrect: Boolean, delayMs: Int) {
+        val clamped = delayMs.coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+        if (isCorrect) {
+            _autoNextCorrectDelayMs.value = clamped
+            prefs.edit().putInt("drill_auto_next_correct_delay_ms", clamped).apply()
+        } else {
+            _autoNextWrongDelayMs.value = clamped
+            prefs.edit().putInt("drill_auto_next_wrong_delay_ms", clamped).apply()
+        }
+    }
+
+    fun adjustAutoNextDelayMillis(isCorrect: Boolean, increment: Int) {
+        val current = if (isCorrect) _autoNextCorrectDelayMs.value else _autoNextWrongDelayMs.value
+        setAutoNextDelayMillis(isCorrect, current + increment * AUTO_NEXT_STEP_MS)
     }
 
     private var autoAdvanceJob: kotlinx.coroutines.Job? = null
@@ -3438,7 +3477,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             cancelAutoAdvance()
             val evaluatedQuestionId = currentQ.id
             autoAdvanceJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(practiceAutoAdvanceDelayMillis(isCorrect))
+                kotlinx.coroutines.delay(
+                    practiceAutoAdvanceDelayMillis(
+                        isCorrect, _autoNextCorrectDelayMs.value, _autoNextWrongDelayMs.value
+                    )
+                )
                 val stillOnSameAnswer = _isAnswerEvaluated.value &&
                     _intensiveQueue.value.firstOrNull()?.id == evaluatedQuestionId &&
                     _intensiveCurrentQuestionState.value?.isCorrect == isCorrect
@@ -4407,7 +4450,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 cancelAutoAdvance()
                 val evaluatedQuestionId = currentQ.id
                 autoAdvanceJob = viewModelScope.launch {
-                    kotlinx.coroutines.delay(practiceAutoAdvanceDelayMillis(isCorrect))
+                    kotlinx.coroutines.delay(
+                    practiceAutoAdvanceDelayMillis(
+                        isCorrect, _autoNextCorrectDelayMs.value, _autoNextWrongDelayMs.value
+                    )
+                )
                     val stillOnSameAnswer = _isAnswerEvaluated.value &&
                         _currentQuestionIndex.value == currentIndex &&
                         _activeQuestions.value.getOrNull(currentIndex)?.id == evaluatedQuestionId

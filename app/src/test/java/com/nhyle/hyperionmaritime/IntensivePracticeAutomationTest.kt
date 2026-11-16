@@ -35,6 +35,8 @@ class IntensivePracticeAutomationTest {
         viewModel.toggleDirectAnswer(false)
         viewModel.toggleAutoNextCorrect(false)
         viewModel.toggleAutoNextWrong(false)
+        viewModel.setAutoNextDelayMillis(true, 300)
+        viewModel.setAutoNextDelayMillis(false, 500)
         viewModel.setTrack(Track.DECK_OIC_NW)
         viewModel.startConfiguredPractice(
             competenceId = "C1",
@@ -51,6 +53,8 @@ class IntensivePracticeAutomationTest {
         viewModel.toggleDirectAnswer(false)
         viewModel.toggleAutoNextCorrect(false)
         viewModel.toggleAutoNextWrong(false)
+        viewModel.setAutoNextDelayMillis(true, 300)
+        viewModel.setAutoNextDelayMillis(false, 500)
         LicenseManager.setOicNwProUnlocked(application, false)
         LicenseManager.init(application)
     }
@@ -105,8 +109,46 @@ class IntensivePracticeAutomationTest {
     }
 
     @Test
-    fun autoNextUsesBriefFeedbackInBothDrillModes() {
+    fun autoNextDelaysStartAtPreviousDefaultsAndCanBeChangedIndependently() {
+        assertEquals(300, viewModel.autoNextCorrectDelayMs.value)
+        assertEquals(500, viewModel.autoNextWrongDelayMs.value)
         assertEquals(300L, practiceAutoAdvanceDelayMillis(isCorrect = true))
         assertEquals(500L, practiceAutoAdvanceDelayMillis(isCorrect = false))
+
+        viewModel.adjustAutoNextDelayMillis(isCorrect = true, increment = 1)
+        viewModel.adjustAutoNextDelayMillis(isCorrect = false, increment = -1)
+
+        assertEquals(400, viewModel.autoNextCorrectDelayMs.value)
+        assertEquals(400, viewModel.autoNextWrongDelayMs.value)
+        assertEquals(400L, practiceAutoAdvanceDelayMillis(
+            isCorrect = true,
+            correctDelayMs = viewModel.autoNextCorrectDelayMs.value,
+            wrongDelayMs = viewModel.autoNextWrongDelayMs.value
+        ))
+
+        viewModel.setAutoNextDelayMillis(isCorrect = true, delayMs = 300)
+        viewModel.setAutoNextDelayMillis(isCorrect = false, delayMs = 500)
+        assertEquals(300, viewModel.autoNextCorrectDelayMs.value)
+        assertEquals(500, viewModel.autoNextWrongDelayMs.value)
+    }
+
+    @Test
+    fun autoNextDelayClampsAndPersistsLocallyAcrossViewModels() {
+        viewModel.setAutoNextDelayMillis(isCorrect = true, delayMs = 10)
+        viewModel.setAutoNextDelayMillis(isCorrect = false, delayMs = 9000)
+        viewModel.adjustAutoNextDelayMillis(isCorrect = true, increment = -1)
+        viewModel.adjustAutoNextDelayMillis(isCorrect = false, increment = 1)
+
+        assertEquals(100, viewModel.autoNextCorrectDelayMs.value)
+        assertEquals(5000, viewModel.autoNextWrongDelayMs.value)
+        val prefs = application.getSharedPreferences("hyperion_prefs", Context.MODE_PRIVATE)
+        assertEquals(100, prefs.getInt("drill_auto_next_correct_delay_ms", -1))
+        assertEquals(5000, prefs.getInt("drill_auto_next_wrong_delay_ms", -1))
+
+        val reloaded = ReviewerViewModel(application)
+        assertEquals(100, reloaded.autoNextCorrectDelayMs.value)
+        assertEquals(5000, reloaded.autoNextWrongDelayMs.value)
+        assertEquals(100L, practiceAutoAdvanceDelayMillis(true, 0, 5000))
+        assertEquals(5000L, practiceAutoAdvanceDelayMillis(false, 100, 10000))
     }
 }
