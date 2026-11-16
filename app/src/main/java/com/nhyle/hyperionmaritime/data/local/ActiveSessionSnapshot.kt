@@ -3,6 +3,7 @@ package com.nhyle.hyperionmaritime.data.local
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.Difficulty
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
 import com.nhyle.hyperionmaritime.data.model.Track
 import org.json.JSONArray
 import org.json.JSONObject
@@ -48,6 +49,7 @@ object ActiveSessionSnapshotManager {
                         put("competenceId", q.competenceId)
                         put("topic", q.topic)
                         put("questionText", q.questionText)
+                        if (q.imageAttachments.isNotEmpty()) put("imageAttachments", QuestionMedia.toJson(q.imageAttachments))
                         val opts = JSONArray()
                         q.options.forEach { opts.put(it) }
                         put("options", opts)
@@ -194,6 +196,8 @@ object ActiveSessionSnapshotManager {
                     val competenceId = qObj.optString("competenceId", "")
                     val topic = qObj.optString("topic", "")
                     val questionText = qObj.optString("questionText", "")
+                    val images = QuestionMedia.parse(qObj.optJSONArray("imageAttachments")?.toString())
+                    if (!QuestionMedia.hasPrompt(questionText, images)) return null
                     val optsArray = qObj.optJSONArray("options") ?: JSONArray()
                     val options = mutableListOf<String>()
                     for (j in 0 until optsArray.length()) {
@@ -219,7 +223,8 @@ object ActiveSessionSnapshotManager {
                             explanation = explanation,
                             difficulty = difficulty,
                             isBookmarked = isBookmarked,
-                            isWrongInVault = isWrongInVault
+                            isWrongInVault = isWrongInVault,
+                            imageAttachments = images
                         )
                     )
                 }

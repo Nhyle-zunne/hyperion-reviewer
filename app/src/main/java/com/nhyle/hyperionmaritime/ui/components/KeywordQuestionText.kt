@@ -49,6 +49,13 @@ class KeywordEditorState internal constructor(
             if (saved) editing = false
         }
     }
+    if (state.enabled && state.editing) {
+        ClickableText(modifier = modifier, text = annotated, style = style, onClick = { offset ->
+            // Punctuation inside a legacy compound word is selectable on its own.
+            val id = tokens.indexOfLast { offset in it.range }
+            if (id >= 0) state.toggle(key, text, id)
+        })
+    } else Text(text = annotated, style = style, modifier = modifier)
 }
 
 @Composable
@@ -59,6 +66,7 @@ fun rememberKeywordEditorState(
     text: String,
     choices: List<String> = emptyList()
 ): KeywordEditorState {
+    if (text.isBlank()) return
     val context = LocalContext.current
     val storage = remember(context) { QuestionKeywords(context) }
     // Choice order is presentation only; navigation, revisions and disabling discard the draft.
@@ -73,6 +81,7 @@ fun rememberKeywordEditorState(
 
 @Composable
 internal fun KeywordQuestionEditor(enabled: Boolean, track: String, questionId: String, text: String, style: TextStyle) {
+    if (text.isBlank()) return
     KeywordQuestionEditor(rememberKeywordEditorState(enabled, track, questionId, text), text, style)
 }
 
@@ -108,11 +117,4 @@ private fun KeywordHighlightText(state: KeywordEditorState, key: String, text: S
             }
         }
     }
-    if (state.enabled && state.editing) {
-        ClickableText(modifier = modifier, text = annotated, style = style, onClick = { offset ->
-            // Punctuation inside a legacy compound word is selectable on its own.
-            val id = tokens.indexOfLast { offset in it.range }
-            if (id >= 0) state.toggle(key, text, id)
-        })
-    } else Text(text = annotated, style = style, modifier = modifier)
 }

@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
+
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.model.ProQuestion
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -119,6 +121,9 @@ object ProQuestionRepository {
 
             val content = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
             val rows = parseCsvText(content)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
             val list = mutableListOf<ProQuestion>()
 
             // Match the PWA parser: attempt normal row records first, then
@@ -133,16 +138,17 @@ object ProQuestionRepository {
                     break
                 }
             }
-            val startRow = if (rows.size > 3) (if (headerIdx != -1) headerIdx + 1 else 1) else rows.size
+            val startRow = if (headerIdx != -1) headerIdx + 1 else if (rows.size > 3) 1 else rows.size
             for (rowIndex in startRow until rows.size) {
                 val row = rows[rowIndex]
-                if (row.size >= 10 && row[0].isNotBlank() && !row[0].equals("Question", ignoreCase = true)) {
+                if (row.size >= 10 && !row[0].equals("Question", ignoreCase = true)) {
                     val qText = row[0].trim()
+                    val images = QuestionMedia.fromCsvRow(mediaHeader, row)
                     val options = row.subList(2, 8).map { it.trim() }.filter { it.isNotEmpty() }
                     val explanation = row.getOrElse(8) { "" }.trim()
                     val ansStr = row.getOrElse(9) { "1" }.trim()
                     val ansIndex = ansStr.toIntOrNull()?.minus(1) ?: "ABCDEF".indexOf(ansStr.trim().uppercase().firstOrNull() ?: ' ')
-                    if (qText.isNotEmpty() && options.size >= 2) {
+                    if (QuestionMedia.hasPrompt(qText, images) && options.size >= 2) {
                         list.add(
                             ProQuestion(
                                 id = "$normComp-P$part-${list.size + 1}",
@@ -152,7 +158,8 @@ object ProQuestionRepository {
                                 options = options,
                                 correctAnswerIndex = ansIndex.coerceIn(0, options.size - 1),
                                 explanation = explanation,
-                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows)
+                                isRetired = RetiredQuestionPolicy.retiredFromCsv(row, rows),
+                                imageAttachments = images
                             )
                         )
                     }

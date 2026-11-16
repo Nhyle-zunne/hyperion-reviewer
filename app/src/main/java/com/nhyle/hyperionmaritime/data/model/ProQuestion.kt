@@ -12,7 +12,8 @@ data class ProQuestion(
     val options: List<String>,
     val correctAnswerIndex: Int,
     val explanation: String,
-    val isRetired: Boolean = false
+    val isRetired: Boolean = false,
+    val imageAttachments: List<QuestionImageRef> = emptyList()
 ) {
     fun toQuestion(): Question {
         return Question(
@@ -26,6 +27,7 @@ data class ProQuestion(
             correctAnswerIndex = this.correctAnswerIndex,
             explanation = this.explanation,
             isRetired = this.isRetired,
+            imageAttachments = this.imageAttachments,
             difficulty = classifyQuestionDifficulty(this.questionText, this.options)
         )
     }

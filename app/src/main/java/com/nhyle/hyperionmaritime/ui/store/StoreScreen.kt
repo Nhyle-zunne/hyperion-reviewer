@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.CellTower
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Construction
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,6 +79,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
+import com.nhyle.hyperionmaritime.data.billing.PlayPlanMode
 import com.nhyle.hyperionmaritime.data.billing.PlayProductItem
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
@@ -258,6 +260,23 @@ private fun PopupPlanBox(
     }
 }
 
+/**
+ * The ten benefits of a licensed reviewer track, matching the Bond Store on
+ * hyperionmaritime.org. No free access is promised for timed mock examinations.
+ */
+internal fun premiumFeaturesForTrack(competencies: String): List<String> = listOf(
+    "Unlimited practice sessions",
+    "Unlimited timed mock exams",
+    "Full question bank across $competencies competencies",
+    "Custom drills and question ranges",
+    "Quick Scan Mode",
+    "Mistakes Notebook and bookmarks",
+    "Full-text question search",
+    "Offline access",
+    "Study history and cross-device progress sync",
+    "Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."
+)
+
 @Composable
 internal fun StorePopupCard(
     productId: String,
@@ -328,15 +347,11 @@ internal fun StorePopupCard(
     }
 
     val activeCycle = selectedCardCycle ?: BillingCycle.YEARLY
-    val activeItem = billingManager.getProductItem(productId, activeCycle)
+    val canExtendPlay = isEntitled && billingManager.getActivePlayPlan(productId) != null
+    val displayedMode = if (canExtendPlay) PlayPlanMode.PREPAID else PlayPlanMode.AUTO_RENEWING
+    val activeItem = billingManager.getProductItem(productId, activeCycle, displayedMode)
 
-    val perks = listOf(
-        "Full question bank unlocked",
-        "All $competencies competencies, nothing locked",
-        "Mock exams with competence-by-competence scoring",
-        "Works 100% offline, study at sea",
-        "Manage or cancel anytime in Google Play"
-    )
+    val perks = premiumFeaturesForTrack(competencies)
 
     AnimatedVisibility(
         visible = shown,
@@ -359,7 +374,7 @@ internal fun StorePopupCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(colors.cardBackground)
-                        .padding(14.dp)
+                        .padding(12.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -428,8 +443,8 @@ internal fun StorePopupCard(
                 )
 
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         PopupStat("QUESTIONS", questionCount, colors, Modifier.weight(1f))
@@ -437,7 +452,12 @@ internal fun StorePopupCard(
                         PopupStat("MOCK EXAM", mockItems, colors, Modifier.weight(1f))
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    // All ten benefits are present immediately in both the Bond Store
+                    // and locked-feature popup; only the card scrolls on small screens.
+                    Column(
+                        modifier = Modifier.testTag("store_perks_list_$productId"),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         perks.forEach { perk ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
@@ -472,7 +492,7 @@ internal fun StorePopupCard(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         BillingCycle.values().forEach { cycle ->
-                            val cycleItem = billingManager.getProductItem(productId, cycle)
+                            val cycleItem = billingManager.getProductItem(productId, cycle, displayedMode)
                             PopupPlanBox(
                                 cycle = cycle,
                                 formattedPrice = cycleItem.shortFormattedPrice,
@@ -487,7 +507,42 @@ internal fun StorePopupCard(
                         }
                     }
 
-                    if (isEntitled) {
+                    if (canExtendPlay) {
+                        val prepaidOfferAvailable = billingManager.getOfferToken(
+                            productId, activeCycle, PlayPlanMode.PREPAID
+                        ) != null
+                        Button(
+                            onClick = { onPurchaseCycle(activeCycle) },
+                            enabled = prepaidOfferAvailable,
+                            shape = RectangleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accentGreen,
+                                contentColor = if (colors.isDark) Color.Black else Color.White
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("purchase_button_$productId")
+                        ) {
+                            Text(
+                                text = if (prepaidOfferAvailable)
+                                    "EXTEND LICENSE — ${activeItem.shortFormattedPrice}"
+                                else "PREPAID EXTENSION UNAVAILABLE",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = "Prepaid extension: pay once, no automatic renewal. " +
+                                "If your current Play plan auto-renews, extending switches it to prepaid. " +
+                                "Google Play credits the remaining paid value.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                    } else if (isEntitled) {
                         Surface(
                             shape = RectangleShape,
                             color = colors.storeBackground,
@@ -741,6 +796,8 @@ fun StoreScreen(
     var selectedOffer by rememberSaveable {
         mutableStateOf<SelectedOffer?>(null)
     }
+    var prepaidConfirmation by remember { mutableStateOf<SelectedOffer?>(null) }
+    var prepaidError by remember { mutableStateOf<String?>(null) }
 
     var openProductId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -1183,16 +1240,25 @@ fun StoreScreen(
                                     },
                                     onPurchaseCycle = { cycle ->
                                         selectedOffer = SelectedOffer(productId, cycle)
-                                        val activity = context.findActivity()
-                                        val details = billingManager.getProductDetails(productId)
-                                        if (activity != null && details != null) {
-                                            billingManager.launchBillingFlow(activity, productId, cycle)
-                                        } else if (activity != null && !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
-                                            billingManager.launchBillingFlow(activity, productId, cycle)
-                                        } else {
-                                            val item = billingManager.getProductItem(productId, cycle)
-                                            sandboxConfirmProduct = item
-                                            sandboxConfirmCycle = cycle
+                                        val activePlayPlan = billingManager.getActivePlayPlan(productId)
+                                        if (isEntitled && activePlayPlan != null) {
+                                            if (LicenseManager.getCurrentAccountUserId(context).isNullOrBlank()) {
+                                                prepaidError = "Sign in to My Hyperion Account and sync your Google Play subscription before extending. This is required to preserve and verify the exact prepaid expiry."
+                                            } else {
+                                                prepaidConfirmation = SelectedOffer(productId, cycle)
+                                            }
+                                        } else if (!isEntitled) {
+                                            val activity = context.findActivity()
+                                            val details = billingManager.getProductDetails(productId)
+                                            if (activity != null && details != null) {
+                                                billingManager.launchBillingFlow(activity, productId, cycle)
+                                            } else if (activity != null && !com.nhyle.hyperionmaritime.BuildConfig.DEBUG) {
+                                                billingManager.launchBillingFlow(activity, productId, cycle)
+                                            } else {
+                                                val item = billingManager.getProductItem(productId, cycle)
+                                                sandboxConfirmProduct = item
+                                                sandboxConfirmCycle = cycle
+                                            }
                                         }
                                     }
                                 )
@@ -1371,6 +1437,65 @@ fun StoreScreen(
                 )
             }
         }
+    }
+
+    prepaidConfirmation?.let { chosen ->
+        val existingMode = billingManager.getActivePlayPlan(chosen.productId)?.planMode
+        AlertDialog(
+            onDismissRequest = { prepaidConfirmation = null },
+            title = { Text("EXTEND LICENSE — PREPAID") },
+            text = {
+                Text(
+                    if (existingMode == PlayPlanMode.PREPAID)
+                        "Google Play will charge for this prepaid top-up immediately. " +
+                            "Your existing prepaid time is preserved and no automatic renewal is started."
+                    else
+                        "Google Play will charge for the prepaid plan immediately and replace " +
+                            "your auto-renewing subscription. Future automatic renewals stop. " +
+                            "Google Play credits remaining paid value, which may convert to a " +
+                            "different amount of time depending on the new plan's price. " +
+                            "Auto-renewal will not restart when prepaid access expires."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    prepaidConfirmation = null
+                    val activity = context.findActivity()
+                    if (activity == null) {
+                        prepaidError = "Google Play checkout requires an Android activity."
+                    } else {
+                        val result = billingManager.launchBillingFlow(
+                            activity, chosen.productId, chosen.cycle, PlayPlanMode.PREPAID
+                        )
+                        if (result.responseCode !=
+                            com.android.billingclient.api.BillingClient.BillingResponseCode.OK
+                        ) {
+                            prepaidError = result.debugMessage.ifBlank {
+                                "Google Play could not start this prepaid extension."
+                            }
+                        }
+                    }
+                }) {
+                    Text("CONTINUE TO GOOGLE PLAY")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { prepaidConfirmation = null }) {
+                    Text("KEEP CURRENT PLAN")
+                }
+            }
+        )
+    }
+
+    prepaidError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { prepaidError = null },
+            title = { Text("PREPAID EXTENSION UNAVAILABLE") },
+            text = { Text(message) },
+            confirmButton = {
+                Button(onClick = { prepaidError = null }) { Text("OK") }
+            }
+        )
     }
 
     if (showExpiredPopup) {

@@ -67,6 +67,7 @@ import com.nhyle.hyperionmaritime.ui.components.AreYouStillThereDialog
 import com.nhyle.hyperionmaritime.ui.components.KeywordQuestionEditor
 import com.nhyle.hyperionmaritime.ui.components.KeywordChoiceText
 import com.nhyle.hyperionmaritime.ui.components.rememberKeywordEditorState
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.QuestionBookmarkButton
 import com.nhyle.hyperionmaritime.ui.components.QuestionSettingsMenu
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
@@ -339,6 +340,7 @@ fun QuickScanViewerScreen(
                                     lineHeight = 24.sp * textScale
                                 )
                             )
+                            QuestionImageGallery(question = currentQuestion, placement = "question")
                         }
                     }
                 }
@@ -428,6 +430,11 @@ fun QuickScanViewerScreen(
                                 }
                             }
                         }
+                    }
+                }
+                if (currentQuestion.imageAttachments.any { it.placement == "explanation" }) {
+                    item {
+                        QuestionImageGallery(question = currentQuestion, placement = "explanation")
                     }
                 }
             }

@@ -228,6 +228,14 @@ class KeywordQuestionEditorTest {
         node.performTouchInput { click(Offset(box.left + box.width * 0.25f, box.center.y)) }
     }
 
+    @Test fun imageOnlyPromptDoesNotOfferEmptyKeywordEditing() {
+        compose.setContent {
+            MaterialTheme { KeywordQuestionEditor(true, "DECK", "image-only", " ", MaterialTheme.typography.bodyLarge) }
+        }
+        compose.onNodeWithText("Edit Keyword").assertDoesNotExist()
+        compose.onNodeWithTag("keyword_question_text").assertDoesNotExist()
+    }
+
     @Test fun editingRequiresSaveAndTogglePreservesSelection() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         context.getSharedPreferences("question_keywords", Context.MODE_PRIVATE).edit().clear().commit()

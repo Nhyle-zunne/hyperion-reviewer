@@ -55,6 +55,7 @@ import com.nhyle.hyperionmaritime.data.model.Question
 import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.shuffleOptionsStable
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.DifficultyBadge
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianButton
@@ -269,6 +270,7 @@ fun FlashcardScreen(
                                         ),
                                         color = colors.foreground
                                     )
+                                    QuestionImageGallery(question = currentCard, placement = "question")
                                 }
                             } else {
                                 // BACK: ANSWER & RATIONALE
@@ -318,6 +320,7 @@ fun FlashcardScreen(
                                             lineHeight = 22.sp
                                         )
                                     }
+                                    QuestionImageGallery(question = currentCard, placement = "explanation")
                                 }
                             }
                         }

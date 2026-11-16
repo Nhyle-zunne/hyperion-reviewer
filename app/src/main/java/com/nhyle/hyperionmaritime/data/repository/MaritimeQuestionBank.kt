@@ -3,6 +3,7 @@ package com.nhyle.hyperionmaritime.data.repository
 import android.content.Context
 import com.nhyle.hyperionmaritime.data.local.MockExamHistoryManager
 import com.nhyle.hyperionmaritime.data.model.Question
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.classifyQuestionDifficulty
 
@@ -41,13 +42,15 @@ object MaritimeQuestionBank {
                         NewTrackQuestionBank.getQuestions())
                 val result = lists.filter { q ->
                     val text = q.questionText.trim()
-                    val isHeader = text.equals("Question", ignoreCase = true) || text.isBlank()
+                    val isHeader = text.equals("Question", ignoreCase = true) ||
+                            !QuestionMedia.hasPrompt(text, q.imageAttachments)
+                    val isImageOnly = text.isBlank() && q.imageAttachments.any { it.placement == "question" }
                     val isDummyOptions = q.options.size == 4 &&
                             q.options[0].trim() == "A" &&
                             q.options[1].trim() == "B" &&
                             q.options[2].trim() == "C" &&
                             q.options[3].trim() == "D"
-                    !isHeader && !isDummyOptions
+                    !isHeader && (!isDummyOptions || isImageOnly)
                 }.map { q ->
                     q.copy(difficulty = classifyQuestionDifficulty(q.questionText, q.options))
                 }

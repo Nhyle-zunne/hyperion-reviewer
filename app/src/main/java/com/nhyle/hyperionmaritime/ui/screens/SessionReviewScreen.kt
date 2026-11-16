@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nhyle.hyperionmaritime.ui.components.QuestionImageGallery
 import com.nhyle.hyperionmaritime.ui.components.MaritimeTopBar
 import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.ui.components.MianSectionHeader
@@ -545,6 +546,7 @@ fun SessionReviewScreen(
                                         color = colors.foreground,
                                         lineHeight = 22.sp
                                     )
+                                    QuestionImageGallery(question = q, placement = "question")
 
                                     Spacer(modifier = Modifier.height(12.dp))
 
@@ -655,6 +657,7 @@ fun SessionReviewScreen(
                                         }
                                     }
 
+                                    QuestionImageGallery(question = q, placement = "explanation")
                                     if (!q.rationale.isNullOrBlank()) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Surface(
@@ -822,6 +825,7 @@ fun SessionReviewScreen(
                                 color = colors.foreground,
                                 lineHeight = 24.sp
                             )
+                            QuestionImageGallery(question = q, placement = "question")
                         }
                     }
                 }
@@ -934,6 +938,10 @@ fun SessionReviewScreen(
                         }
                     }
                 }
+            }
+
+            if (q.imageAttachments.any { it.placement == "explanation" }) {
+                QuestionImageGallery(question = q, placement = "explanation")
             }
 
             Surface(

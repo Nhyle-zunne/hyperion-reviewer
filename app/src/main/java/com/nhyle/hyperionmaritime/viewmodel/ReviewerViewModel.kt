@@ -79,6 +79,20 @@ enum class DrillDeliveryMode {
     INTENSIVE
 }
 
+// Keep feedback visible briefly without slowing either practice delivery mode.
+internal const val AUTO_NEXT_MIN_DELAY_MS = 100
+internal const val AUTO_NEXT_MAX_DELAY_MS = 5000
+internal const val AUTO_NEXT_STEP_MS = 100
+internal const val AUTO_NEXT_CORRECT_DEFAULT_MS = 300
+internal const val AUTO_NEXT_WRONG_DEFAULT_MS = 500
+
+internal fun practiceAutoAdvanceDelayMillis(
+    isCorrect: Boolean,
+    correctDelayMs: Int = AUTO_NEXT_CORRECT_DEFAULT_MS,
+    wrongDelayMs: Int = AUTO_NEXT_WRONG_DEFAULT_MS
+): Long = (if (isCorrect) correctDelayMs else wrongDelayMs)
+    .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS).toLong()
+
 data class DrillConfiguration(
     val competenceId: String? = null,
     val selectedPart: Int? = null,
@@ -1745,6 +1759,35 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         prefs.edit().putBoolean("drill_auto_next_wrong", enabled).apply()
     }
 
+    // Like Text Size, these preferences remain local and work offline.
+    private val _autoNextCorrectDelayMs = MutableStateFlow(
+        prefs.getInt("drill_auto_next_correct_delay_ms", AUTO_NEXT_CORRECT_DEFAULT_MS)
+            .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+    )
+    val autoNextCorrectDelayMs: StateFlow<Int> = _autoNextCorrectDelayMs.asStateFlow()
+
+    private val _autoNextWrongDelayMs = MutableStateFlow(
+        prefs.getInt("drill_auto_next_wrong_delay_ms", AUTO_NEXT_WRONG_DEFAULT_MS)
+            .coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+    )
+    val autoNextWrongDelayMs: StateFlow<Int> = _autoNextWrongDelayMs.asStateFlow()
+
+    fun setAutoNextDelayMillis(isCorrect: Boolean, delayMs: Int) {
+        val clamped = delayMs.coerceIn(AUTO_NEXT_MIN_DELAY_MS, AUTO_NEXT_MAX_DELAY_MS)
+        if (isCorrect) {
+            _autoNextCorrectDelayMs.value = clamped
+            prefs.edit().putInt("drill_auto_next_correct_delay_ms", clamped).apply()
+        } else {
+            _autoNextWrongDelayMs.value = clamped
+            prefs.edit().putInt("drill_auto_next_wrong_delay_ms", clamped).apply()
+        }
+    }
+
+    fun adjustAutoNextDelayMillis(isCorrect: Boolean, increment: Int) {
+        val current = if (isCorrect) _autoNextCorrectDelayMs.value else _autoNextWrongDelayMs.value
+        setAutoNextDelayMillis(isCorrect, current + increment * AUTO_NEXT_STEP_MS)
+    }
+
     private var autoAdvanceJob: kotlinx.coroutines.Job? = null
 
     fun cancelAutoAdvance() {
@@ -2214,7 +2257,46 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
+    // Full Reviewer routes must never silently downgrade to a five-question trial.
+    // The separate Free Reviewer and imported-sheet flows remain accessible.
+    fun canOpenPracticeScreen(screen: Screen): Boolean {
+        val track = (screen as? Screen.PracticeConfig)?.track ?: _selectedTrack.value
+        val isGmdssFreeReview = track == Track.GMDSS_GOC
+        val isProtected = when (screen) {
+            is Screen.PracticeCompetenceSelect ->
+                !screen.isCrpMode && !(isGmdssFreeReview && screen.isOperationalReview)
+            is Screen.PracticeConfig ->
+                (screen.isBookmarksMode || screen.isMistakesMode || (
+                    !screen.isCrpMode &&
+                    !(isGmdssFreeReview && screen.isOperationalReview) &&
+                    !_isMTestMDrillActive.value
+                ))
+            is Screen.Quiz ->
+                !_isCrpMode.value && !_isMTestMDrillActive.value &&
+                    !(isGmdssFreeReview && _lastPracticeDrillConfig?.isOperationalReview == true)
+            else -> false
+        }
+        return !isProtected || isTrackUnlocked(track)
+    }
+
+    fun enforceActivePracticeAccess() {
+        if (canOpenPracticeScreen(_currentScreen.value)) return
+        if (_currentScreen.value is Screen.Quiz) {
+            // Keep the session for later renewal; never discard answers on expiry.
+            autoSaveCurrentSession()
+            timerJob?.cancel()
+            studyTimeTracker.pauseTimer()
+        }
+        backStack.removeAll { it is Screen.PracticeCompetenceSelect || it is Screen.PracticeConfig || it is Screen.Quiz }
+        _currentScreen.value = Screen.Home
+    }
+
     fun navigateTo(screen: Screen) {
+        if (!canOpenPracticeScreen(screen)) {
+            enforceActivePracticeAccess()
+            triggerPaywall((screen as? Screen.PracticeConfig)?.track ?: _selectedTrack.value)
+            return
+        }
         val current = _currentScreen.value
         if (current == screen) return
 
@@ -2479,6 +2561,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         track: Track = _selectedTrack.value,
         selectedFunctions: Set<String>? = _selectedMockFunctions.value
     ) {
+        // Mock is a premium feature even when entered outside the track home.
+        if (!isTrackUnlocked(track)) {
+            triggerPaywall(track)
+            return
+        }
         _selectedTrack.value = track
         _selectedMockFunctions.value = selectedFunctions
         startQuizSession(QuizMode.MOCK_EXAM, selectedFunctions = selectedFunctions)
@@ -2581,6 +2668,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         shuffleQuestions: Boolean = false,
         shuffleChoices: Boolean = true
     ) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
@@ -2679,6 +2771,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         shuffleChoices: Boolean = true,
         requiredPasses: Int = _requiredMistakePasses.value
     ) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         setRequiredMistakePasses(requiredPasses)
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
@@ -3091,6 +3188,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         seenIds: Set<String> = emptySet(),
         isOperationalReview: Boolean = false
     ) {
+        val isFreeReviewer = isCrpMode ||
+            (_selectedTrack.value == Track.GMDSS_GOC && isOperationalReview)
+        if (!isFreeReviewer && !_isMTestMDrillActive.value && !isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         timerJob?.cancel()
         currentActiveSessionId = java.util.UUID.randomUUID().toString()
         _isExamSubmitted.value = false
@@ -3199,9 +3303,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             shuffleQuestions = if (isGmdssOpReview) false else shuffleQuestions
         )
 
-        // Secondary defense check: Truncate to first 5 questions if unactivated and NOT CRP mode and NOT GMDSS Op Review and NOT MTestM Drill
-        if (!isPro && !isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value) {
-            questions = questions.take(5)
+        // Recheck at launch in case the license expired while the pool loaded.
+        // Full Reviewer must not turn into a five-question preview.
+        if (!isCrpMode && !isGmdssOpReview && !_isMTestMDrillActive.value &&
+            !isTrackUnlocked(_selectedTrack.value)) {
+            enforceActivePracticeAccess()
+            triggerPaywall(_selectedTrack.value)
+            return
         }
 
         if (shuffleChoices) {
@@ -3271,8 +3379,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun selectIntensiveChoice(optionIndex: Int) {
         if (_isAnswerEvaluated.value) return
-        _selectedChoiceIndex.value = optionIndex
         val currentQ = _intensiveQueue.value.firstOrNull() ?: return
+        if (optionIndex !in currentQ.options.indices) return
+        _selectedChoiceIndex.value = optionIndex
         val currentMap = _userQuestionStates.value.toMutableMap()
         currentMap[currentQ.id] = UserQuestionState(
             questionId = currentQ.id,
@@ -3281,7 +3390,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             isCorrect = false
         )
         _userQuestionStates.value = currentMap
-        autoSaveCurrentSession()
+        // Intensive Mode must use the same Direct Answer setting as Standard Drill.
+        // confirmIntensiveAnswer records the attempt, updates feedback and schedules Auto-Next.
+        if (_isDirectAnswer.value) {
+            confirmIntensiveAnswer()
+        } else {
+            autoSaveCurrentSession()
+        }
     }
 
     fun selectIntensiveOption(optionIndex: Int) {
@@ -3362,7 +3477,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             cancelAutoAdvance()
             val evaluatedQuestionId = currentQ.id
             autoAdvanceJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(if (isCorrect) 750L else 1200L)
+                kotlinx.coroutines.delay(
+                    practiceAutoAdvanceDelayMillis(
+                        isCorrect, _autoNextCorrectDelayMs.value, _autoNextWrongDelayMs.value
+                    )
+                )
                 val stillOnSameAnswer = _isAnswerEvaluated.value &&
                     _intensiveQueue.value.firstOrNull()?.id == evaluatedQuestionId &&
                     _intensiveCurrentQuestionState.value?.isCorrect == isCorrect
@@ -3375,6 +3494,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun advanceIntensiveQuestion() {
+        if (!_isAnswerEvaluated.value) return
+        // A manual advance must cancel the pending timer, even when a wrong
+        // answer recycles the same question into a one-item intensive queue.
+        cancelAutoAdvance()
         intensivePresentationCounter++
         activeEvaluationAttemptCommittedId = null
         _currentQuestionStats.value = null
@@ -4121,6 +4244,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openMockCompetence(competenceId: String) {
+        if (!isTrackUnlocked(_selectedTrack.value)) {
+            triggerPaywall(_selectedTrack.value)
+            return
+        }
         _activeCompetenceId.value = competenceId
         if (!_isExamSubmitted.value && competenceId !in _completedCompetences.value) {
             timerJob?.cancel()
@@ -4323,8 +4450,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 cancelAutoAdvance()
                 val evaluatedQuestionId = currentQ.id
                 autoAdvanceJob = viewModelScope.launch {
-                    val delayMs = if (isCorrect) 750L else 1200L
-                    kotlinx.coroutines.delay(delayMs)
+                    kotlinx.coroutines.delay(
+                    practiceAutoAdvanceDelayMillis(
+                        isCorrect, _autoNextCorrectDelayMs.value, _autoNextWrongDelayMs.value
+                    )
+                )
                     val stillOnSameAnswer = _isAnswerEvaluated.value &&
                         _currentQuestionIndex.value == currentIndex &&
                         _activeQuestions.value.getOrNull(currentIndex)?.id == evaluatedQuestionId

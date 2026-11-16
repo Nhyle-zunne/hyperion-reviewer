@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.repository
 
+import com.nhyle.hyperionmaritime.data.model.QuestionMedia
+
 import android.util.Log
 import com.nhyle.hyperionmaritime.data.model.CompetenceInfo
 import com.nhyle.hyperionmaritime.data.model.Difficulty
@@ -54,6 +56,9 @@ object NewTrackQuestionBank {
                 .replace("\uFFFD", "'")
 
             val rows = parseCsvText(text)
+            val mediaHeader = rows.take(15).firstOrNull { header ->
+                header.any { it.trim().equals(QuestionMedia.COLUMN, ignoreCase = true) }
+            }.orEmpty()
             if (rows.isEmpty()) return emptyList()
 
             // Header row is the one whose first cell equals "No." (ignore case)
@@ -91,8 +96,9 @@ object NewTrackQuestionBank {
                 }
 
                 val qText = row.getOrNull(1)?.trim() ?: ""
-                if (qText.isEmpty()) {
-                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: question text is empty")
+                val images = QuestionMedia.fromCsvRow(mediaHeader, row)
+                if (!QuestionMedia.hasPrompt(qText, images)) {
+                    Log.w(TAG, "Invalid row in $assetPath at row $rowIdx: question text and valid prompt images are absent")
                     continue
                 }
 
@@ -139,7 +145,8 @@ object NewTrackQuestionBank {
                         correctAnswerIndex = correctIndex,
                         explanation = row.getOrNull(7).orEmpty(),
                         difficulty = diff,
-                        isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true
+                        isRetired = statusIndex >= 0 && row.getOrNull(statusIndex)?.trim()?.equals("RETIRED", ignoreCase = true) == true,
+                        imageAttachments = images
                     )
                 )
             }

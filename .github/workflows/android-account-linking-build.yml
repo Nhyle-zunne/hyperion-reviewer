@@ -24,6 +24,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Test tracked CSV policy and pinned UI design tables
+        run: python3 scripts/tests/test_question_bank_asset_safety.py
+
       - name: Block plaintext question banks and verify encrypted manifest
         run: python3 scripts/tests/question-bank-asset-safety.py
 

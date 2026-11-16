@@ -95,8 +95,32 @@ KEY_PASSWORD=your-key-password
 
 Never put actual values in a repository-committed file. The debug build uses Android Gradle Plugin's generated debug key; do not commit a custom debug keystore.
 
-The GitHub Actions workflow **Android internal-testing App Bundle** builds and verifies a signed `.aab` using repository Actions secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GOOGLE_SERVICES_JSON`, and `HYPERION_GOOGLE_WEB_CLIENT_ID`. It writes the keystore only to the temporary runner directory and uploads the signed bundle as an artifact. To build the account-linking feature, select branch `feature/android-account-signin-and-web-licenses` in the workflow's **Run workflow** dropdown; this does not merge or publish that branch automatically.
+GitHub Actions only runs source checks, unit tests, static analysis, and debug builds. It does not build, sign, or upload release APKs or AABs. The maintainer handles Android version numbers, release signing, bundle generation, and Play Console publishing manually through Android Studio.
 
 Signing files, Firebase configuration, exported certificates, APKs, and AABs are excluded by `.gitignore`. A file removed in a later commit can still exist in older Git history. Do not put a private keystore or password into source control; restrict repository-history access and decide whether history cleanup is needed before relying on a signing key that was previously committed.
 
 Before uploading to Play Console, verify the new upload-key reset is effective and that the bundle's version code is greater than the latest version already accepted for this app.
+
+## Question diagrams
+
+Diagrams referenced by packaged question banks must also be present under
+`app/src/main/assets/question-media/TRACK/SHA256.webp.enc` (or `.png.enc` / `.jpg.enc`).
+They use the existing authenticated AES-GCM asset format. The app checks the same
+track license as the question bank, decrypts locally and verifies image signatures
+and SHA-256 before display. Bundled diagrams require no account session, internet,
+or Supabase request. Account changes and license expiration still clear the viewer.
+
+Admin publication from the PWA commits diagrams and encrypted banks together.
+Pull that commit before building the next Android version. Existing installations
+receive new packaged diagrams through an app update; saved sessions referencing
+newer, unbundled images can use their existing verified, account-isolated local cache.
+If no local image is available, the app asks for an update. Android never downloads
+question diagrams or refreshes an account session to display them.
+
+Run `node scripts/bundle-question-media.mjs --verify` for offline reference and
+image-integrity checks. `python3 scripts/tests/question-bank-asset-safety.py`
+also rejects missing, untracked or plaintext assets; its `--artifact` option checks
+the packaged APK/AAB against source. For a historical backfill, the script without
+`--verify` uses a real GitHub maintainer login to request encrypted image assets
+from the private build endpoint. A workspace proxy placeholder is not a transferable
+GitHub credential. Never supply database service keys or put credentials in source.

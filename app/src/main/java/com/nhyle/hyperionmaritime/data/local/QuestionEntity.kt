@@ -1,5 +1,6 @@
 package com.nhyle.hyperionmaritime.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -21,5 +22,6 @@ data class QuestionEntity(
     val optionsJson: String = "",
     val correctAnswerIndex: Int = 0,
     val explanation: String = "",
-    val difficulty: String = "MODERATE"
+    val difficulty: String = "MODERATE",
+    @ColumnInfo(defaultValue = "'[]'") val imageAttachmentsJson: String = "[]"
 )

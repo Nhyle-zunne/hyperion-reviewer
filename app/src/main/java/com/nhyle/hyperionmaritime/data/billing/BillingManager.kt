@@ -28,6 +28,8 @@ import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -83,6 +85,62 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
     // Do not use this for subscription expiry calculations; use nextBillingPeriod().
     val durationMs: Long get() = durationDays.toLong() * 24L * 60L * 60L * 1000L
 }
+
+enum class PlayPlanMode { AUTO_RENEWING, PREPAID }
+
+/** Published prepaid base-plan IDs; All-Access is legacy-only and not sold. */
+internal fun prepaidBasePlanId(productId: String, cycle: BillingCycle): String? {
+    val prefix = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "oic-nw"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "oic-ew"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "deck-mgt"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "engine-mgt"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "gmdss"
+        else -> return null
+    }
+    return "$prefix-prepaid-${cycle.name.lowercase()}"
+}
+
+/** Never select a prepaid offer for an initial auto-renewing purchase. */
+internal fun matchesPlanOffer(
+    productId: String,
+    cycle: BillingCycle,
+    mode: PlayPlanMode,
+    basePlanId: String,
+    billingPeriods: List<String>
+): Boolean = when (mode) {
+    PlayPlanMode.PREPAID ->
+        basePlanId == prepaidBasePlanId(productId, cycle) &&
+            cycle.matchesPlayOffer(basePlanId, billingPeriods)
+    PlayPlanMode.AUTO_RENEWING ->
+        !basePlanId.contains("prepaid", ignoreCase = true) &&
+            cycle.matchesPlayOffer(basePlanId, billingPeriods)
+}
+
+internal fun resolvePurchasedPlanMode(
+    previousMode: PlayPlanMode?,
+    pendingMode: PlayPlanMode?,
+    isNewPurchase: Boolean,
+    isAutoRenewing: Boolean
+): PlayPlanMode = when {
+    isNewPurchase && pendingMode != null -> pendingMode
+    // Google Play can change a plan outside the app. A new token or advanced
+    // purchase time establishes a fresh purchase, not the previous plan type.
+    isNewPurchase -> if (isAutoRenewing) PlayPlanMode.AUTO_RENEWING else PlayPlanMode.PREPAID
+    previousMode != null -> previousMode
+    isAutoRenewing -> PlayPlanMode.AUTO_RENEWING
+    else -> PlayPlanMode.PREPAID
+}
+
+internal fun canExtendPlayPurchase(purchaseToken: String?): Boolean =
+    !purchaseToken.isNullOrBlank() && !purchaseToken.startsWith("mock_sandbox_sub_token_")
+
+/** A legacy All-Access token must not be used to replace a single-track purchase. */
+internal fun canExtendTrackPlayPurchase(
+    trackToken: String?,
+    allAccessToken: String?
+): Boolean = canExtendPlayPurchase(trackToken) &&
+    (allAccessToken.isNullOrBlank() || trackToken != allAccessToken)
 
 /**
  * Matches the recurring billing period of a Play subscription offer. When an offer
@@ -214,6 +272,7 @@ fun formatSubscriptionTimeRemaining(
  */
 data class ActivePlanInfo(
     val cycle: BillingCycle = BillingCycle.YEARLY,
+    val planMode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING,
     val isTerminalLicense: Boolean = false,
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
@@ -334,6 +393,28 @@ object BillingConstants {
     const val PRODUCT_DECK_MGT_PASS = "hyperion_deck_mgt_pass"
     const val PRODUCT_ENGINE_MGT_PASS = "hyperion_engine_mgt_pass"
 
+    // Staged non-consumable INAPP products; NOT included in active subscription
+    // catalog or selectable until verified server fulfillment and Play Console setup.
+    const val PRODUCT_OIC_NW_LIFETIME = "hyperion_oic_nw_lifetime"
+    const val PRODUCT_ENGINE_OIC_EW_LIFETIME = "hyperion_engine_oic_ew_lifetime"
+    const val PRODUCT_GMDSS_LIFETIME = "hyperion_gmdss_lifetime"
+    const val PRODUCT_DECK_MGT_LIFETIME = "hyperion_deck_mgt_lifetime"
+    const val PRODUCT_ENGINE_MGT_LIFETIME = "hyperion_engine_mgt_lifetime"
+
+    val LIFETIME_PRODUCT_IDS = listOf(
+        PRODUCT_OIC_NW_LIFETIME, PRODUCT_ENGINE_OIC_EW_LIFETIME,
+        PRODUCT_GMDSS_LIFETIME, PRODUCT_DECK_MGT_LIFETIME,
+        PRODUCT_ENGINE_MGT_LIFETIME
+    )
+
+    fun lifetimeProductForTrack(track: Track): String = when (track) {
+        Track.DECK_OIC_NW -> PRODUCT_OIC_NW_LIFETIME
+        Track.ENGINE_OIC_EW -> PRODUCT_ENGINE_OIC_EW_LIFETIME
+        Track.GMDSS_GOC -> PRODUCT_GMDSS_LIFETIME
+        Track.DECK_MGT -> PRODUCT_DECK_MGT_LIFETIME
+        Track.ENGINE_MGT -> PRODUCT_ENGINE_MGT_LIFETIME
+    }
+
     val ALL_PRODUCT_IDS = listOf(
         PRODUCT_OIC_NW_PASS,
         PRODUCT_GMDSS_PASS,
@@ -343,74 +424,74 @@ object BillingConstants {
         PRODUCT_ENGINE_MGT_PASS
     )
 
-    // Standard Fallback Display Prices across billing cycles
+    // Display-only fallback prices. Actual purchases always use the fetched Google Play offer.
     val DEFAULT_PRICES_YEARLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱350 / year",
-        PRODUCT_GMDSS_PASS to "₱250 / year",
+        PRODUCT_OIC_NW_PASS to "₱499 / year",
+        PRODUCT_GMDSS_PASS to "₱399 / year",
         PRODUCT_ALL_ACCESS_PASS to "₱500 / year",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱350 / year",
-        PRODUCT_DECK_MGT_PASS to "₱700 / year",
-        PRODUCT_ENGINE_MGT_PASS to "₱700 / year"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱499 / year",
+        PRODUCT_DECK_MGT_PASS to "₱999 / year",
+        PRODUCT_ENGINE_MGT_PASS to "₱999 / year"
     )
 
     val DEFAULT_PRICES_MONTHLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱50 / month",
-        PRODUCT_GMDSS_PASS to "₱40 / month",
+        PRODUCT_OIC_NW_PASS to "₱79 / month",
+        PRODUCT_GMDSS_PASS to "₱59 / month",
         PRODUCT_ALL_ACCESS_PASS to "₱80 / month",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱50 / month",
-        PRODUCT_DECK_MGT_PASS to "₱100 / month",
-        PRODUCT_ENGINE_MGT_PASS to "₱100 / month"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱79 / month",
+        PRODUCT_DECK_MGT_PASS to "₱149 / month",
+        PRODUCT_ENGINE_MGT_PASS to "₱149 / month"
     )
 
     val DEFAULT_PRICES_WEEKLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱20 / week",
-        PRODUCT_GMDSS_PASS to "₱15 / week",
+        PRODUCT_OIC_NW_PASS to "₱29 / week",
+        PRODUCT_GMDSS_PASS to "₱25 / week",
         PRODUCT_ALL_ACCESS_PASS to "₱35 / week",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱20 / week",
-        PRODUCT_DECK_MGT_PASS to "₱40 / week",
-        PRODUCT_ENGINE_MGT_PASS to "₱40 / week"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱29 / week",
+        PRODUCT_DECK_MGT_PASS to "₱59 / week",
+        PRODUCT_ENGINE_MGT_PASS to "₱59 / week"
     )
 
     // Backward-compatible default price map (Yearly)
     val DEFAULT_PRICES = DEFAULT_PRICES_YEARLY
 
     val DEFAULT_SHORT_PRICES_YEARLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱350/yr",
-        PRODUCT_GMDSS_PASS to "₱250/yr",
+        PRODUCT_OIC_NW_PASS to "₱499/yr",
+        PRODUCT_GMDSS_PASS to "₱399/yr",
         PRODUCT_ALL_ACCESS_PASS to "₱500/yr",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱350/yr",
-        PRODUCT_DECK_MGT_PASS to "₱700/yr",
-        PRODUCT_ENGINE_MGT_PASS to "₱700/yr"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱499/yr",
+        PRODUCT_DECK_MGT_PASS to "₱999/yr",
+        PRODUCT_ENGINE_MGT_PASS to "₱999/yr"
     )
 
     val DEFAULT_SHORT_PRICES_MONTHLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱50/mo",
-        PRODUCT_GMDSS_PASS to "₱40/mo",
+        PRODUCT_OIC_NW_PASS to "₱79/mo",
+        PRODUCT_GMDSS_PASS to "₱59/mo",
         PRODUCT_ALL_ACCESS_PASS to "₱80/mo",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱50/mo",
-        PRODUCT_DECK_MGT_PASS to "₱100/mo",
-        PRODUCT_ENGINE_MGT_PASS to "₱100/mo"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱79/mo",
+        PRODUCT_DECK_MGT_PASS to "₱149/mo",
+        PRODUCT_ENGINE_MGT_PASS to "₱149/mo"
     )
 
     val DEFAULT_SHORT_PRICES_WEEKLY = mapOf(
-        PRODUCT_OIC_NW_PASS to "₱20/wk",
-        PRODUCT_GMDSS_PASS to "₱15/wk",
+        PRODUCT_OIC_NW_PASS to "₱29/wk",
+        PRODUCT_GMDSS_PASS to "₱25/wk",
         PRODUCT_ALL_ACCESS_PASS to "₱35/wk",
-        PRODUCT_ENGINE_OIC_EW_PASS to "₱20/wk",
-        PRODUCT_DECK_MGT_PASS to "₱40/wk",
-        PRODUCT_ENGINE_MGT_PASS to "₱40/wk"
+        PRODUCT_ENGINE_OIC_EW_PASS to "₱29/wk",
+        PRODUCT_DECK_MGT_PASS to "₱59/wk",
+        PRODUCT_ENGINE_MGT_PASS to "₱59/wk"
     )
 
     fun getFallbackPrice(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String = when (cycle) {
-        BillingCycle.WEEKLY -> DEFAULT_PRICES_WEEKLY[productId] ?: "₱20 / week"
-        BillingCycle.MONTHLY -> DEFAULT_PRICES_MONTHLY[productId] ?: "₱50 / month"
-        BillingCycle.YEARLY -> DEFAULT_PRICES_YEARLY[productId] ?: "₱350 / year"
+        BillingCycle.WEEKLY -> DEFAULT_PRICES_WEEKLY[productId] ?: "Price unavailable"
+        BillingCycle.MONTHLY -> DEFAULT_PRICES_MONTHLY[productId] ?: "Price unavailable"
+        BillingCycle.YEARLY -> DEFAULT_PRICES_YEARLY[productId] ?: "Price unavailable"
     }
 
     fun getFallbackShortPrice(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String = when (cycle) {
-        BillingCycle.WEEKLY -> DEFAULT_SHORT_PRICES_WEEKLY[productId] ?: "₱20/wk"
-        BillingCycle.MONTHLY -> DEFAULT_SHORT_PRICES_MONTHLY[productId] ?: "₱50/mo"
-        BillingCycle.YEARLY -> DEFAULT_SHORT_PRICES_YEARLY[productId] ?: "₱350/yr"
+        BillingCycle.WEEKLY -> DEFAULT_SHORT_PRICES_WEEKLY[productId] ?: "Price unavailable"
+        BillingCycle.MONTHLY -> DEFAULT_SHORT_PRICES_MONTHLY[productId] ?: "Price unavailable"
+        BillingCycle.YEARLY -> DEFAULT_SHORT_PRICES_YEARLY[productId] ?: "Price unavailable"
     }
 
     val PRODUCT_NAMES = mapOf(
@@ -613,6 +694,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         fun resetForTesting() {
             synchronized(this) {
+                INSTANCE?.scope?.cancel()
+                INSTANCE?.runCatchingCloseForTesting()
                 INSTANCE?.resetEntitlementsForTesting()
                 INSTANCE = null
             }
@@ -625,14 +708,24 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     }
 
     fun resetEntitlementsForTesting() {
-        try {
-            securePrefs.edit().clear().apply()
-        } catch (_: Exception) {}
-        _entitlements.value = TrackEntitlements()
+        synchronized(entitlementCacheGuard) {
+            entitlementMutationRevision.incrementAndGet()
+            try {
+                securePrefs.edit().clear().apply()
+            } catch (_: Exception) {}
+            _entitlements.value = TrackEntitlements()
+        }
     }
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Prevent a late startup cache snapshot from overwriting a newer Play grant.
+    private val entitlementCacheGuard = Any()
+    private val entitlementMutationRevision = AtomicInteger(0)
+
+    private fun runCatchingCloseForTesting() {
+        runCatching { billingClient.endConnection() }
+    }
 
     private val _entitlements = MutableStateFlow(TrackEntitlements())
     val entitlements: StateFlow<TrackEntitlements> = _entitlements.asStateFlow()
@@ -934,7 +1027,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
             else -> return
         }
-        securePrefs.edit().remove("${cycleKey}_pending").apply()
+        securePrefs.edit()
+            .remove("${cycleKey}_pending")
+            .remove("${cycleKey}_pending_mode")
+            .apply()
         lastRequestedCycles.remove(productId)
         if (checkoutFlowProductId == productId) checkoutFlowProductId = null
     }
@@ -1060,6 +1156,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             pendingCycle = pendingCycle,
                             isNewPurchase = selectedCycleWasPurchased
                         )
+                        val previouslyPurchasedMode = securePrefs.getString("${cycleKey}_mode", null)
+                            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+                        val requestedMode = securePrefs.getString("${cycleKey}_pending_mode", null)
+                            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+                        val purchasedMode = resolvePurchasedPlanMode(
+                            previouslyPurchasedMode, requestedMode,
+                            selectedCycleWasPurchased, purchase.isAutoRenewing
+                        )
+                        editor.putString("${cycleKey}_mode", purchasedMode.name)
 
                         // Confirm a pending Store selection only when Google Play reports a
                         // newer purchase or a replacement purchase token. A cancelled checkout
@@ -1068,6 +1173,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             val checkoutStillOpen = _entitlements.value.pendingPurchaseProductId == productId
                             if (selectedCycleWasPurchased || !checkoutStillOpen) {
                                 editor.remove(pendingCycleKey)
+                                editor.remove("${cycleKey}_pending_mode")
                                 lastRequestedCycles.remove(productId)
                             }
                         }
@@ -1094,6 +1200,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
                                 oicPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1107,6 +1214,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_GMDSS_PASS -> {
                                 gmdssPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1120,6 +1228,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
                                 engineOicEwPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1133,6 +1242,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_DECK_MGT_PASS -> {
                                 deckMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1146,6 +1256,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
                                 engineMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1159,6 +1270,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
                                 val plan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1327,7 +1439,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         editor.apply()
 
-        _entitlements.update {
+        synchronized(entitlementCacheGuard) {
+            entitlementMutationRevision.incrementAndGet()
+            _entitlements.update {
             TrackEntitlements(
                 oicNwPlan = oicPlan,
                 gmdssPlan = gmdssPlan,
@@ -1342,6 +1456,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 cachedPurchaseTime = lastPurchaseTime,
                 isClockTampered = isClockTampered
             )
+            }
         }
         true
     }
@@ -1390,7 +1505,13 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
+    private fun cachedPlanMode(cycleKey: String): PlayPlanMode =
+        securePrefs.getString("${cycleKey}_mode", null)
+            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+            ?: PlayPlanMode.AUTO_RENEWING
+
     private fun loadCachedEntitlements() {
+        val readRevision = entitlementMutationRevision.get()
         migrateLegacyWeeklyFallbacks()
 
         val oic = securePrefs.getBoolean(KEY_OIC_NW_UNLOCKED, false)
@@ -1460,6 +1581,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val oicPlan = if (oic) ActivePlanInfo(
             cycle = oicCycle,
+            planMode = cachedPlanMode("play_plan_cycle_oic"),
             purchaseToken = securePrefs.getString(KEY_OIC_TOKEN, null),
             purchaseTimestamp = oicPurchase,
             expiryTimestamp = oicExpiry,
@@ -1472,6 +1594,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
             cycle = gmdssCycle,
+            planMode = cachedPlanMode("play_plan_cycle_gmdss"),
             purchaseToken = securePrefs.getString(KEY_GMDSS_TOKEN, null),
             purchaseTimestamp = gmdssPurchase,
             expiryTimestamp = gmdssExpiry,
@@ -1484,6 +1607,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
             cycle = allAccessCycle,
+            planMode = cachedPlanMode("play_plan_cycle_all_access"),
             purchaseToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null),
             purchaseTimestamp = allAccessPurchase,
             expiryTimestamp = allAccessExpiry,
@@ -1499,6 +1623,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", engineEwCycle.nextBillingPeriod(ewPurchase))
         val engineEwPlan = if (hasEw) ActivePlanInfo(
             cycle = engineEwCycle,
+            planMode = cachedPlanMode("play_plan_cycle_engine_ew"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
             purchaseTimestamp = ewPurchase,
             expiryTimestamp = ewExpiry,
@@ -1514,6 +1639,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", deckMgtCycle.nextBillingPeriod(dmPurchase))
         val deckMgtPlan = if (hasDm) ActivePlanInfo(
             cycle = deckMgtCycle,
+            planMode = cachedPlanMode("play_plan_cycle_deck_mgt"),
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
             purchaseTimestamp = dmPurchase,
             expiryTimestamp = dmExpiry,
@@ -1529,6 +1655,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", engineMgtCycle.nextBillingPeriod(emPurchase))
         val engineMgtPlan = if (hasEm) ActivePlanInfo(
             cycle = engineMgtCycle,
+            planMode = cachedPlanMode("play_plan_cycle_engine_mgt"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
             purchaseTimestamp = emPurchase,
             expiryTimestamp = emExpiry,
@@ -1550,10 +1677,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val anyActive = hasOicActive || hasGmdssActive || hasAllActive || hasEwActive || hasDmActive || hasEmActive
         val expectedHash = computeIntegrityChecksum(hasOicActive, hasGmdssActive, hasAllActive, hasEwActive, hasDmActive, hasEmActive)
         
-        // Auto-heal integrity hash on app version upgrades
-        securePrefs.edit().putString(KEY_SIGNATURE_HASH, expectedHash).apply()
-
-        _entitlements.update {
+        // A newer purchase/Play query wins over a stale startup cache read.
+        synchronized(entitlementCacheGuard) {
+            if (entitlementMutationRevision.get() != readRevision) return
+            securePrefs.edit().putString(KEY_SIGNATURE_HASH, expectedHash).apply()
+            _entitlements.update {
             it.copy(
                 oicNwPlan = if (hasOicActive) oicPlan else null,
                 gmdssPlan = if (hasGmdssActive) gmdssPlan else null,
@@ -1564,6 +1692,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 cachedPurchaseTime = purchaseTime,
                 cachedBasePlan = basePlan
             )
+            }
         }
     }
 
@@ -1573,28 +1702,62 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         return md.digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
-    fun getOfferToken(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String? {
-        val details = _productsDetails.value[productId] ?: return null
-        val offers = details.subscriptionOfferDetails ?: return null
-
-        val matchedOffer = offers.firstOrNull { offer ->
-            cycle.matchesPlayOffer(
-                basePlanId = offer.basePlanId,
-                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+    fun getOfferToken(
+        productId: String,
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
+    ): String? {
+        val offers = _productsDetails.value[productId]?.subscriptionOfferDetails ?: return null
+        // Strictly select either the published prepaid base plan or a recurring
+        // offer. An unavailable selection must never silently charge another plan.
+        return offers.firstOrNull { offer ->
+            matchesPlanOffer(
+                productId, cycle, mode, offer.basePlanId,
+                offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
             )
-        }
+        }?.offerToken
+    }
 
-        // Never silently fall back to a different base plan (e.g. yearly when the
-        // user explicitly selected weekly). The caller will show an unavailable-plan
-        // message instead of charging for a different duration.
-        return matchedOffer?.offerToken
+    fun getActivePlayPlan(productId: String): ActivePlanInfo? {
+        val ent = _entitlements.value
+        val plan = when (productId) {
+            BillingConstants.PRODUCT_OIC_NW_PASS -> ent.oicNwPlan
+            BillingConstants.PRODUCT_GMDSS_PASS -> ent.gmdssPlan
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> ent.engineOicEwPlan
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> ent.deckMgtPlan
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> ent.engineMgtPlan
+            else -> null
+        }
+        return plan?.takeUnless { it.isExpired }?.takeIf {
+            canExtendTrackPlayPurchase(it.purchaseToken, ent.allAccessPlan?.purchaseToken)
+        }
     }
 
     fun launchBillingFlow(
         activity: Activity,
         productId: String,
-        cycle: BillingCycle = BillingCycle.YEARLY
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
     ): BillingResult {
+        // Website and legacy All-Access grants are not Google Play purchases.
+        // Never collect a Play top-up unless there is an active, valid Play token.
+        val existingPlayToken = getActivePlayPlan(productId)?.purchaseToken
+        if (mode == PlayPlanMode.PREPAID && !canExtendPlayPurchase(existingPlayToken)) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("An active Google Play subscription is required for a prepaid extension.")
+                .build()
+        }
+        // Prepaid expiry requires Google Play SubscriptionsV2 verification; the
+        // linked Hyperion account securely persists the exact verified expiry.
+        if (mode == PlayPlanMode.PREPAID &&
+            LicenseManager.getCurrentAccountUserId(appContext).isNullOrBlank()
+        ) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.DEVELOPER_ERROR)
+                .setDebugMessage("Sign in to My Hyperion Account before extending your Google Play license.")
+                .build()
+        }
         lastRequestedCycles[productId] = cycle
         val cycleKey = when (productId) {
             BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
@@ -1606,7 +1769,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             else -> "play_plan_cycle_default"
         }
         try {
-            securePrefs.edit().putString("${cycleKey}_pending", cycle.name).apply()
+            securePrefs.edit()
+                .putString("${cycleKey}_pending", cycle.name)
+                .putString("${cycleKey}_pending_mode", mode.name)
+                .apply()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to persist pending duration selection: ${e.message}")
         }
@@ -1622,7 +1788,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 .build()
         }
 
-        val offerToken = getOfferToken(productId, cycle)
+        val offerToken = getOfferToken(productId, cycle, mode)
         if (offerToken.isNullOrBlank()) {
             clearPendingBillingCycle(productId)
             Log.e(TAG, "No Google Play offer matched the selected cycle: product=$productId, cycle=$cycle")
@@ -1643,6 +1809,19 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val flowBuilder = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(productDetailsParamsList)
+        if (mode == PlayPlanMode.PREPAID) {
+            // Google Play requires CHARGE_FULL_PRICE for switching an active
+            // recurring plan to prepaid. Existing paid value is credited by Play;
+            // prepaid top-ups also use this replacement mode.
+            flowBuilder.setSubscriptionUpdateParams(
+                BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                    .setOldPurchaseToken(requireNotNull(existingPlayToken))
+                    .setSubscriptionReplacementMode(
+                        BillingFlowParams.SubscriptionUpdateParams.ReplacementMode.CHARGE_FULL_PRICE
+                    )
+                    .build()
+            )
+        }
 
         // Bind this new Play purchase to the signed-in Hyperion account when available.
         // Sign-in is optional; users without an app account can still purchase normally.
@@ -1666,7 +1845,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         return result
     }
 
-    fun getProductItem(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): PlayProductItem {
+    fun getProductItem(
+        productId: String,
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
+    ): PlayProductItem {
         val details = _productsDetails.value[productId]
         val ent = _entitlements.value
 
@@ -1683,9 +1866,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val isPending = ent.pendingPurchaseProductId == productId
 
         val matchedOffer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-            cycle.matchesPlayOffer(
-                basePlanId = offer.basePlanId,
-                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            matchesPlanOffer(
+                productId, cycle, mode, offer.basePlanId,
+                offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
             )
         }
 
@@ -1738,10 +1921,12 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
      * Guarded strictly for DEBUG builds.
      */
     fun simulatePurchaseForTesting(productId: String, cycle: BillingCycle = BillingCycle.YEARLY) {
+        synchronized(entitlementCacheGuard) {
         if (!BuildConfig.DEBUG) {
             Log.w(TAG, "Sandbox purchase simulation is strictly forbidden in RELEASE builds.")
             return
         }
+        entitlementMutationRevision.incrementAndGet()
         lastRequestedCycles[productId] = cycle
         val now = System.currentTimeMillis()
         val expiryTime = cycle.nextBillingPeriod(now)
@@ -1915,6 +2100,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 errorMessage = null,
                 cachedPurchaseTime = now
             )
+        }
         }
     }
 }

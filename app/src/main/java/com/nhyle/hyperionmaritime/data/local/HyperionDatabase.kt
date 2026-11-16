@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -15,7 +17,7 @@ import androidx.room.RoomDatabase
         DrillSessionEntity::class,
         com.nhyle.hyperionmaritime.data.studytime.StudyTimeSegmentEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class HyperionDatabase : RoomDatabase() {
@@ -29,6 +31,12 @@ abstract class HyperionDatabase : RoomDatabase() {
     abstract fun studyTimeSegmentDao(): com.nhyle.hyperionmaritime.data.studytime.StudyTimeSegmentDao
 
     companion object {
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE questions ADD COLUMN imageAttachmentsJson TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile
         private var INSTANCE: HyperionDatabase? = null
 
@@ -38,7 +46,7 @@ abstract class HyperionDatabase : RoomDatabase() {
                     context.applicationContext,
                     HyperionDatabase::class.java,
                     "hyperion_marina.db"
-                ).fallbackToDestructiveMigration().build()
+                ).addMigrations(MIGRATION_7_8).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }

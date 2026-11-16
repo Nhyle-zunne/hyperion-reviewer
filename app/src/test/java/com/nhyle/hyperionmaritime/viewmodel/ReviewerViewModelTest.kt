@@ -126,6 +126,59 @@ class ReviewerViewModelTest {
         }
     }
 
+    @Test
+    fun unlicensedUserCannotOpenFullReviewerPagesOrStartARestrictedQuiz() {
+        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateTo(Screen.PracticeCompetenceSelect())
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C1"))
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+
+        viewModel.startConfiguredPractice(competenceId = "C1", questionCount = 5)
+        assertEquals("Paid practice must not fall back to a five-question quiz", Screen.Home, viewModel.currentScreen.value)
+
+        // Free Reviewer remains independent of paid Full Reviewer access.
+        val freeCompetences = Screen.PracticeCompetenceSelect(isCrpMode = true)
+        viewModel.navigateTo(freeCompetences)
+        assertEquals(freeCompetences, viewModel.currentScreen.value)
+        val freeConfig = Screen.PracticeConfig(competenceId = "C1", isCrpMode = true)
+        viewModel.navigateTo(freeConfig)
+        assertEquals(freeConfig, viewModel.currentScreen.value)
+    }
+
+    @Test
+    fun entitlementLossBlocksFurtherFullReviewerNavigationFromAnOpenConfig() {
+        LicenseManager.setOicNwProUnlocked(context, true)
+        viewModel.refreshUnlockStates()
+        val paidConfig = Screen.PracticeConfig(competenceId = "C1")
+        viewModel.navigateTo(paidConfig)
+        assertEquals(paidConfig, viewModel.currentScreen.value)
+
+        LicenseManager.setOicNwProUnlocked(context, false)
+        viewModel.refreshUnlockStates()
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C2"))
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+    }
+
+    @Test
+    fun activeFullReviewerConfigClosesOnLicenseExpiryWithoutNavigation() {
+        LicenseManager.setOicNwProUnlocked(context, true)
+        viewModel.refreshUnlockStates()
+        viewModel.navigateTo(Screen.Home)
+        viewModel.navigateTo(Screen.PracticeCompetenceSelect())
+        viewModel.navigateTo(Screen.PracticeConfig(competenceId = "C1"))
+        assertTrue(viewModel.currentScreen.value is Screen.PracticeConfig)
+
+        // Expiry/sign-out invalidates the same local source checked on every page.
+        LicenseManager.setOicNwProUnlocked(context, false)
+        viewModel.refreshUnlockStates()
+        viewModel.enforceActivePracticeAccess()
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+        assertFalse(viewModel.canOpenPracticeScreen(Screen.PracticeConfig(competenceId = "C1")))
+        assertTrue(viewModel.canOpenPracticeScreen(Screen.PracticeConfig(competenceId = "C1", isCrpMode = true)))
+    }
+
     @After
     fun tearDown() {
         LicenseManager.setActivated(context, false)
@@ -176,7 +229,7 @@ class ReviewerViewModelTest {
         // 2. Also verify persistent entitlement cache survives
         val reloadedItem = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS)
         assertTrue("Product item must report isOwned = true", reloadedItem.isOwned)
-        assertEquals("₱350 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_OIC_NW_PASS])
+        assertEquals("₱499 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_OIC_NW_PASS])
     }
 
     /**
@@ -212,7 +265,7 @@ class ReviewerViewModelTest {
 
         val reloadedItem = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS)
         assertTrue("Product item must report isOwned = true", reloadedItem.isOwned)
-        assertEquals("₱250 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_GMDSS_PASS])
+        assertEquals("₱399 / year", BillingConstants.DEFAULT_PRICES_YEARLY[BillingConstants.PRODUCT_GMDSS_PASS])
     }
 
     /**
@@ -290,23 +343,21 @@ class ReviewerViewModelTest {
     }
 
     /**
-     * Requirement e: Unentitled users cannot advance past question index 4 (5-question limit boundary).
+     * Requirement e: Full Reviewer must never degrade to an unlicensed five-question preview.
      */
     @Test
-    fun testE_unentitledUsersCannotAdvancePastQuestionIndex4() = runBlocking {
+    fun testE_unentitledUsersCannotStartFullReviewer() {
         LicenseManager.setActivated(context, false)
         LicenseManager.setOicNwProUnlocked(context, false)
         LicenseManager.setGmdssProUnlocked(context, false)
         LicenseManager.setHyperionProUnlocked(context, false)
         LicenseManager.init(context)
 
-        val secPrefs = context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE)
-        secPrefs.edit().clear().apply()
-
+        context.getSharedPreferences("secure_license_prefs", Context.MODE_PRIVATE).edit().clear().apply()
         assertFalse(viewModel.isTrackUnlocked(Track.DECK_OIC_NW))
 
-        // Start practice requesting 20 questions
         viewModel.setTrack(Track.DECK_OIC_NW)
+        viewModel.navigateTo(Screen.Home)
         viewModel.startConfiguredPractice(
             competenceId = "C1",
             questionCount = 20,
@@ -315,32 +366,9 @@ class ReviewerViewModelTest {
             isCrpMode = false
         )
 
-        val activeQuestions = viewModel.activeQuestions.value
-        assertEquals("Free preview must be strictly capped at 5 questions", 5, activeQuestions.size)
-
-        // Out-of-bounds navigation attempts must fail
-        viewModel.jumpToQuestion(5)
-        assertTrue("Index must remain <= 4", viewModel.currentQuestionIndex.value <= 4)
-
-        viewModel.jumpToQuestion(15)
-        assertTrue("Index must remain <= 4", viewModel.currentQuestionIndex.value <= 4)
-
-        // Walk through the 5 allowed questions (index 0..4)
-        for (i in 0 until 5) {
-            val q = activeQuestions[i]
-            viewModel.selectOption(i, q.correctAnswerIndex)
-            viewModel.confirmOrNextQuestion() // evaluates
-            if (i < 4) {
-                viewModel.confirmOrNextQuestion() // advances
-            }
-        }
-
-        // On submitting the 5th question (index 4), paywall dialog MUST be triggered
-        viewModel.confirmOrNextQuestion()
-        assertTrue(
-            "Paywall dialog must trigger when reaching the 5-question limit ceiling",
-            viewModel.showPaywallDialog.value
-        )
+        assertEquals(Screen.Home, viewModel.currentScreen.value)
+        assertTrue("No Full Reviewer questions may be exposed without a license", viewModel.activeQuestions.value.isEmpty())
+        assertTrue("Offer the existing track-specific purchase popup", viewModel.showPaywallDialog.value)
     }
 
     /**
@@ -589,22 +617,22 @@ class ReviewerViewModelTest {
         assertEquals("₱500/yr", yearlyAllAccess.shortFormattedPrice)
 
         val weeklyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.WEEKLY)
-        assertEquals("₱20 / week", weeklyOic.formattedPrice)
+        assertEquals("₱29 / week", weeklyOic.formattedPrice)
 
         val monthlyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.MONTHLY)
-        assertEquals("₱50 / month", monthlyOic.formattedPrice)
+        assertEquals("₱79 / month", monthlyOic.formattedPrice)
 
         val yearlyOic = billingManager.getProductItem(BillingConstants.PRODUCT_OIC_NW_PASS, BillingCycle.YEARLY)
-        assertEquals("₱350 / year", yearlyOic.formattedPrice)
+        assertEquals("₱499 / year", yearlyOic.formattedPrice)
 
         val weeklyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.WEEKLY)
-        assertEquals("₱15 / week", weeklyGmdss.formattedPrice)
+        assertEquals("₱25 / week", weeklyGmdss.formattedPrice)
 
         val monthlyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.MONTHLY)
-        assertEquals("₱40 / month", monthlyGmdss.formattedPrice)
+        assertEquals("₱59 / month", monthlyGmdss.formattedPrice)
 
         val yearlyGmdss = billingManager.getProductItem(BillingConstants.PRODUCT_GMDSS_PASS, BillingCycle.YEARLY)
-        assertEquals("₱250 / year", yearlyGmdss.formattedPrice)
+        assertEquals("₱399 / year", yearlyGmdss.formattedPrice)
     }
 
     /**
