@@ -1,0 +1,362 @@
+{
+  "schemaVersion": 1,
+  "stage": "editorial_draft_not_published",
+  "batchId": "oic-nw-c1-pilot-001",
+  "preparedOn": "2026-11-07",
+  "language": "en",
+  "track": "DECK_OIC_NW",
+  "competenceId": "C1",
+  "source": {
+    "repository": "Nhyle-zunne/hyperion-reviewer",
+    "commit": "b881555be0b023e2bfb0f966a2c71b96b4aa5e62",
+    "path": "app/src/main/assets/questions/deck/oic_nw_c1.csv.enc",
+    "encryptedFileSha256": "2ddc50a5361005da6bda52224e8b419f9217d054c0bddaeeec4e2d1318c65325",
+    "decryptedCsvSha256": "ce9d46fc7d71996ba3c1eec53cf16f3db901ebfe728588824c68eef0883a8d8b",
+    "totalQuestions": 831
+  },
+  "identity": {
+    "algorithm": "SHA-256 of existing questionFingerprintPayload v1",
+    "namespace": "app/src/main/assets/questions/deck/oic_nw_c1.csv.enc",
+    "questionIds": "Advisory row-derived IDs, not permanent identity.",
+    "punctuation": "Exact parsed stem and choice text, including punctuation, blanks and internal whitespace; never strip punctuation or match by similarity.",
+    "options": "Option text is sorted with correctness attached, so a pure shuffle preserves identity.",
+    "answerChanges": "Changing which answer text is correct invalidates the content fingerprint.",
+    "publication": "Draft records are not consumed by either app; future publishing must require explicit editorial approval and an exact fingerprint match."
+  },
+  "items": [
+    {
+      "sourceQuestionId": "D-F1-C1-001",
+      "contentSha256": "d812a910eebe1b873c42b3bc9440d78c834036f19aaa3fb8391b6efd46937257",
+      "questionText": "If there are small cumulus clouds in the morning in summer, what kind of cloud cover would you expect and is the reasonable to forecast later in the day?",
+      "options": [
+        "CB cloud.",
+        "Haze",
+        "Clear skies.",
+        "ST and drizzle"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "Cumulonimbus (CB) is the answer used in this question. Summer heating can make warm, moist air rise and form cumulus clouds. If the atmosphere allows continued vertical growth, these clouds can develop into cumulonimbus, which can produce showers and thunderstorms. This describes development under suitable conditions; small cumulus does not always become CB.",
+      "memoryTip": "Summer heating and suitable instability can build cumulus into CB.",
+      "references": [
+        {
+          "title": "Met Office — Low level clouds",
+          "url": "https://weather.metoffice.gov.uk/learn-about/weather/types-of-weather/clouds/low-level-clouds",
+          "locator": "Cumulus clouds: “How do cumulus clouds form?” and “What weather is associated with cumulus clouds?”; development is conditional, and small cumulus humilis indicates fair weather."
+        },
+        {
+          "title": "Met Office — What is convection?",
+          "url": "https://weather.metoffice.gov.uk/learn-about/weather/how-weather-works/what-is-convection",
+          "locator": "“How does convection affect the weather?” and “Can convection be seen?”; surface heating, rising air, cloud growth, and stronger convection sometimes producing cumulonimbus."
+        },
+        {
+          "title": "Met Office — Tornadoes",
+          "url": "https://weather.metoffice.gov.uk/learn-about/weather/types-of-weather/tornadoes",
+          "locator": "Explanation of thermals: shallow cumulus develops first; an unstable atmosphere allows much deeper ascent and deep cumulus/cumulonimbus."
+        }
+      ],
+      "researchNotes": [
+        "Existing key A requires an unstated assumption of sufficient instability and moisture for deep convection; small morning cumulus alone does not establish later CB.",
+        "Do not assert the three other options are impossible; the observation does not uniquely determine later cloud cover.",
+        "Original question wording and answer key are preserved; no correction is authorized by this draft."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-002",
+      "contentSha256": "3efb73a9fc66f159456ae4b79600b28bf43c926026ae7e4c2a0df2113c99136f",
+      "questionText": "What do you call a gyroscope error that affects the heading system due to the rotation of the earth?",
+      "options": [
+        "Apparent drift",
+        "System error",
+        "Heading error",
+        "Transport error"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "Apparent drift results from the Earth rotating beneath a gyroscope whose axis tends to maintain its direction in space. To an observer on Earth, the gyro axis appears to change direction. The clue here is Earth’s rotation; transport effects instead involve moving the gyro over the Earth’s surface.",
+      "memoryTip": "Earth’s rotation: apparent drift. Movement over Earth: transport effects.",
+      "references": [
+        {
+          "title": "NGA, The American Practical Navigator, Volume II",
+          "url": "https://msi.nga.mil/api/publications/download?key=16693975%2FSFH00000%2FBowditch_Vol_2_LoRes.pdf&type=view",
+          "locator": "Glossary entries: apparent precession (apparent gyro-axis direction change caused by Earth rotation); drift, noun sense 5 (horizontal component of real or apparent precession); drift axis (vertical for a horizontally mounted directional gyro). Exact definitions retrieved from indexed official NGA PDF text; full PDF download timed out/returned HTTP 503."
+        }
+      ],
+      "researchNotes": [
+        "The stem uses error broadly: apparent drift describes an apparent change relative to Earth; it does not by itself establish a fault in a compensated heading system."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-003",
+      "contentSha256": "eaee03bbf114d4bc42f1f3812f2d8936ca7433d772baf74b1d8b6879d1fe9d72",
+      "questionText": "In what area on the earth surface does the compass decreases its accuracy?",
+      "options": [
+        "75 degree latitude",
+        "85 degree latitude",
+        "60 degree latitude",
+        "80 degree latitude"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "The question bank uses 75° latitude for this item. The principle being tested is reduced compass reliability at high latitudes. A conventional gyrocompass has weaker north-seeking action toward the poles, while a magnetic compass becomes less dependable where the horizontal magnetic field is weak. Actual operating limits depend on the instrument.",
+      "memoryTip": "For this bank item: 75°. The concept is high-latitude compass limitations.",
+      "references": [
+        {
+          "title": "NOAA NCEI, World Magnetic Model Accuracy, Limitations, and Error Model",
+          "url": "https://www.ncei.noaa.gov/products/world-magnetic-model/accuracy-limitations-error-model",
+          "locator": "Blackout Zone (BoZ) section: unreliable below horizontal intensity H = 2000 nT; caution zone from 2000 to below 6000 nT."
+        },
+        {
+          "title": "NGA, The American Practical Navigator, Volume I",
+          "url": "https://msi.nga.mil/api/publications/download?key=16693975%2FSFH00000%2FBowditch_Vol_1_LoRes.pdf&type=view",
+          "locator": "Chapter 9, Compasses, section 937, Using the Gyrocompass, printed page 185: directive force is greatest at the equator and decreases to zero at the poles."
+        }
+      ],
+      "researchNotes": [
+        "Compass type is unspecified; magnetic and gyrocompasses have different reasons for high-latitude degradation.",
+        "The official sources reviewed do not support a universal accuracy threshold at 75 degrees latitude.",
+        "All listed choices describe high latitudes, so the stem lacks a condition that makes the keyed choice uniquely correct. Specify instrument type and a documented operating limit before release."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-004",
+      "contentSha256": "d5cd29dcefbc41da5526aca53593024cd7aaaf85214694b33c45b6311bc28f0b",
+      "questionText": "What is your idea of a Cold Front?",
+      "options": [
+        "It is the line of discontinuity at the surface or a upper level along which an advancing cold air mass is undercutting a warmer air mass.",
+        "It is the area of a depression occupied by cold air at the surface and comprises the whole depression after the occluding process has been completed",
+        "It is a period of low temperatures below the average for the season and locality which last 24 hours or longer particularly during the cold season",
+        "It is the the sudden line of demarcation separating the Gulf Stream from the Labrador current."
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "A cold front forms where advancing colder, denser air moves beneath and replaces warmer air. The warm air is forced upward, which can produce clouds and precipitation when sufficient moisture is present. The key idea is the advancing cold air undercutting the warm air.",
+      "memoryTip": "Cold front: cold air advances beneath warm air.",
+      "references": [
+        {
+          "title": "National Weather Service Glossary — Cold Front",
+          "url": "https://forecast.weather.gov/glossary.php?word=cold+front",
+          "locator": "Entry “Cold Front”: a zone separating two air masses, with the cooler, denser mass advancing and replacing the warmer."
+        },
+        {
+          "title": "National Weather Service Louisville — A Basic Discussion on Pressure Systems, Fronts, Jet Streams, and Precipitation",
+          "url": "https://www.weather.gov/lmk/basic-fronts",
+          "locator": "Cold-front discussion and vertical cross-section: dense cold air advances into warm air; upward motion, moisture-dependent rain, instability-dependent thunderstorms, and fronts aloft."
+        }
+      ],
+      "researchNotes": []
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-005",
+      "contentSha256": "d93bed23f355ccd07076fd4d5886cf593aa1cd42708009d2836d760385b61d6a",
+      "questionText": "How would you categorize the courses and the bearings which are laid down on the chart?",
+      "options": [
+        "All the courses and all the bearings which are laid down down on the chart are true.",
+        "All the courses and all the bearings which are laid down down on the chart are corrected for compass error.",
+        "All the courses and all the bearings which are laid down down on the chart are corrected for deviation.",
+        "All the causes and all the bearings which are laid down down on the chart are relatively corrected."
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "Courses and bearings plotted in ordinary nautical chart work are normally expressed as true directions, referenced to geographic north. Compass-observed bearings must therefore be converted to true before plotting. For a magnetic compass, this means allowing for both deviation and variation.",
+      "memoryTip": "Plot true directions, measured from geographic north.",
+      "references": [
+        {
+          "title": "NGA, The American Practical Navigator, Volume II",
+          "url": "https://msi.nga.mil/api/publications/download?key=16693975%2FSFH00000%2FBowditch_Vol_2_LoRes.pdf&type=view",
+          "locator": "Chapter 4, Compass Error, section 400, Magnetic Compass Error, printed page 231. Official NGA indexed PDF text defines true direction by geographic meridian, deviation as magnetic-to-compass difference, and total compass error as the algebraic sum of variation and deviation. Full PDF download timed out/returned HTTP 503."
+        }
+      ],
+      "researchNotes": [
+        "Options 1 and 2 are overlapping descriptions for compass-observed bearings converted to true; the key cannot be justified by treating option 2 as simply false.",
+        "The word all is too absolute without specifying ordinary chart plotting and the direction reference; a course constructed on a chart was not necessarily observed with a compass."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-006",
+      "contentSha256": "e1c0d2d9681449b7942147e7fc8a896e1efb5507bb08dbce32d2668060645b6e",
+      "questionText": "Base on what you know, would you explain how the jet stream affect weather conditions around the world?",
+      "options": [
+        "The strong wind current of the jet stream pushes weather systems around the world",
+        "The narrow meandering current of high speed winds near the tropopause redirect weather system around the world",
+        "The strong wind current of the jet stream prevents weather systems from moving around the world",
+        "The weak wind current of the jet stream redirects weather systems around the world"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "The jet stream is a band of strong winds high in the atmosphere that helps steer weather systems. Changes in its position and path influence where weather systems move. That steering action explains the bank’s answer that the strong wind current pushes weather systems around the world.",
+      "memoryTip": "Jet streams steer weather systems.",
+      "references": [
+        {
+          "title": "NOAA — Weather systems and patterns",
+          "url": "https://www.noaa.gov/education/resource-collections/weather-atmosphere/weather-systems-patterns",
+          "locator": "Section “Jet streams”: narrow bands of strong wind high in the atmosphere steer weather systems and transfer heat and moisture."
+        },
+        {
+          "title": "NOAA NESDIS — What Is the Jet Stream?",
+          "url": "https://www.nesdis.noaa.gov/about/k-12-education/atmosphere/what-the-jet-stream",
+          "locator": "Definition at line 25; “How Do Jet Streams Affect Weather?” and “How Does the Jet Stream Help Us Predict the Weather?” describe transport, north–south bends, and changing storm paths."
+        },
+        {
+          "title": "National Weather Service — Prevailing Winds",
+          "url": "https://www.weather.gov/source/zhu/ZHU_Training_Page/winds/Wx_Terms/Flight_Environment.htm",
+          "locator": "Section “JET STREAM”: narrow bands of high-speed winds, closely associated with the tropopause and polar front."
+        }
+      ],
+      "researchNotes": [
+        "Options A and B both describe jet streams steering weather systems; official sources do not justify rejecting B.",
+        "Single-answer item needs editorial review or an authorized option revision before publication.",
+        "Original options and key remain unchanged."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-007",
+      "contentSha256": "541781ba9c27d0ae8f92a43e7da953ac345092f97b8d91df482353e647995e9c",
+      "questionText": "At 1200H, you fix your position and change course to 315T. At 1225H, you again fix your position, and its 0.9 mile southwest of your DR position. Find the drift:",
+      "options": [
+        "2.1 knots",
+        "2.3 knots",
+        "1.9 knots",
+        "1.7 knots"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "The elapsed time is 25 minutes, or 25/60 hour. Taking the distance as 0.9 nautical mile, drift = distance ÷ time = 0.9 ÷ (25/60) = 2.16 knots. The bank’s answer, 2.1 knots, is the closest listed option. The southwest displacement indicates the current’s set; drift is its speed.",
+      "memoryTip": "Drift = nautical miles × 60 ÷ minutes; choose the closest listed answer.",
+      "references": [
+        {
+          "title": "NOAA Tides & Currents, Glossary",
+          "url": "https://www.tidesandcurrents.noaa.gov/glossary.html",
+          "locator": "Entry: drift (of current), defined as the speed of the current. Calculation uses the problem's distance and elapsed time."
+        },
+        {
+          "title": "NGA, The American Practical Navigator, Volume II",
+          "url": "https://msi.nga.mil/api/publications/download?key=16693975%2FSFH00000%2FBowditch_Vol_2_LoRes.pdf&type=view",
+          "locator": "Glossary entry: current. Distinguishes set, the direction toward which current flows, from drift, its speed."
+        },
+        {
+          "title": "NOAA National Weather Service, Marine Definitions",
+          "url": "https://www.weather.gov/okx/marinedef",
+          "locator": "Entry: Knot, a speed of one nautical mile per hour."
+        }
+      ],
+      "acceptedInterpretation": "Show 2.16 knots as the calculated result and 2.1 knots as the closest listed option. Preserve the existing key.",
+      "researchNotes": [
+        "Exact calculation is 2.16 knots; rounded to the options' one-decimal precision it is 2.2 knots, which is not offered.",
+        "The keyed 2.1 knots is the nearest offered value, but the stem does not ask for the nearest offered approximation or specify truncation.",
+        "User accepted the exact-result/closest-listed interpretation on 7 November 2026. This does not constitute approval of the entire batch or authorize an answer-key change."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-008",
+      "contentSha256": "ddbe35e8c8ecf3f8dd44a6d10c4bc73d9266fc49c73e5914d6b65905bf83d53e",
+      "questionText": "Polaris always appears due north in the sky to a precision better than how many degree?",
+      "options": [
+        "one degree",
+        "quarter of a degree",
+        "tenth of a degree",
+        "half degree"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "The bank uses one degree as the answer for Polaris as an approximate north reference. Polaris currently lies less than one degree from the north celestial pole, making it useful for finding north. Its precise bearing still varies with the observer’s latitude and time; an accurate bearing requires a Polaris azimuth correction.",
+      "memoryTip": "One degree is the bank’s approximate Polaris answer; precise bearings need correction.",
+      "references": [
+        {
+          "title": "USNO, The Air Almanac 2026",
+          "url": "https://aa.usno.navy.mil/downloads/publications/aira26_all.pdf",
+          "locator": "Page A157, Polaris (Pole Star) Table, 2026, and Azimuth of Polaris, 2026: declination N 89°22.6′; at LHA Aries 0°, azimuth is 1.1° at latitude 65°N and 1.4° at 70°N."
+        },
+        {
+          "title": "USNO, Computing Altitude and Azimuth from Greenwich Apparent Sidereal Time",
+          "url": "https://aa.usno.navy.mil/faq/alt_az",
+          "locator": "Definition of azimuth and equations using observer latitude, body declination, and local hour angle."
+        }
+      ],
+      "researchNotes": [
+        "The stem confuses angular distance from the north celestial pole with azimuthal departure from due north.",
+        "The word always makes the keyed one-degree claim false: the USNO 2026 table directly gives departures larger than one degree at high latitude.",
+        "For a polar-distance question, specify the present era or a stated almanac year rather than making a timeless claim."
+      ]
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-009",
+      "contentSha256": "ebfc74a0063ed2ce084a03fe9882e7a607ae82831f7126b5a8e38ef30b688fbf",
+      "questionText": "What is the color of the Starboard hand lateral marks used in IALA Region B?",
+      "options": [
+        "Red",
+        "Green and white vertical stripes",
+        "Black with one or more broad horizontal green bands",
+        "Green"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "In IALA Region B, starboard-hand lateral marks are red. When following the conventional direction of buoyage, normally entering a harbour from seaward, these marks are kept to starboard. Check the chart’s direction of buoyage when applying this rule.",
+      "memoryTip": "Region B: red, right, returning—check the direction of buoyage.",
+      "references": [
+        {
+          "title": "NGA/NOAA, U.S. Chart No. 1, Edition 13",
+          "url": "https://msi.nga.mil/api/publications/download?key=16694005%2FSFH00000%2FChartNo1.pdf",
+          "locator": "Appendix 1, IALA Maritime Buoyage System, Region B lateral-mark table, printed page 129; following Direction of Buoyage diagram: starboard marks red, conical topmarks, red light if fitted."
+        },
+        {
+          "title": "USCG, Aids to Navigation Manual—Administration, COMDTINST M16500.7A",
+          "url": "https://www.navcen.uscg.gov/sites/default/files/pdf/waterways/shallow_draft/CIM_16500_7a%20%28Admin%20manual%20w%20CH1%20%26%20CH2%29.pdf",
+          "locator": "Short Range Aid Marking Systems, C.1, The U.S. Marking System: identifies Region B and contrasts Region A's reversed colour significance."
+        }
+      ],
+      "researchNotes": []
+    },
+    {
+      "sourceQuestionId": "D-F1-C1-010",
+      "contentSha256": "369a9a259369fd6ed23ecb351f7ee6a9484949ce2b3ec1f70c04975e6a3a1516",
+      "questionText": "What conclusion can you draw if the moon and sun align with the Earth?",
+      "options": [
+        "The tides will be stronger because the attraction of the moon and sun is combine",
+        "The moon's gravitational pull will be twice as strong as the suns",
+        "Their pulls partially cancel each other out, so the tides are weaker",
+        "The moon's gravitational attraction has more effect on tides than the sun's"
+      ],
+      "correctAnswerIndex": 0,
+      "reviewStatus": "draft",
+      "draftExplanation": "When the Sun, Moon and Earth align, the solar and lunar tidal effects reinforce each other. This produces spring tides, with a larger difference between high and low water. That increased tidal range is the meaning of “stronger” in the bank’s answer.",
+      "memoryTip": "Aligned Sun and Moon reinforce tidal range: spring tides.",
+      "references": [
+        {
+          "title": "NOAA National Ocean Service — Tidal Variations: The Influence of Position and Distance",
+          "url": "https://oceanservice.noaa.gov/education/tutorial_tides/tides06_variations.html",
+          "locator": "Opening paragraphs: solar tides are about half as large as lunar tides; alignment at new/full moon adds their effects, while right-angle geometry produces neap tides."
+        },
+        {
+          "title": "NOAA JetStream — Tides",
+          "url": "https://www.noaa.gov/jetstream/ocean/tides",
+          "locator": "Line 50 distinguishes stronger total solar gravitational attraction from the Moon’s larger tidal pull; lines 78 and 84–97 explain local influences, spring tidal range, and neap tides."
+        }
+      ],
+      "researchNotes": [
+        "Option A is the intended alignment-specific answer, but “stronger” should be understood as a larger tidal range, not a universal prediction of current speed or a doubling of gravitational attraction.",
+        "Option B confuses total gravitational pull with tide-raising effect; the roughly two-to-one comparison applies to tidal effects.",
+        "Option D is broadly true about tidal influence but does not follow specifically from alignment; review this potentially confusing distractor before publication.",
+        "Original question, options, and key remain unchanged."
+      ]
+    }
+  ],
+  "editorialDecisions": [
+    {
+      "date": "2026-11-07",
+      "decision": "Use official references."
+    },
+    {
+      "date": "2026-11-07",
+      "questionId": "D-F1-C1-007",
+      "decision": "Show 2.16 knots as the calculated result and 2.1 knots as the closest listed option. Preserve the existing key.",
+      "scope": "Explanation wording only; no source-question or answer-key change."
+    },
+    {
+      "date": "2026-11-07",
+      "decision": "Follow the answer used in the question bank; keep explanations simple and practical.",
+      "scope": "All ten pilot explanations. Questions and answer keys remain unchanged; content remains unpublished."
+    }
+  ],
+  "explanationPolicy": "Follow the existing bank key and explain its intended concept briefly. Preserve original stems, punctuation, choices and keys. Keep research concerns as background notes, not a separate blocking workflow. State conditions or approximation where needed rather than inventing a factual justification."
+}

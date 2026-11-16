@@ -1,0 +1,184 @@
+{
+  "purpose": "Candidate discovery only; lexical similarity is NEVER explanation identity or proof of equivalent meaning.",
+  "questionCount": 831,
+  "punctuationNormalizedStemGroupsWithDifferentAnswerTexts": 4,
+  "relatedItems": [
+    {
+      "pilotId": "D-F1-C1-004",
+      "relatedId": "D-F1-C1-179",
+      "lexicalSimilarity": 0.889,
+      "questionText": "What is your idea about of a cold front?",
+      "correctAnswer": "It is when colder air is underrunning and displacing warmer air",
+      "options": [
+        "It is when colder air is underrunning and displacing warmer air",
+        "It is a vast cold air masses moving toward a high pressure.",
+        "It is when colder air is replace by warmer air.",
+        "It is a vast cold air masses moving toward a low pressure."
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-004",
+      "relatedId": "D-F1-C1-184",
+      "lexicalSimilarity": 0.778,
+      "questionText": "What is your idea of a Cold Sector?",
+      "correctAnswer": "It is the area of a depression occupied by cold air at the surface and comprises the whole depression after the occluding process has been completed",
+      "options": [
+        "It is the area of a depression occupied by cold air at the surface and comprises the whole depression after the occluding process has been completed",
+        "It is the line of discontinuity at the surface or a upper level along which an advancing cold air mass is undercutting a warmer air mass.",
+        "It is a period of low temperatures below the average for the season and locality which last 24 hours or longer particularly during the cold season",
+        "It is the the sudden line of demarcation separating the Gulf Stream from the Labrador current."
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-004",
+      "relatedId": "D-F1-C1-364",
+      "lexicalSimilarity": 0.778,
+      "questionText": "What is your idea of a Cold Wall?",
+      "correctAnswer": "It is the sudden line of demarcation separating the Gulf Stream and the Labrador current.",
+      "options": [
+        "It is the sudden line of demarcation separating the Gulf Stream and the Labrador current.",
+        "It is that area of a depression occupied by cold air at the surface and comprises the whole depression after the occluding process has been completed.",
+        "It is the line of discontinuity at the surface or a upper level along which an advancing cold air mass is undercutting a warmer air mass.",
+        "It is a period of low temperatures below the average for the season and locality which last 24 hours or longer particularly during the cold season."
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-006",
+      "relatedId": "D-F1-C1-357",
+      "lexicalSimilarity": 0.529,
+      "questionText": "How does the jet stream affect weather conditions around the world?",
+      "correctAnswer": "The strong wind current of the jet stream pushes weather systems around the world",
+      "options": [
+        "The strong wind current of the jet stream pushes weather systems around the world",
+        "The narrow meandering current of high speed winds near the tropopause redirect weather system around the world",
+        "The strong wind current of the jet stream prevents weather systems from moving around the world",
+        "The weak wind current of the jet stream redirects weather systems around the world"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-007",
+      "relatedId": "D-F1-C1-151",
+      "lexicalSimilarity": 0.84,
+      "questionText": "At 1600H, you fix your position and change course to 315T. At 1625H, you again fix your position, and its 0.9 mile southwest of your DR position. Find the drift:",
+      "correctAnswer": "2.1 knots",
+      "options": [
+        "2.1 knots",
+        "2.3 knots",
+        "1.9 knots",
+        "1.7 knots"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-007",
+      "relatedId": "D-F1-C1-342",
+      "lexicalSimilarity": 0.84,
+      "questionText": "At 1300H, you fix your position and change course to 315T. At 1325H, you again fix your position, and its 0.9 mile southwest of your DR position. Find the drift:",
+      "correctAnswer": "2.1 knots",
+      "options": [
+        "2.1 knots",
+        "2.3 knots",
+        "1.9 knots",
+        "1.7 knots"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-007",
+      "relatedId": "D-F1-C1-032",
+      "lexicalSimilarity": 0.741,
+      "questionText": "At 1500H, you fix your position and change course to 315T. At 1525H, you again fix your position, and it is 0.9 mile southwest of your DR position. Find the drift:",
+      "correctAnswer": "2.1 knots",
+      "options": [
+        "2.1 knots",
+        "2.3 knots",
+        "1.7 knots",
+        "1.9 knots"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-009",
+      "relatedId": "D-F1-C1-369",
+      "lexicalSimilarity": 0.867,
+      "questionText": "What is the shape of the Starboard hand lateral marks used in IALA Region B?",
+      "correctAnswer": "Conical, pillar or spar.",
+      "options": [
+        "Conical, pillar or spar.",
+        "Spherical, pillar or spar.",
+        "Hexagonal, pillar or spar",
+        "Cylindrical| (can), pillar or spar."
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-009",
+      "relatedId": "D-F1-C1-033",
+      "lexicalSimilarity": 0.8,
+      "questionText": "What is the color of the Starboard hand lateral marks in IALA Region A?",
+      "correctAnswer": "Green",
+      "options": [
+        "Green",
+        "Black with one more broad horizontal red bands",
+        "Red",
+        "Red and white vertical stripes"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-009",
+      "relatedId": "D-F1-C1-056",
+      "lexicalSimilarity": 0.722,
+      "questionText": "What is the light color (when fitted) of the Port hand lateral marks used in IALA Region B?",
+      "correctAnswer": "Green",
+      "options": [
+        "Green",
+        "Red",
+        "White",
+        "Yellow"
+      ]
+    },
+    {
+      "pilotId": "D-F1-C1-010",
+      "relatedId": "D-F1-C1-194",
+      "lexicalSimilarity": 0.563,
+      "questionText": "What would be result if the moon and sun align with the Earth?",
+      "correctAnswer": "Tides are stronger",
+      "options": [
+        "Tides are stronger",
+        "Tides are weaker.",
+        "The moon's gravitational attraction has more effect.",
+        "Tide pull is twice as strong as the sun."
+      ]
+    }
+  ],
+  "caution": "The four normalized groups contain differences in capitalization or typographical errors too. This count is not a count of incorrect keys or semantic conflicts.",
+  "focusedComparisons": [
+    {
+      "ids": [
+        "D-F1-C1-460",
+        "D-F1-C1-814"
+      ],
+      "lesson": "Colon versus blank with chart-scale formatting: both key coastal chart, but options differ. Punctuation alone neither proves equivalence nor proves a different answer."
+    },
+    {
+      "ids": [
+        "D-F1-C1-009",
+        "D-F1-C1-033",
+        "D-F1-C1-369"
+      ],
+      "lesson": "Region B versus Region A changes red/green; asking shape instead of colour changes the required fact."
+    },
+    {
+      "ids": [
+        "D-F1-C1-008",
+        "D-F1-C1-725",
+        "D-F1-C1-731"
+      ],
+      "lesson": "Azimuth from due north versus angular distance from the north celestial pole are not interchangeable claims."
+    },
+    {
+      "ids": [
+        "D-F1-C1-004",
+        "D-F1-C1-184",
+        "D-F1-C1-364"
+      ],
+      "lesson": "Cold front, cold sector and cold wall are different concepts despite similar stem structure."
+    }
+  ]
+}
