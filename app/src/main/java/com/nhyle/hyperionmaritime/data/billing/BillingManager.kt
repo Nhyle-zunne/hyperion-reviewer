@@ -86,6 +86,50 @@ enum class BillingCycle(val label: String, val shortLabel: String, val durationD
     val durationMs: Long get() = durationDays.toLong() * 24L * 60L * 60L * 1000L
 }
 
+enum class PlayPlanMode { AUTO_RENEWING, PREPAID }
+
+/** Published prepaid base-plan IDs; All-Access is legacy-only and not sold. */
+internal fun prepaidBasePlanId(productId: String, cycle: BillingCycle): String? {
+    val prefix = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "oic-nw"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "oic-ew"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "deck-mgt"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "engine-mgt"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "gmdss"
+        else -> return null
+    }
+    return "$prefix-prepaid-${cycle.name.lowercase()}"
+}
+
+/** Never select a prepaid offer for an initial auto-renewing purchase. */
+internal fun matchesPlanOffer(
+    productId: String,
+    cycle: BillingCycle,
+    mode: PlayPlanMode,
+    basePlanId: String,
+    billingPeriods: List<String>
+): Boolean = when (mode) {
+    PlayPlanMode.PREPAID -> basePlanId == prepaidBasePlanId(productId, cycle)
+    PlayPlanMode.AUTO_RENEWING ->
+        !basePlanId.contains("prepaid", ignoreCase = true) &&
+            cycle.matchesPlayOffer(basePlanId, billingPeriods)
+}
+
+internal fun resolvePurchasedPlanMode(
+    previousMode: PlayPlanMode?,
+    pendingMode: PlayPlanMode?,
+    isNewPurchase: Boolean,
+    isAutoRenewing: Boolean
+): PlayPlanMode = when {
+    isNewPurchase && pendingMode != null -> pendingMode
+    previousMode != null -> previousMode
+    isAutoRenewing -> PlayPlanMode.AUTO_RENEWING
+    else -> PlayPlanMode.PREPAID
+}
+
+internal fun canExtendPlayPurchase(purchaseToken: String?): Boolean =
+    !purchaseToken.isNullOrBlank() && !purchaseToken.startsWith("mock_sandbox_sub_token_")
+
 /**
  * Matches the recurring billing period of a Play subscription offer. When an offer
  * contains a trial or introductory phase, the final pricing phase is the base plan's
@@ -216,6 +260,7 @@ fun formatSubscriptionTimeRemaining(
  */
 data class ActivePlanInfo(
     val cycle: BillingCycle = BillingCycle.YEARLY,
+    val planMode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING,
     val isTerminalLicense: Boolean = false,
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
@@ -948,7 +993,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "play_plan_cycle_engine_mgt"
             else -> return
         }
-        securePrefs.edit().remove("${cycleKey}_pending").apply()
+        securePrefs.edit()
+            .remove("${cycleKey}_pending")
+            .remove("${cycleKey}_pending_mode")
+            .apply()
         lastRequestedCycles.remove(productId)
         if (checkoutFlowProductId == productId) checkoutFlowProductId = null
     }
@@ -1074,6 +1122,15 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             pendingCycle = pendingCycle,
                             isNewPurchase = selectedCycleWasPurchased
                         )
+                        val previouslyPurchasedMode = securePrefs.getString("${cycleKey}_mode", null)
+                            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+                        val requestedMode = securePrefs.getString("${cycleKey}_pending_mode", null)
+                            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+                        val purchasedMode = resolvePurchasedPlanMode(
+                            previouslyPurchasedMode, requestedMode,
+                            selectedCycleWasPurchased, purchase.isAutoRenewing
+                        )
+                        editor.putString("${cycleKey}_mode", purchasedMode.name)
 
                         // Confirm a pending Store selection only when Google Play reports a
                         // newer purchase or a replacement purchase token. A cancelled checkout
@@ -1082,6 +1139,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             val checkoutStillOpen = _entitlements.value.pendingPurchaseProductId == productId
                             if (selectedCycleWasPurchased || !checkoutStillOpen) {
                                 editor.remove(pendingCycleKey)
+                                editor.remove("${cycleKey}_pending_mode")
                                 lastRequestedCycles.remove(productId)
                             }
                         }
@@ -1108,6 +1166,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
                                 oicPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1121,6 +1180,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_GMDSS_PASS -> {
                                 gmdssPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1134,6 +1194,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> {
                                 engineOicEwPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1147,6 +1208,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_DECK_MGT_PASS -> {
                                 deckMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1160,6 +1222,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ENGINE_MGT_PASS -> {
                                 engineMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1173,6 +1236,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             BillingConstants.PRODUCT_ALL_ACCESS_PASS -> {
                                 val plan = ActivePlanInfo(
                                     cycle = cycle,
+                                    planMode = purchasedMode,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1407,6 +1471,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
+    private fun cachedPlanMode(cycleKey: String): PlayPlanMode =
+        securePrefs.getString("${cycleKey}_mode", null)
+            ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
+            ?: PlayPlanMode.AUTO_RENEWING
+
     private fun loadCachedEntitlements() {
         val readRevision = entitlementMutationRevision.get()
         migrateLegacyWeeklyFallbacks()
@@ -1478,6 +1547,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val oicPlan = if (oic) ActivePlanInfo(
             cycle = oicCycle,
+            planMode = cachedPlanMode("play_plan_cycle_oic"),
             purchaseToken = securePrefs.getString(KEY_OIC_TOKEN, null),
             purchaseTimestamp = oicPurchase,
             expiryTimestamp = oicExpiry,
@@ -1490,6 +1560,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
             cycle = gmdssCycle,
+            planMode = cachedPlanMode("play_plan_cycle_gmdss"),
             purchaseToken = securePrefs.getString(KEY_GMDSS_TOKEN, null),
             purchaseTimestamp = gmdssPurchase,
             expiryTimestamp = gmdssExpiry,
@@ -1502,6 +1573,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
             cycle = allAccessCycle,
+            planMode = cachedPlanMode("play_plan_cycle_all_access"),
             purchaseToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null),
             purchaseTimestamp = allAccessPurchase,
             expiryTimestamp = allAccessExpiry,
@@ -1517,6 +1589,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", engineEwCycle.nextBillingPeriod(ewPurchase))
         val engineEwPlan = if (hasEw) ActivePlanInfo(
             cycle = engineEwCycle,
+            planMode = cachedPlanMode("play_plan_cycle_engine_ew"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
             purchaseTimestamp = ewPurchase,
             expiryTimestamp = ewExpiry,
@@ -1532,6 +1605,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", deckMgtCycle.nextBillingPeriod(dmPurchase))
         val deckMgtPlan = if (hasDm) ActivePlanInfo(
             cycle = deckMgtCycle,
+            planMode = cachedPlanMode("play_plan_cycle_deck_mgt"),
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
             purchaseTimestamp = dmPurchase,
             expiryTimestamp = dmExpiry,
@@ -1547,6 +1621,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", engineMgtCycle.nextBillingPeriod(emPurchase))
         val engineMgtPlan = if (hasEm) ActivePlanInfo(
             cycle = engineMgtCycle,
+            planMode = cachedPlanMode("play_plan_cycle_engine_mgt"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
             purchaseTimestamp = emPurchase,
             expiryTimestamp = emExpiry,
@@ -1593,28 +1668,60 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         return md.digest(raw.toByteArray()).joinToString("") { "%02x".format(it) }
     }
 
-    fun getOfferToken(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): String? {
-        val details = _productsDetails.value[productId] ?: return null
-        val offers = details.subscriptionOfferDetails ?: return null
-
-        val matchedOffer = offers.firstOrNull { offer ->
-            cycle.matchesPlayOffer(
-                basePlanId = offer.basePlanId,
-                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+    fun getOfferToken(
+        productId: String,
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
+    ): String? {
+        val offers = _productsDetails.value[productId]?.subscriptionOfferDetails ?: return null
+        // Strictly select either the published prepaid base plan or a recurring
+        // offer. An unavailable selection must never silently charge another plan.
+        return offers.firstOrNull { offer ->
+            matchesPlanOffer(
+                productId, cycle, mode, offer.basePlanId,
+                offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
             )
-        }
+        }?.offerToken
+    }
 
-        // Never silently fall back to a different base plan (e.g. yearly when the
-        // user explicitly selected weekly). The caller will show an unavailable-plan
-        // message instead of charging for a different duration.
-        return matchedOffer?.offerToken
+    fun getActivePlayPlan(productId: String): ActivePlanInfo? {
+        val ent = _entitlements.value
+        val plan = when (productId) {
+            BillingConstants.PRODUCT_OIC_NW_PASS -> ent.oicNwPlan
+            BillingConstants.PRODUCT_GMDSS_PASS -> ent.gmdssPlan
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> ent.engineOicEwPlan
+            BillingConstants.PRODUCT_DECK_MGT_PASS -> ent.deckMgtPlan
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS -> ent.engineMgtPlan
+            else -> null
+        }
+        return plan?.takeUnless { it.isExpired }?.takeIf { canExtendPlayPurchase(it.purchaseToken) }
     }
 
     fun launchBillingFlow(
         activity: Activity,
         productId: String,
-        cycle: BillingCycle = BillingCycle.YEARLY
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
     ): BillingResult {
+        // Website and legacy All-Access grants are not Google Play purchases.
+        // Never collect a Play top-up unless there is an active, valid Play token.
+        val existingPlayToken = getActivePlayPlan(productId)?.purchaseToken
+        if (mode == PlayPlanMode.PREPAID && !canExtendPlayPurchase(existingPlayToken)) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("An active Google Play subscription is required for a prepaid extension.")
+                .build()
+        }
+        // Prepaid expiry requires Google Play SubscriptionsV2 verification; the
+        // linked Hyperion account securely persists the exact verified expiry.
+        if (mode == PlayPlanMode.PREPAID &&
+            LicenseManager.getCurrentAccountUserId(appContext).isNullOrBlank()
+        ) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.DEVELOPER_ERROR)
+                .setDebugMessage("Sign in to My Hyperion Account before extending your Google Play license.")
+                .build()
+        }
         lastRequestedCycles[productId] = cycle
         val cycleKey = when (productId) {
             BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
@@ -1626,7 +1733,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             else -> "play_plan_cycle_default"
         }
         try {
-            securePrefs.edit().putString("${cycleKey}_pending", cycle.name).apply()
+            securePrefs.edit()
+                .putString("${cycleKey}_pending", cycle.name)
+                .putString("${cycleKey}_pending_mode", mode.name)
+                .apply()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to persist pending duration selection: ${e.message}")
         }
@@ -1642,7 +1752,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 .build()
         }
 
-        val offerToken = getOfferToken(productId, cycle)
+        val offerToken = getOfferToken(productId, cycle, mode)
         if (offerToken.isNullOrBlank()) {
             clearPendingBillingCycle(productId)
             Log.e(TAG, "No Google Play offer matched the selected cycle: product=$productId, cycle=$cycle")
@@ -1663,6 +1773,19 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val flowBuilder = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(productDetailsParamsList)
+        if (mode == PlayPlanMode.PREPAID) {
+            // Google Play requires CHARGE_FULL_PRICE for switching an active
+            // recurring plan to prepaid. Existing paid value is credited by Play;
+            // prepaid top-ups also use this replacement mode.
+            flowBuilder.setSubscriptionUpdateParams(
+                BillingFlowParams.SubscriptionUpdateParams.newBuilder()
+                    .setOldPurchaseToken(requireNotNull(existingPlayToken))
+                    .setSubscriptionReplacementMode(
+                        BillingFlowParams.SubscriptionUpdateParams.ReplacementMode.CHARGE_FULL_PRICE
+                    )
+                    .build()
+            )
+        }
 
         // Bind this new Play purchase to the signed-in Hyperion account when available.
         // Sign-in is optional; users without an app account can still purchase normally.
@@ -1686,7 +1809,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         return result
     }
 
-    fun getProductItem(productId: String, cycle: BillingCycle = BillingCycle.YEARLY): PlayProductItem {
+    fun getProductItem(
+        productId: String,
+        cycle: BillingCycle = BillingCycle.YEARLY,
+        mode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING
+    ): PlayProductItem {
         val details = _productsDetails.value[productId]
         val ent = _entitlements.value
 
@@ -1703,9 +1830,9 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val isPending = ent.pendingPurchaseProductId == productId
 
         val matchedOffer = details?.subscriptionOfferDetails?.firstOrNull { offer ->
-            cycle.matchesPlayOffer(
-                basePlanId = offer.basePlanId,
-                billingPeriods = offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
+            matchesPlanOffer(
+                productId, cycle, mode, offer.basePlanId,
+                offer.pricingPhases.pricingPhaseList.map { it.billingPeriod }
             )
         }
 
