@@ -79,6 +79,10 @@ enum class DrillDeliveryMode {
     INTENSIVE
 }
 
+// Keep feedback visible briefly without slowing either practice delivery mode.
+internal fun practiceAutoAdvanceDelayMillis(isCorrect: Boolean): Long =
+    if (isCorrect) 300L else 500L
+
 data class DrillConfiguration(
     val competenceId: String? = null,
     val selectedPart: Int? = null,
@@ -3336,8 +3340,9 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
 
     fun selectIntensiveChoice(optionIndex: Int) {
         if (_isAnswerEvaluated.value) return
-        _selectedChoiceIndex.value = optionIndex
         val currentQ = _intensiveQueue.value.firstOrNull() ?: return
+        if (optionIndex !in currentQ.options.indices) return
+        _selectedChoiceIndex.value = optionIndex
         val currentMap = _userQuestionStates.value.toMutableMap()
         currentMap[currentQ.id] = UserQuestionState(
             questionId = currentQ.id,
@@ -3346,7 +3351,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             isCorrect = false
         )
         _userQuestionStates.value = currentMap
-        autoSaveCurrentSession()
+        // Intensive Mode must use the same Direct Answer setting as Standard Drill.
+        // confirmIntensiveAnswer records the attempt, updates feedback and schedules Auto-Next.
+        if (_isDirectAnswer.value) {
+            confirmIntensiveAnswer()
+        } else {
+            autoSaveCurrentSession()
+        }
     }
 
     fun selectIntensiveOption(optionIndex: Int) {
@@ -3427,7 +3438,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             cancelAutoAdvance()
             val evaluatedQuestionId = currentQ.id
             autoAdvanceJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(if (isCorrect) 750L else 1200L)
+                kotlinx.coroutines.delay(practiceAutoAdvanceDelayMillis(isCorrect))
                 val stillOnSameAnswer = _isAnswerEvaluated.value &&
                     _intensiveQueue.value.firstOrNull()?.id == evaluatedQuestionId &&
                     _intensiveCurrentQuestionState.value?.isCorrect == isCorrect
@@ -3440,6 +3451,10 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun advanceIntensiveQuestion() {
+        if (!_isAnswerEvaluated.value) return
+        // A manual advance must cancel the pending timer, even when a wrong
+        // answer recycles the same question into a one-item intensive queue.
+        cancelAutoAdvance()
         intensivePresentationCounter++
         activeEvaluationAttemptCommittedId = null
         _currentQuestionStats.value = null
@@ -4392,8 +4407,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
                 cancelAutoAdvance()
                 val evaluatedQuestionId = currentQ.id
                 autoAdvanceJob = viewModelScope.launch {
-                    val delayMs = if (isCorrect) 750L else 1200L
-                    kotlinx.coroutines.delay(delayMs)
+                    kotlinx.coroutines.delay(practiceAutoAdvanceDelayMillis(isCorrect))
                     val stillOnSameAnswer = _isAnswerEvaluated.value &&
                         _currentQuestionIndex.value == currentIndex &&
                         _activeQuestions.value.getOrNull(currentIndex)?.id == evaluatedQuestionId
