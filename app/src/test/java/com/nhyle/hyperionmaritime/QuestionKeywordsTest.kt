@@ -12,6 +12,77 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 class QuestionKeywordsTest {
+    @Test fun failedCommitRestoresPreviousSelectionsForLaterLoads() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("failed_keyword_commit", Context.MODE_PRIVATE)
+        prefs.edit().clear().putStringSet("stem", setOf("0")).commit()
+        var failNextCommit = true
+        val wrapped = java.lang.reflect.Proxy.newProxyInstance(
+            android.content.SharedPreferences::class.java.classLoader,
+            arrayOf(android.content.SharedPreferences::class.java)
+        ) { _, method, args ->
+            if (method.name == "edit") {
+                val editor = prefs.edit()
+                java.lang.reflect.Proxy.newProxyInstance(
+                    android.content.SharedPreferences.Editor::class.java.classLoader,
+                    arrayOf(android.content.SharedPreferences.Editor::class.java)
+                ) { proxy, editMethod, editArgs ->
+                    val result = editMethod.invoke(editor, *(editArgs ?: emptyArray()))
+                    when {
+                        editMethod.name == "commit" && failNextCommit -> { failNextCommit = false; false }
+                        result is android.content.SharedPreferences.Editor -> proxy
+                        else -> result
+                    }
+                }
+            } else method.invoke(prefs, *(args ?: emptyArray()))
+        } as android.content.SharedPreferences
+        val store = QuestionKeywords(wrapped)
+        assertFalse(store.saveAll(mapOf("stem" to setOf(1), "choice" to setOf(0))))
+        assertEquals(setOf(0), store.load("stem", 2))
+        assertTrue(store.load("choice", 1).isEmpty())
+        assertEquals(setOf(0, 1), store.loadText("stem", "ship's"))
+    }
+
+    @Test fun legacyCompoundsExpandOnceAndIndependentRemovalSurvivesReload() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
+        val text = "ship's"
+        val key = store.key("DECK", "legacy-compound", text)
+        store.save(key, setOf(0))
+        val expanded = store.loadText(key, text)
+        assertEquals(setOf(0, 1), expanded)
+        assertTrue(4 in QuestionKeywords.highlightRanges(text, expanded).flatMap { it.toList() })
+        val withoutApostrophe = QuestionKeywords.toggleSelection(text, expanded, 1)
+        assertEquals(setOf(0), withoutApostrophe)
+        assertFalse(4 in QuestionKeywords.highlightRanges(text, withoutApostrophe).flatMap { it.toList() })
+        assertTrue(store.saveAll(mapOf(key to withoutApostrophe)))
+        assertEquals(setOf(0), QuestionKeywords(ApplicationProvider.getApplicationContext<Context>()).loadText(key, text))
+        assertEquals(setOf(0, 1), QuestionKeywords.toggleSelection(text, emptySet(), 0))
+        assertTrue(QuestionKeywords.toggleSelection(text, expanded, 0).isEmpty())
+    }
+
+    @Test fun punctuationPreservesLegacyWordPositions() {
+        val tokens = QuestionKeywords.tokens("Ship, 12% + ⚓!")
+        assertEquals(listOf("Ship", "12", ",", "%", "+", "⚓", "!"), tokens.map { it.value })
+    }
+
+    @Test fun punctuationInsideLegacyWordsHasItsOwnToken() {
+        assertEquals(listOf("ship's", "give-way", "'", "-"),
+            QuestionKeywords.tokens("ship's give-way").map { it.value })
+    }
+
+    @Test fun choicesFollowTextAndAreScopedToQuestionRevision() {
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
+        val stem = store.key("DECK", "choice", "Stem?")
+        val key = store.choiceKey(stem, "Ship, 12%")
+        assertTrue(store.saveAll(mapOf(key to setOf(0, 2))))
+        assertEquals(setOf(0, 2), QuestionKeywords(ApplicationProvider.getApplicationContext<Context>()).load(store.choiceKey(stem, listOf("Other", "Ship, 12%")[1]), 5))
+        val revisedKey = store.choiceKey(stem, "Ship, 13%")
+        assertTrue(store.load(revisedKey, 5).isEmpty())
+        assertTrue(store.saveAll(mapOf(revisedKey to setOf(1))))
+        assertEquals(setOf(0, 2), store.load(key, 5))
+        assertTrue(store.load(store.choiceKey(store.key("DECK", "choice", "Revised"), "Ship, 12%"), 5).isEmpty())
+    }
+
     @Test fun persistsMultipleWordsAndRemovalAcrossInstances() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val store = QuestionKeywords(context)
@@ -25,7 +96,7 @@ class QuestionKeywordsTest {
     }
 
     @Test fun isolatesTracksQuestionsAndRevisedText() {
-        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
         val key = store.key("DECK", "1", "Which vessel gives way?")
         store.save(key, setOf(1))
         assertTrue(store.load(store.key("ENGINE", "1", "Which vessel gives way?"), 4).isEmpty())
@@ -35,7 +106,7 @@ class QuestionKeywordsTest {
     }
 
     @Test fun rejectsOutOfBoundsPositions() {
-        val store = QuestionKeywords(ApplicationProvider.getApplicationContext())
+        val store = QuestionKeywords(ApplicationProvider.getApplicationContext<Context>())
         val key = store.key("DECK", "bounds", "Two words")
         store.save(key, setOf(-1, 0, 2, 100))
         assertEquals(setOf(0), store.load(key, 2))

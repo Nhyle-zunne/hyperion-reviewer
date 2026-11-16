@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.nhyle.hyperionmaritime.ui.components.KeywordEditorState
+import com.nhyle.hyperionmaritime.ui.components.KeywordChoiceText
 
 /**
  * Compact, zero-jitter industrial option card with circular radio indicator.
@@ -42,7 +44,8 @@ fun DrillOptionCard(
     isEvaluated: Boolean,
     onOptionSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    showTrailingStatus: Boolean = true
+    showTrailingStatus: Boolean = true,
+    keywordState: KeywordEditorState? = null
 ) {
     val colors = com.nhyle.hyperionmaritime.ui.theme.LocalSpaghettiColors.current
     val isDark = colors.isDark
@@ -68,8 +71,8 @@ fun DrillOptionCard(
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 44.dp) // Uniform compact baseline height
-            .clickable(enabled = !isEvaluated) {
-                onOptionSelected(choiceIndex)
+            .clickable(enabled = !isEvaluated && keywordState?.editing != true) {
+                if (keywordState?.editing != true) onOptionSelected(choiceIndex)
             }
             .testTag("option_card_$choiceIndex"),
         shape = RectangleShape,
@@ -130,16 +133,16 @@ fun DrillOptionCard(
             Spacer(modifier = Modifier.width(12.dp))
 
             // Option Text
-            Text(
-                text = choiceText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = when {
-                    isEvaluated && isSelected && !isCorrect -> evalWrongText
-                    isEvaluated && isCorrect -> evalCorrectText
-                    else -> defaultTextColor
-                },
-                modifier = Modifier.weight(1f)
-            )
+            val choiceStyle = MaterialTheme.typography.bodyMedium.copy(color = when {
+                isEvaluated && isSelected && !isCorrect -> evalWrongText
+                isEvaluated && isCorrect -> evalCorrectText
+                else -> defaultTextColor
+            })
+            if (keywordState != null) {
+                KeywordChoiceText(keywordState, choiceText, choiceStyle, Modifier.weight(1f))
+            } else {
+                Text(text = choiceText, style = choiceStyle, modifier = Modifier.weight(1f))
+            }
 
             // Optional trailing status indicator (Check/Cross icon, fixed 20.dp box to prevent shifts)
             if (showTrailingStatus) {
