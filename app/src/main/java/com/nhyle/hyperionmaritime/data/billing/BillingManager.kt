@@ -124,6 +124,9 @@ internal fun resolvePurchasedPlanMode(
     isAutoRenewing: Boolean
 ): PlayPlanMode = when {
     isNewPurchase && pendingMode != null -> pendingMode
+    // Google Play can change a plan outside the app. A new token or advanced
+    // purchase time establishes a fresh purchase, not the previous plan type.
+    isNewPurchase -> if (isAutoRenewing) PlayPlanMode.AUTO_RENEWING else PlayPlanMode.PREPAID
     previousMode != null -> previousMode
     isAutoRenewing -> PlayPlanMode.AUTO_RENEWING
     else -> PlayPlanMode.PREPAID
