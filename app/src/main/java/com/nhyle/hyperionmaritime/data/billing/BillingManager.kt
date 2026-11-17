@@ -770,7 +770,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
     val lifetimeProductDetails: StateFlow<Map<String, ProductDetails>> = _lifetimeProductDetails.asStateFlow()
     // Play's query only finds device purchases. These are NEVER local license grants.
     private val _ownedLifetimePurchases = MutableStateFlow<List<PlayPurchaseForAccountLinking>>(emptyList())
-    private val unacknowledgedLifetimeTokens = mutableSetOf<String>()
+    private val _unacknowledgedLifetimeTokens = MutableStateFlow<Set<String>>(emptySet())
 
     private val _isConnecting = MutableStateFlow(false)
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
@@ -857,6 +857,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                 // Restore Play-owned access, but leave full Supabase license
                 // synchronization to sign-in, manual Sync and new purchases.
                 queryPurchasesAsync()
+                queryLifetimePurchasesAsync()
             }
         } else {
             Log.w(TAG, "Billing setup failed: code=${billingResult.responseCode}, msg=${billingResult.debugMessage}")
@@ -914,12 +915,90 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             } else {
                 Log.e(TAG, "queryProductDetails failed: ${result.billingResult.debugMessage}")
             }
+            // Non-consumable Lifetime products must be queried separately as INAPP.
+            // They never enter the subscription SKU/expiry cache.
+            val lifetimeProducts = BillingConstants.LIFETIME_PRODUCT_IDS.map { id ->
+                QueryProductDetailsParams.Product.newBuilder()
+                    .setProductId(id)
+                    .setProductType(BillingClient.ProductType.INAPP)
+                    .build()
+            }
+            val lifetimeResult = billingClient.queryProductDetails(
+                QueryProductDetailsParams.newBuilder().setProductList(lifetimeProducts).build()
+            )
+            if (lifetimeResult.billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                _lifetimeProductDetails.value =
+                    lifetimeResult.productDetailsList.orEmpty().associateBy { it.productId }
+            } else {
+                Log.w(TAG, "Lifetime Play products unavailable: ${lifetimeResult.billingResult.responseCode}")
+                _lifetimeProductDetails.value = emptyMap()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Exception querying product details: ${e.message}")
         }
     }
 
     suspend fun queryProductDetailsAsync() = queryProductDetails()
+
+    fun getLifetimePrice(lifetimeProductId: String): String =
+        _lifetimeProductDetails.value[lifetimeProductId]
+            ?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
+            ?: BillingConstants.getFallbackLifetimePrice(lifetimeProductId)
+
+    fun isLifetimeProductAvailable(lifetimeProductId: String): Boolean =
+        _lifetimeProductDetails.value[lifetimeProductId]
+            ?.oneTimePurchaseOfferDetailsList?.any { it.offerToken.isNotBlank() } == true
+
+    fun getOwnedLifetimePurchasesForAccountLinking(): List<PlayPurchaseForAccountLinking> =
+        _ownedLifetimePurchases.value
+
+    suspend fun queryLifetimePurchasesAsync(): Boolean = withContext(Dispatchers.IO) {
+        if (!billingClient.isReady || !hasValidatedInternet()) return@withContext false
+        try {
+            val params = QueryPurchasesParams.newBuilder()
+                .setProductType(BillingClient.ProductType.INAPP).build()
+            val result = billingClient.queryPurchasesAsync(params)
+            if (result.billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
+                Log.w(TAG, "Lifetime ownership refresh failed: ${result.billingResult.responseCode}")
+                return@withContext false
+            }
+            _ownedLifetimePurchases.value = result.purchasesList.flatMap { purchase ->
+                if (!isEligibleLifetimePurchase(
+                        purchase.purchaseState == Purchase.PurchaseState.PURCHASED,
+                        purchase.products
+                    )) emptyList()
+                else listOf(PlayPurchaseForAccountLinking(
+                    purchase.products.single(), purchase.purchaseToken
+                ))
+            }.distinctBy { it.purchaseToken }
+            _unacknowledgedLifetimeTokens.value = result.purchasesList
+                .filter {
+                    isEligibleLifetimePurchase(
+                        it.purchaseState == Purchase.PurchaseState.PURCHASED, it.products
+                    ) && !it.isAcknowledged
+                }.map { it.purchaseToken }.toSet()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not refresh one-time Play purchase ownership: ${e.javaClass.simpleName}")
+            false
+        }
+    }
+
+    // Call only after the authenticated Hyperion server verified Google Play's
+    // ProductPurchaseV2 and atomically linked this account's permanent receipt.
+    suspend fun acknowledgeVerifiedLifetimePurchase(purchaseToken: String): Boolean {
+        if (!_unacknowledgedLifetimeTokens.value.contains(purchaseToken)) return true
+        if (!billingClient.isReady || !hasValidatedInternet()) return false
+        val result = billingClient.acknowledgePurchase(
+            AcknowledgePurchaseParams.newBuilder().setPurchaseToken(purchaseToken).build()
+        )
+        if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+            _unacknowledgedLifetimeTokens.update { it - purchaseToken }
+            return true
+        }
+        Log.w(TAG, "Google Play Lifetime acknowledgement could not complete: ${result.responseCode}")
+        return false
+    }
 
     fun isTrackUnlocked(track: Track): Boolean = _entitlements.value.isTrackUnlocked(track)
 
