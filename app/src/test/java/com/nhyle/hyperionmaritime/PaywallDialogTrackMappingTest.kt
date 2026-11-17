@@ -52,11 +52,12 @@ class PaywallDialogTrackMappingTest {
     }
 
     @Test
-    fun everyProductPopupContainsTenRelevantBenefits() {
+    fun everyProductPopupContainsElevenRelevantBenefits() {
         for (count in listOf("12", "2", "13", "18", "14")) {
             val perks = premiumFeaturesForTrack(count)
-            assertEquals(10, perks.size)
-            assertEquals(10, perks.distinct().size)
+            assertEquals(11, perks.size)
+            assertEquals(11, perks.distinct().size)
+            assertEquals("1 year unlimited access", perks.first())
             assertTrue(perks.contains("Unlimited timed mock exams"))
             assertTrue(perks.contains("Full question bank across $count competencies"))
             assertTrue(perks.contains("Quick Scan Mode"))
