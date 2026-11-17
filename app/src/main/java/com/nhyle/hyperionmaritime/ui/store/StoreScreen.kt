@@ -95,7 +95,11 @@ private const val LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS = 253_000_000_000_000L
 internal fun canTapLifetimeUnlock(lifetimeOwned: Boolean, purchaseInProgress: Boolean): Boolean =
     !lifetimeOwned && !purchaseInProgress
 
-internal fun lifetimeUnlockButtonLabel(price: String): String = "UNLOCK — $price"
+// Display-only: keep Google's actual Billing price and offer metadata unchanged.
+internal fun storeDisplayPrice(price: String): String =
+    price.replace(Regex("""(?<=\d)\.00(?=\D|$)"""), "")
+
+internal fun lifetimeUnlockButtonLabel(price: String): String = "UNLOCK — ${storeDisplayPrice(price)}"
 
 data class StoreColors(
     val isDark: Boolean,
@@ -316,18 +320,39 @@ private fun PopupLifetimeBox(
  * The ten benefits of a licensed reviewer track, matching the Bond Store on
  * hyperionmaritime.org. No free access is promised for timed mock examinations.
  */
-internal fun premiumFeaturesForTrack(competencies: String): List<String> = listOf(
-    "Unlimited practice sessions",
-    "Unlimited timed mock exams",
-    "Full question bank across $competencies competencies",
-    "Custom drills and question ranges",
-    "Quick Scan Mode",
-    "Mistakes Notebook and bookmarks",
-    "Full-text question search",
-    "Offline access",
-    "Study history and cross-device progress sync",
-    "Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."
-)
+internal fun premiumFeaturesForTrack(
+    productId: String,
+    cycle: BillingCycle = BillingCycle.YEARLY,
+    lifetimeSelected: Boolean = false
+): List<String> {
+    val (name, topic) = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "Deck OIC-NW" to "deck navigation and watchkeeping"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "Engine OIC-EW" to "marine engineering and machinery"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "GMDSS GOC" to "maritime radio communications"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "Deck Management" to "deck leadership and command"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "Engine Management" to "engine-room management"
+        else -> "Hyperion reviewer" to "maritime"
+    }
+    val access = when {
+        lifetimeSelected -> "No expiration"
+        cycle == BillingCycle.WEEKLY -> "1 week unlimited access"
+        cycle == BillingCycle.MONTHLY -> "1 month unlimited access"
+        else -> "1 year unlimited access"
+    }
+    return listOf(
+        access,
+        "Unlimited $name practice sessions",
+        "Unlimited $name timed mock exams",
+        "Full $name question bank",
+        "Custom $topic drills and question ranges",
+        "Quick Scan for $name questions",
+        "$name mistakes notebook and bookmarks",
+        "Full-text search of $name questions",
+        "Offline $name review after downloading",
+        "$name study history and cross-device progress sync",
+        "Use your $name license on Hyperion web and Android"
+    )
+}
 
 @Composable
 internal fun StorePopupCard(
@@ -409,7 +434,7 @@ internal fun StorePopupCard(
     val displayedMode = if (canExtendPlay) PlayPlanMode.PREPAID else PlayPlanMode.AUTO_RENEWING
     val activeItem = billingManager.getProductItem(productId, activeCycle, displayedMode)
 
-    val perks = premiumFeaturesForTrack(competencies)
+    val perks = premiumFeaturesForTrack(productId, activeCycle, lifetimeSelected)
 
     AnimatedVisibility(
         visible = shown,
@@ -510,7 +535,7 @@ internal fun StorePopupCard(
                         PopupStat("MOCK EXAM", mockItems, colors, Modifier.weight(1f))
                     }
 
-                    // All ten benefits are present immediately in both the Bond Store
+                    // The selected duration and all ten shared benefits are shown in the Bond Store
                     // and locked-feature popup; only the card scrolls on small screens.
                     Column(
                         modifier = Modifier.testTag("store_perks_list_$productId"),
@@ -553,7 +578,7 @@ internal fun StorePopupCard(
                             val cycleItem = billingManager.getProductItem(productId, cycle, displayedMode)
                             PopupPlanBox(
                                 cycle = cycle,
-                                formattedPrice = cycleItem.shortFormattedPrice,
+                                formattedPrice = storeDisplayPrice(cycleItem.shortFormattedPrice),
                                 savingsPercent = cycleItem.savingsPercentage,
                                 isSelected = !lifetimeSelected && activeCycle == cycle,
                                 colors = colors,
@@ -564,7 +589,7 @@ internal fun StorePopupCard(
                             )
                         }
                         PopupLifetimeBox(
-                            price = lifetimePrice,
+                            price = storeDisplayPrice(lifetimePrice),
                             isSelected = lifetimeSelected,
                             colors = colors,
                             onClick = onSelectLifetime,
@@ -574,15 +599,6 @@ internal fun StorePopupCard(
                     }
 
                     if (lifetimeSelected) {
-                        Text(
-                            text = if (lifetimeOwned) "LIFETIME OWNED" else "NO EXPIRATION",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp
-                            ),
-                            color = colors.accentGreen
-                        )
                         Button(
                             onClick = onPurchaseLifetime,
                             enabled = canTapLifetimeUnlock(lifetimeOwned, lifetimePurchaseInProgress),
@@ -625,7 +641,7 @@ internal fun StorePopupCard(
                         ) {
                             Text(
                                 text = if (prepaidOfferAvailable)
-                                    "EXTEND LICENSE — ${activeItem.shortFormattedPrice}"
+                                    "EXTEND LICENSE — ${storeDisplayPrice(activeItem.shortFormattedPrice)}"
                                 else "PREPAID EXTENSION UNAVAILABLE",
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.ExtraBold,
@@ -691,7 +707,7 @@ internal fun StorePopupCard(
                                 .testTag("purchase_button_$productId")
                         ) {
                             Text(
-                                text = "UNLOCK — ${activeItem.shortFormattedPrice}",
+                                text = "UNLOCK — ${storeDisplayPrice(activeItem.shortFormattedPrice)}",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.ExtraBold,
@@ -746,7 +762,7 @@ private fun StoreTile(
         else -> Icons.Default.Key
     }
 
-    val fromPrice = billingManager.getProductItem(productId, BillingCycle.WEEKLY).shortFormattedPrice
+    val fromPrice = storeDisplayPrice(billingManager.getProductItem(productId, BillingCycle.WEEKLY).shortFormattedPrice)
 
     Surface(
         modifier = Modifier
@@ -1836,7 +1852,7 @@ fun StoreScreen(
                     }
 
                     Text(
-                        text = "Simulate Google Play subscription purchase in emulator / browser preview:\n\n• Product: ${product.title}\n• Cycle: ${sandboxConfirmCycle.name}\n• Reference Price: ${product.formattedPrice}",
+                        text = "Simulate Google Play subscription purchase in emulator / browser preview:\n\n• Product: ${product.title}\n• Cycle: ${sandboxConfirmCycle.name}\n• Reference Price: ${storeDisplayPrice(product.formattedPrice)}",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 11.5.sp,
@@ -2093,7 +2109,7 @@ private fun SharpProductCard(
 
                     SharpCycleBox(
                         cycle = cycle,
-                        formattedPrice = cycleItem.shortFormattedPrice,
+                        formattedPrice = storeDisplayPrice(cycleItem.shortFormattedPrice),
                         savingsPercent = cycleItem.savingsPercentage,
                         isSelected = isCycleActive,
                         colors = colors,
@@ -2146,7 +2162,7 @@ private fun SharpProductCard(
             } else {
                 if (selectedCardCycle != null) {
                     val selectedItem = billingManager.getProductItem(productId, selectedCardCycle)
-                    val buttonText = "UNLOCK — ${selectedItem.shortFormattedPrice}"
+                    val buttonText = "UNLOCK — ${storeDisplayPrice(selectedItem.shortFormattedPrice)}"
 
                     Button(
                         onClick = {

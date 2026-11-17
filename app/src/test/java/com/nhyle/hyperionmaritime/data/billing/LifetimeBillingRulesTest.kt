@@ -2,6 +2,8 @@ package com.nhyle.hyperionmaritime.data.billing
 
 import com.nhyle.hyperionmaritime.ui.store.canTapLifetimeUnlock
 import com.nhyle.hyperionmaritime.ui.store.lifetimeUnlockButtonLabel
+import com.nhyle.hyperionmaritime.ui.store.premiumFeaturesForTrack
+import com.nhyle.hyperionmaritime.ui.store.storeDisplayPrice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -58,6 +60,33 @@ class LifetimeBillingRulesTest {
         assertEquals("UNLOCK — ₱999", lifetimeUnlockButtonLabel("₱999"))
         assertEquals("UNLOCK — ₱599", lifetimeUnlockButtonLabel("₱599"))
         assertEquals("UNLOCK — ₱1,999", lifetimeUnlockButtonLabel("₱1,999"))
+    }
+
+    @Test
+    fun storePricesHideOnlyZeroCentDecimalsWithoutChangingOtherFractions() {
+        assertEquals("₱999", storeDisplayPrice("₱999.00"))
+        assertEquals("₱1,999", storeDisplayPrice("₱1,999.00"))
+        assertEquals("₱29/mo", storeDisplayPrice("₱29.00/mo"))
+        assertEquals("₱29.50", storeDisplayPrice("₱29.50"))
+        assertEquals("₱999", storeDisplayPrice("₱999"))
+        assertEquals("UNLOCK — ₱1,999", lifetimeUnlockButtonLabel("₱1,999.00"))
+    }
+
+    @Test
+    fun firstPremiumFeatureMatchesSelectedDurationAndPreservesSharedBenefits() {
+        val productId = BillingConstants.PRODUCT_OIC_NW_PASS
+        val weekly = premiumFeaturesForTrack(productId, BillingCycle.WEEKLY)
+        val monthly = premiumFeaturesForTrack(productId, BillingCycle.MONTHLY)
+        val yearly = premiumFeaturesForTrack(productId, BillingCycle.YEARLY)
+        val lifetime = premiumFeaturesForTrack(productId, BillingCycle.YEARLY, lifetimeSelected = true)
+        assertEquals("1 week unlimited access", weekly.first())
+        assertEquals("1 month unlimited access", monthly.first())
+        assertEquals("1 year unlimited access", yearly.first())
+        assertEquals("No expiration", lifetime.first())
+        assertEquals(11, lifetime.size)
+        assertEquals(weekly.drop(1), monthly.drop(1))
+        assertEquals(weekly.drop(1), yearly.drop(1))
+        assertEquals(weekly.drop(1), lifetime.drop(1))
     }
 
     @Test

@@ -52,18 +52,28 @@ class PaywallDialogTrackMappingTest {
     }
 
     @Test
-    fun everyProductPopupContainsTenRelevantBenefits() {
-        for (count in listOf("12", "2", "13", "18", "14")) {
-            val perks = premiumFeaturesForTrack(count)
-            assertEquals(10, perks.size)
-            assertEquals(10, perks.distinct().size)
-            assertTrue(perks.contains("Unlimited timed mock exams"))
-            assertTrue(perks.contains("Full question bank across $count competencies"))
-            assertTrue(perks.contains("Quick Scan Mode"))
-            assertTrue(perks.contains("Mistakes Notebook and bookmarks"))
-            assertTrue(perks.contains("Offline access"))
-            assertTrue(perks.contains("Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."))
-            assertTrue(perks.contains("Study history and cross-device progress sync"))
+    fun everyProductPopupContainsElevenTrackSpecificBenefits() {
+        val tracks = mapOf(
+            BillingConstants.PRODUCT_OIC_NW_PASS to "Deck OIC-NW",
+            BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS to "Engine OIC-EW",
+            BillingConstants.PRODUCT_GMDSS_PASS to "GMDSS GOC",
+            BillingConstants.PRODUCT_DECK_MGT_PASS to "Deck Management",
+            BillingConstants.PRODUCT_ENGINE_MGT_PASS to "Engine Management"
+        )
+        val descriptions = mutableSetOf<List<String>>()
+        for ((productId, name) in tracks) {
+            val perks = premiumFeaturesForTrack(productId)
+            assertEquals(11, perks.size)
+            assertEquals(11, perks.distinct().size)
+            assertEquals("1 year unlimited access", perks.first())
+            assertEquals("Unlimited $name practice sessions", perks[1])
+            assertTrue(perks.contains("Unlimited $name timed mock exams"))
+            assertTrue(perks.contains("Full $name question bank"))
+            assertTrue(perks.contains("Quick Scan for $name questions"))
+            assertTrue(perks.contains("Offline $name review after downloading"))
+            assertTrue(perks.contains("Use your $name license on Hyperion web and Android"))
+            assertTrue("Every track has its own benefits copy", descriptions.add(perks))
         }
     }
+
 }
