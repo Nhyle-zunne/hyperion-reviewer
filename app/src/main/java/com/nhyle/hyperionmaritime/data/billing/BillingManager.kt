@@ -1069,17 +1069,20 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
             val beforeTokens = getOwnedPurchasesForAccountLinking()
                 .map { it.purchaseToken }.toSet()
+            val beforeLifetimeTokens = getOwnedLifetimePurchasesForAccountLinking()
+                .map { it.purchaseToken }.toSet()
             val queried = queryPurchasesAsync()
-            if (!queried) return@launch
+            val lifetimeQueried = queryLifetimePurchasesAsync()
+            if (!queried && !lifetimeQueried) return@launch
             val afterTokens = getOwnedPurchasesForAccountLinking()
                 .map { it.purchaseToken }.toSet()
-            // Only a purchase event or actual ownership change links to the
-            // Hyperion account. Sign-in and the manual Sync button handle
-            // existing website licenses independently.
-            if (shouldSyncLinkedAccountAfterPlayRefresh(
-                checkoutPending, beforeTokens, afterTokens
-            ) && hasValidatedInternet()) {
-                syncAccountAfterPlayPurchaseChanged()
+            val afterLifetimeTokens = getOwnedLifetimePurchasesForAccountLinking()
+                .map { it.purchaseToken }.toSet()
+            // Only purchase events or ownership changes trigger account sync.
+            if ((queried && shouldSyncLinkedAccountAfterPlayRefresh(
+                    checkoutPending, beforeTokens, afterTokens
+                )) || (lifetimeQueried && (checkoutPending || beforeLifetimeTokens != afterLifetimeTokens))) {
+                if (hasValidatedInternet()) syncAccountAfterPlayPurchaseChanged()
             }
         }
     }
@@ -1094,7 +1097,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         it.purchaseState == Purchase.PurchaseState.PURCHASED
                     }
                     purchases?.forEach { purchase ->
-                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
+                        // Lifetime is NOT acknowledged before the authenticated
+                        // backend verifies ProductPurchaseV2 and binds its receipt.
+                        if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED &&
+                            !purchase.isAcknowledged &&
+                            purchase.products.any { it in BillingConstants.ALL_PRODUCT_IDS }) {
                             val ackParams = AcknowledgePurchaseParams.newBuilder()
                                 .setPurchaseToken(purchase.purchaseToken)
                                 .build()
@@ -1102,6 +1109,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         }
                     }
                     queryPurchasesAsync()
+                    queryLifetimePurchasesAsync()
                     if (hasCompletedPurchase) {
                         syncAccountAfterPlayPurchaseChanged()
                     }
