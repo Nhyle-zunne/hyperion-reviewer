@@ -45,6 +45,20 @@ class LifetimeBillingRulesTest {
     }
 
     @Test
+    fun lifetimeUnlockIsTappableBeforeRemoteCheckoutReadinessCompletes() {
+        assertTrue(canTapLifetimeUnlock(lifetimeOwned = false, purchaseInProgress = false))
+        assertFalse(canTapLifetimeUnlock(lifetimeOwned = true, purchaseInProgress = false))
+        assertFalse(canTapLifetimeUnlock(lifetimeOwned = false, purchaseInProgress = true))
+    }
+
+    @Test
+    fun lifetimeUnlockUsesSameButtonCopyAsSubscriptionOffers() {
+        assertEquals("UNLOCK — ₱999", lifetimeUnlockButtonLabel("₱999"))
+        assertEquals("UNLOCK — ₱599", lifetimeUnlockButtonLabel("₱599"))
+        assertEquals("UNLOCK — ₱1,999", lifetimeUnlockButtonLabel("₱1,999"))
+    }
+
+    @Test
     fun lifetimeCheckoutRequiresLinkedAccountAndAvailablePlayOffer() {
         assertTrue(canOfferLifetimeCheckout("signed-user", true, false, true))
         assertFalse(canOfferLifetimeCheckout(null, true, false, true))
