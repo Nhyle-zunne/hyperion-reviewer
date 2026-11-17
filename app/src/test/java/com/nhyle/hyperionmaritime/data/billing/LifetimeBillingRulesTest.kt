@@ -1,5 +1,7 @@
 package com.nhyle.hyperionmaritime.data.billing
 
+import com.nhyle.hyperionmaritime.ui.store.canTapLifetimeUnlock
+import com.nhyle.hyperionmaritime.ui.store.lifetimeUnlockButtonLabel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -42,6 +44,20 @@ class LifetimeBillingRulesTest {
         assertFalse(isEligibleLifetimePurchase(true, listOf(id, BillingConstants.PRODUCT_GMDSS_LIFETIME)))
         assertFalse(isEligibleLifetimePurchase(true, listOf(BillingConstants.PRODUCT_OIC_NW_PASS)))
         assertFalse(isEligibleLifetimePurchase(true, emptyList()))
+    }
+
+    @Test
+    fun lifetimeUnlockIsTappableBeforeRemoteCheckoutReadinessCompletes() {
+        assertTrue(canTapLifetimeUnlock(lifetimeOwned = false, purchaseInProgress = false))
+        assertFalse(canTapLifetimeUnlock(lifetimeOwned = true, purchaseInProgress = false))
+        assertFalse(canTapLifetimeUnlock(lifetimeOwned = false, purchaseInProgress = true))
+    }
+
+    @Test
+    fun lifetimeUnlockUsesSameButtonCopyAsSubscriptionOffers() {
+        assertEquals("UNLOCK — ₱999", lifetimeUnlockButtonLabel("₱999"))
+        assertEquals("UNLOCK — ₱599", lifetimeUnlockButtonLabel("₱599"))
+        assertEquals("UNLOCK — ₱1,999", lifetimeUnlockButtonLabel("₱1,999"))
     }
 
     @Test
