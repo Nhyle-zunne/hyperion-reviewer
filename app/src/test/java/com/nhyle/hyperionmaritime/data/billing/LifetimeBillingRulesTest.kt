@@ -2,6 +2,7 @@ package com.nhyle.hyperionmaritime.data.billing
 
 import com.nhyle.hyperionmaritime.ui.store.canTapLifetimeUnlock
 import com.nhyle.hyperionmaritime.ui.store.lifetimeUnlockButtonLabel
+import com.nhyle.hyperionmaritime.ui.store.isVerifiedLifetimeActive
 import com.nhyle.hyperionmaritime.ui.store.premiumFeaturesForTrack
 import com.nhyle.hyperionmaritime.ui.store.storeDisplayPrice
 import org.junit.Assert.assertEquals
@@ -46,6 +47,16 @@ class LifetimeBillingRulesTest {
         assertFalse(isEligibleLifetimePurchase(true, listOf(id, BillingConstants.PRODUCT_GMDSS_LIFETIME)))
         assertFalse(isEligibleLifetimePurchase(true, listOf(BillingConstants.PRODUCT_OIC_NW_PASS)))
         assertFalse(isEligibleLifetimePurchase(true, emptyList()))
+    }
+
+    @Test
+    fun bondStoreShowsLifetimeActiveOnlyForAValidSignedAccountExpiry() {
+        val now = 1_795_000_000_000L
+        val permanentExpiry = 253_402_300_799_000L // Server's December 31, 9999 grant
+        assertTrue(isVerifiedLifetimeActive(permanentExpiry, now))
+        assertFalse(isVerifiedLifetimeActive(0L, now)) // No verified account grant
+        assertFalse(isVerifiedLifetimeActive(now + 365L * 24L * 60L * 60L * 1_000L, now))
+        assertFalse(isVerifiedLifetimeActive(permanentExpiry, permanentExpiry))
     }
 
     @Test
