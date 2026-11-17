@@ -1450,10 +1450,16 @@ fun StoreScreen(
                             isRestoring = true
                             restoreFeedbackMessage = null
                             scope.launch {
-                                billingManager.queryPurchasesAsync()
+                                val subscriptionsRestored = billingManager.queryPurchasesAsync()
+                                val lifetimeRestored = billingManager.queryLifetimePurchasesAsync()
+                                if (subscriptionsRestored || lifetimeRestored) {
+                                    SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(context)
+                                }
                                 delay(800)
                                 isRestoring = false
-                                restoreFeedbackMessage = "Purchase restoration scan completed."
+                                restoreFeedbackMessage = if (subscriptionsRestored || lifetimeRestored)
+                                    "Purchase restoration checked. Sync My Hyperion Account to verify active licenses."
+                                else "Could not refresh Google Play purchases. Connect to the internet and retry."
                             }
                         }
                     },
