@@ -685,7 +685,7 @@ object SupabaseAccountManager {
                 messageParts += "A Google Play subscription is linked to a different Hyperion account. Sign in with the original account to sync it. Google Play access on this device is unchanged."
             }
             if (playLinks.hadFailures) {
-                messageParts += "Some Google Play subscriptions could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
+                messageParts += "Some Google Play purchases could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
             }
             messageParts += result.studyProgressMessage
             _state.value = SupabaseAccountState(
