@@ -1971,6 +1971,59 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         return result
     }
 
+    fun launchLifetimeBillingFlow(activity: Activity, lifetimeProductId: String): BillingResult {
+        val ownerId = LicenseManager.getCurrentAccountUserId(appContext)
+        if (ownerId.isNullOrBlank()) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.DEVELOPER_ERROR)
+                .setDebugMessage("Sign in to My Hyperion Account before purchasing Lifetime Access.")
+                .build()
+        }
+        if (lifetimeProductId !in BillingConstants.LIFETIME_PRODUCT_IDS) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("Invalid Lifetime Access product.")
+                .build()
+        }
+        if (!billingClient.isReady) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.SERVICE_UNAVAILABLE)
+                .setDebugMessage("Google Play Billing is not ready. Reconnect and retry.")
+                .build()
+        }
+        val details = _lifetimeProductDetails.value[lifetimeProductId]
+        val offer = details?.oneTimePurchaseOfferDetailsList?.firstOrNull {
+            it.offerToken.isNotBlank()
+        }
+        if (details == null || offer == null) {
+            return BillingResult.newBuilder()
+                .setResponseCode(BillingClient.BillingResponseCode.ITEM_UNAVAILABLE)
+                .setDebugMessage("This Lifetime Access product is not available from Google Play yet.")
+                .build()
+        }
+        val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
+            .setProductDetails(details)
+            .setOfferToken(offer.offerToken)
+            .build()
+        val flow = BillingFlowParams.newBuilder()
+            .setProductDetailsParamsList(listOf(productParams))
+            .setObfuscatedAccountId(requireNotNull(obfuscatedHyperionAccountId(ownerId)))
+            .build()
+        checkoutFlowProductId = lifetimeProductId
+        _entitlements.update { it.copy(pendingPurchaseProductId = lifetimeProductId, errorMessage = null) }
+        val result = billingClient.launchBillingFlow(activity, flow)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            checkoutFlowProductId = null
+            _entitlements.update {
+                it.copy(
+                    pendingPurchaseProductId = null,
+                    errorMessage = result.debugMessage.ifBlank { "Google Play could not start Lifetime checkout." }
+                )
+            }
+        }
+        return result
+    }
+
     fun getProductItem(
         productId: String,
         cycle: BillingCycle = BillingCycle.YEARLY,
