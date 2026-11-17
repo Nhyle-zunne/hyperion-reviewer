@@ -892,6 +892,9 @@ fun StoreScreen(
     }
     var prepaidConfirmation by remember { mutableStateOf<SelectedOffer?>(null) }
     var prepaidError by remember { mutableStateOf<String?>(null) }
+    var selectedLifetimeProductId by rememberSaveable { mutableStateOf<String?>(null) }
+    var lifetimeCheckoutReady by remember { mutableStateOf<Boolean?>(null) }
+    var lifetimeConfirmationProductId by remember { mutableStateOf<String?>(null) }
 
     var openProductId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -1309,6 +1312,7 @@ fun StoreScreen(
                             onDismissRequest = {
                                 openProductId = null
                                 selectedOffer = null
+                                selectedLifetimeProductId = null
                             },
                             properties = DialogProperties(usePlatformDefaultWidth = false)
                         ) {
@@ -1321,6 +1325,7 @@ fun StoreScreen(
                                     onClose = {
                                         openProductId = null
                                         selectedOffer = null
+                                        selectedLifetimeProductId = null
                                     },
                                     productId = productId,
                                     viewModel = viewModel,
@@ -1330,7 +1335,42 @@ fun StoreScreen(
                                     activeBadgeText = activeBadgeText,
                                     selectedCardCycle = selectedCardCycle,
                                     onSelectCycle = { cycle ->
+                                        selectedLifetimeProductId = null
                                         selectedOffer = SelectedOffer(productId, cycle)
+                                    },
+                                    lifetimeSelected = selectedLifetimeProductId == productId,
+                                    lifetimePrice = BillingConstants.lifetimeProductForSubscription(productId)
+                                        ?.let(billingManager::getLifetimePrice) ?: "Price unavailable",
+                                    lifetimeOwned = when (productId) {
+                                        BillingConstants.PRODUCT_OIC_NW_PASS ->
+                                            oicAccountExp >= 253_000_000_000_000L
+                                        BillingConstants.PRODUCT_GMDSS_PASS ->
+                                            gmdssAccountExp >= 253_000_000_000_000L
+                                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS ->
+                                            ewAccountExp >= 253_000_000_000_000L
+                                        BillingConstants.PRODUCT_DECK_MGT_PASS ->
+                                            dmAccountExp >= 253_000_000_000_000L
+                                        BillingConstants.PRODUCT_ENGINE_MGT_PASS ->
+                                            emAccountExp >= 253_000_000_000_000L
+                                        else -> false
+                                    },
+                                    lifetimeCheckoutEnabled = lifetimeCheckoutReady == true &&
+                                        !LicenseManager.getCurrentAccountUserId(context).isNullOrBlank() &&
+                                        BillingConstants.lifetimeProductForSubscription(productId)
+                                            ?.let(billingManager::isLifetimeProductAvailable) == true,
+                                    onSelectLifetime = {
+                                        selectedOffer = null
+                                        selectedLifetimeProductId = productId
+                                        // Refresh readiness when the Lifetime option is chosen.
+                                        // The server controls rollout. No local purchase unlock.
+                                        lifetimeCheckoutReady = null
+                                        scope.launch {
+                                            lifetimeCheckoutReady =
+                                                SupabaseAccountManager.isLifetimeCheckoutAvailable(context)
+                                        }
+                                    },
+                                    onPurchaseLifetime = {
+                                        lifetimeConfirmationProductId = productId
                                     },
                                     onPurchaseCycle = { cycle ->
                                         selectedOffer = SelectedOffer(productId, cycle)
@@ -1530,6 +1570,51 @@ fun StoreScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+
+    lifetimeConfirmationProductId?.let { selectedProduct ->
+        val lifetimeProduct = BillingConstants.lifetimeProductForSubscription(selectedProduct)
+        if (lifetimeProduct != null) {
+            AlertDialog(
+                onDismissRequest = { lifetimeConfirmationProductId = null },
+                title = { Text("LIFETIME ACCESS — NO EXPIRATION") },
+                text = {
+                    Text(
+                        "Review your selected track before proceeding to Google Play. " +
+                            "Price: ${billingManager.getLifetimePrice(lifetimeProduct)}. " +
+                            "Lifetime payment does not automatically cancel existing subscriptions. " +
+                            "Access activates only after Hyperion verifies the Google Play purchase."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        lifetimeConfirmationProductId = null
+                        scope.launch {
+                            if (!SupabaseAccountManager.isLifetimeCheckoutAvailable(context)) {
+                                prepaidError = "Lifetime checkout is not enabled yet. Retry once Google Play products are active."
+                                return@launch
+                            }
+                            val activity = context.findActivity()
+                            if (activity == null) {
+                                prepaidError = "Google Play checkout requires an Android activity."
+                                return@launch
+                            }
+                            val result = billingManager.launchLifetimeBillingFlow(activity, lifetimeProduct)
+                            if (result.responseCode != com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
+                                prepaidError = result.debugMessage.ifBlank {
+                                    "Could not start Google Play Lifetime checkout."
+                                }
+                            }
+                        }
+                    }) { Text("CONTINUE TO GOOGLE PLAY") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { lifetimeConfirmationProductId = null }) {
+                        Text("CANCEL")
+                    }
+                }
+            )
         }
     }
 
