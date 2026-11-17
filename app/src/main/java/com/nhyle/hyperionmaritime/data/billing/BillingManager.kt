@@ -947,7 +947,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     fun isLifetimeProductAvailable(lifetimeProductId: String): Boolean =
         _lifetimeProductDetails.value[lifetimeProductId]
-            ?.oneTimePurchaseOfferDetailsList?.any { it.offerToken.isNotBlank() } == true
+            ?.oneTimePurchaseOfferDetailsList?.any { it.offerToken?.isNotBlank() == true } == true
 
     fun getOwnedLifetimePurchasesForAccountLinking(): List<PlayPurchaseForAccountLinking> =
         _ownedLifetimePurchases.value
@@ -1993,7 +1993,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         val details = _lifetimeProductDetails.value[lifetimeProductId]
         val offer = details?.oneTimePurchaseOfferDetailsList?.firstOrNull {
-            it.offerToken.isNotBlank()
+            it.offerToken?.isNotBlank() == true
         }
         if (details == null || offer == null) {
             return BillingResult.newBuilder()
@@ -2003,7 +2003,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
         val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
-            .setOfferToken(offer.offerToken)
+            .setOfferToken(requireNotNull(offer.offerToken))
             .build()
         val flow = BillingFlowParams.newBuilder()
             .setProductDetailsParamsList(listOf(productParams))
