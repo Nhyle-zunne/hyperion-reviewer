@@ -92,6 +92,10 @@ import kotlinx.coroutines.launch
 
 private const val LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS = 253_000_000_000_000L
 
+// Only a signed, current-account license can produce this server-verified expiry.
+internal fun isVerifiedLifetimeActive(accountExpiryEpochMs: Long, nowEpochMs: Long): Boolean =
+    accountExpiryEpochMs >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS && accountExpiryEpochMs > nowEpochMs
+
 internal fun canTapLifetimeUnlock(lifetimeOwned: Boolean, purchaseInProgress: Boolean): Boolean =
     !lifetimeOwned && !purchaseInProgress
 
@@ -275,6 +279,7 @@ private fun PopupPlanBox(
 @Composable
 private fun PopupLifetimeBox(
     price: String,
+    owned: Boolean,
     isSelected: Boolean,
     colors: StoreColors,
     onClick: () -> Unit,
@@ -304,8 +309,8 @@ private fun PopupLifetimeBox(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = price,
-                color = if (isSelected) colors.accentGreen else colors.textPrimary,
+                text = if (owned) "ACTIVE" else price,
+                color = if (isSelected || owned) colors.accentGreen else colors.textPrimary,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
@@ -590,6 +595,7 @@ internal fun StorePopupCard(
                         }
                         PopupLifetimeBox(
                             price = storeDisplayPrice(lifetimePrice),
+                            owned = lifetimeOwned,
                             isSelected = lifetimeSelected,
                             colors = colors,
                             onClick = onSelectLifetime,
@@ -611,7 +617,7 @@ internal fun StorePopupCard(
                                 .testTag("purchase_button_$productId")
                         ) {
                             Text(
-                                text = if (lifetimeOwned) "LIFETIME OWNED" else lifetimeUnlockButtonLabel(lifetimePrice),
+                                text = if (lifetimeOwned) "LIFETIME ACTIVE" else lifetimeUnlockButtonLabel(lifetimePrice),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = FontWeight.ExtraBold,
@@ -732,6 +738,7 @@ private fun StoreTile(
     billingManager: com.nhyle.hyperionmaritime.data.billing.BillingManager,
     colors: StoreColors,
     isEntitled: Boolean,
+    lifetimeOwned: Boolean,
     onClick: () -> Unit
 ) {
     val title = when (productId) {
@@ -824,7 +831,11 @@ private fun StoreTile(
             )
 
             Text(
-                text = if (isEntitled) "✓ ACTIVE" else "FROM $fromPrice",
+                text = when {
+                    lifetimeOwned -> "✓ LIFETIME ACTIVE"
+                    isEntitled -> "✓ ACTIVE"
+                    else -> "FROM $fromPrice"
+                },
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.ExtraBold,
@@ -1307,7 +1318,16 @@ fun StoreScreen(
                         else -> false
                     }
 
-                    val activeBadgeText = when (productId) {
+                    val accountExpiry = when (productId) {
+                        BillingConstants.PRODUCT_OIC_NW_PASS -> oicAccountExp
+                        BillingConstants.PRODUCT_GMDSS_PASS -> gmdssAccountExp
+                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> ewAccountExp
+                        BillingConstants.PRODUCT_DECK_MGT_PASS -> dmAccountExp
+                        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> emAccountExp
+                        else -> 0L
+                    }
+                    val lifetimeOwned = isVerifiedLifetimeActive(accountExpiry, now)
+                    val activeBadgeText = if (lifetimeOwned) "LIFETIME ACTIVE" else when (productId) {
                         BillingConstants.PRODUCT_OIC_NW_PASS -> {
                             if (effectiveOicExp > now) "ACTIVE: ${formatRemainingDuration(effectiveOicExp).uppercase()}"
                             else if (offlineInfo?.isTampered == true) "CLOCK TAMPERED"
@@ -1345,7 +1365,14 @@ fun StoreScreen(
                         billingManager = billingManager,
                         colors = colors,
                         isEntitled = isEntitled,
-                        onClick = { openProductId = productId }
+                        lifetimeOwned = lifetimeOwned,
+                        onClick = {
+                            openProductId = productId
+                            if (lifetimeOwned) {
+                                selectedOffer = null
+                                selectedLifetimeProductId = productId
+                            }
+                        }
                     )
 
                     if (openProductId == productId) {
@@ -1382,19 +1409,7 @@ fun StoreScreen(
                                     lifetimeSelected = selectedLifetimeProductId == productId,
                                     lifetimePrice = BillingConstants.lifetimeProductForSubscription(productId)
                                         ?.let(billingManager::getLifetimePrice) ?: "Price unavailable",
-                                    lifetimeOwned = when (productId) {
-                                        BillingConstants.PRODUCT_OIC_NW_PASS ->
-                                            oicAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
-                                        BillingConstants.PRODUCT_GMDSS_PASS ->
-                                            gmdssAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
-                                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS ->
-                                            ewAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
-                                        BillingConstants.PRODUCT_DECK_MGT_PASS ->
-                                            dmAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
-                                        BillingConstants.PRODUCT_ENGINE_MGT_PASS ->
-                                            emAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
-                                        else -> false
-                                    },
+                                    lifetimeOwned = lifetimeOwned,
                                     lifetimePurchaseInProgress = lifetimePurchaseInProgress,
                                     onSelectLifetime = {
                                         selectedOffer = null
@@ -1508,14 +1523,20 @@ fun StoreScreen(
                             scope.launch {
                                 val subscriptionsRestored = billingManager.queryPurchasesAsync()
                                 val lifetimeRestored = billingManager.queryLifetimePurchasesAsync()
-                                if (subscriptionsRestored || lifetimeRestored) {
+                                val accountSignedIn = SupabaseAccountManager.savedSignedInOwnerId(context) != null
+                                if ((subscriptionsRestored || lifetimeRestored) && accountSignedIn) {
                                     SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(context)
                                 }
-                                delay(800)
                                 isRestoring = false
-                                restoreFeedbackMessage = if (subscriptionsRestored || lifetimeRestored)
-                                    "Purchase restoration checked. Sync My Hyperion Account to verify active licenses."
-                                else "Could not refresh Google Play purchases. Connect to the internet and retry."
+                                restoreFeedbackMessage = when {
+                                    !subscriptionsRestored && !lifetimeRestored ->
+                                        "Could not refresh Google Play purchases. Connect to the internet and retry."
+                                    !accountSignedIn ->
+                                        "Google Play purchases checked. Sign in with the purchasing Hyperion account, then sync licenses."
+                                    else -> SupabaseAccountManager.state.value.message
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?: "Purchases checked. Tap Sync Website Licenses in My Hyperion Account to refresh your access."
+                                }
                             }
                         }
                     },
@@ -2514,6 +2535,7 @@ private fun ActiveLicenseOverviewCard(
 
                     val durationText = when {
                         isTampered -> "CLOCK ROLLBACK DETECTED"
+                        isVerifiedLifetimeActive(pass.activeExp, now) -> "LIFETIME ACTIVE"
                         pass.activeExp > 0L -> "ACTIVE: ${formatRemainingDuration(pass.activeExp).uppercase()}"
                         offlineInfo != null && offlineInfo.isActive -> "ACTIVE: ${offlineInfo.getFormattedTimeRemaining().uppercase()}"
                         else -> "ACTIVE REVIEWER PASS"
