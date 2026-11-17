@@ -911,7 +911,6 @@ fun StoreScreen(
     var selectedOffer by rememberSaveable {
         mutableStateOf<SelectedOffer?>(null)
     }
-    var prepaidConfirmation by remember { mutableStateOf<SelectedOffer?>(null) }
     var prepaidError by remember { mutableStateOf<String?>(null) }
     var selectedLifetimeProductId by rememberSaveable { mutableStateOf<String?>(null) }
     var lifetimeCheckoutReady by remember { mutableStateOf<Boolean?>(null) }
@@ -1435,7 +1434,21 @@ fun StoreScreen(
                                             if (LicenseManager.getCurrentAccountUserId(context).isNullOrBlank()) {
                                                 prepaidError = "Sign in to My Hyperion Account and sync your Google Play subscription before extending. This is required to preserve and verify the exact prepaid expiry."
                                             } else {
-                                                prepaidConfirmation = SelectedOffer(productId, cycle)
+                                                val activity = context.findActivity()
+                                                if (activity == null) {
+                                                    prepaidError = "Google Play checkout requires an Android activity."
+                                                } else {
+                                                    val result = billingManager.launchBillingFlow(
+                                                        activity, productId, cycle, PlayPlanMode.PREPAID
+                                                    )
+                                                    if (result.responseCode !=
+                                                        com.android.billingclient.api.BillingClient.BillingResponseCode.OK
+                                                    ) {
+                                                        prepaidError = result.debugMessage.ifBlank {
+                                                            "Google Play could not start this prepaid extension."
+                                                        }
+                                                    }
+                                                }
                                             }
                                         } else if (!isEntitled) {
                                             val activity = context.findActivity()
@@ -1633,54 +1646,6 @@ fun StoreScreen(
                 )
             }
         }
-    }
-
-    prepaidConfirmation?.let { chosen ->
-        val existingMode = billingManager.getActivePlayPlan(chosen.productId)?.planMode
-        AlertDialog(
-            onDismissRequest = { prepaidConfirmation = null },
-            title = { Text("EXTEND LICENSE — PREPAID") },
-            text = {
-                Text(
-                    if (existingMode == PlayPlanMode.PREPAID)
-                        "Google Play will charge for this prepaid top-up immediately. " +
-                            "Your existing prepaid time is preserved and no automatic renewal is started."
-                    else
-                        "Google Play will charge for the prepaid plan immediately and replace " +
-                            "your auto-renewing subscription. Future automatic renewals stop. " +
-                            "Google Play credits remaining paid value, which may convert to a " +
-                            "different amount of time depending on the new plan's price. " +
-                            "Auto-renewal will not restart when prepaid access expires."
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    prepaidConfirmation = null
-                    val activity = context.findActivity()
-                    if (activity == null) {
-                        prepaidError = "Google Play checkout requires an Android activity."
-                    } else {
-                        val result = billingManager.launchBillingFlow(
-                            activity, chosen.productId, chosen.cycle, PlayPlanMode.PREPAID
-                        )
-                        if (result.responseCode !=
-                            com.android.billingclient.api.BillingClient.BillingResponseCode.OK
-                        ) {
-                            prepaidError = result.debugMessage.ifBlank {
-                                "Google Play could not start this prepaid extension."
-                            }
-                        }
-                    }
-                }) {
-                    Text("CONTINUE TO GOOGLE PLAY")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { prepaidConfirmation = null }) {
-                    Text("KEEP CURRENT PLAN")
-                }
-            }
-        )
     }
 
     lifetimeError?.let { message ->
