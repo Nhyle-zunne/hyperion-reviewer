@@ -431,11 +431,11 @@ object BillingConstants {
 
     // Informational fallback until Play provides the buyer's real local price.
     val DEFAULT_LIFETIME_PRICES = mapOf(
-        PRODUCT_OIC_NW_LIFETIME to "₱2,499",
-        PRODUCT_ENGINE_OIC_EW_LIFETIME to "₱2,499",
-        PRODUCT_GMDSS_LIFETIME to "₱1,999",
-        PRODUCT_DECK_MGT_LIFETIME to "₱4,999",
-        PRODUCT_ENGINE_MGT_LIFETIME to "₱4,999"
+        PRODUCT_OIC_NW_LIFETIME to "₱999",
+        PRODUCT_ENGINE_OIC_EW_LIFETIME to "₱999",
+        PRODUCT_GMDSS_LIFETIME to "₱599",
+        PRODUCT_DECK_MGT_LIFETIME to "₱1,999",
+        PRODUCT_ENGINE_MGT_LIFETIME to "₱1,999"
     )
     fun getFallbackLifetimePrice(lifetimeProductId: String): String =
         DEFAULT_LIFETIME_PRICES[lifetimeProductId] ?: "Price unavailable"
