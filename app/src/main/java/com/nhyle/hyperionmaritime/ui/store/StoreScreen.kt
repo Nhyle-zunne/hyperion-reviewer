@@ -92,6 +92,11 @@ import kotlinx.coroutines.launch
 
 private const val LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS = 253_000_000_000_000L
 
+internal fun canTapLifetimeUnlock(lifetimeOwned: Boolean, purchaseInProgress: Boolean): Boolean =
+    !lifetimeOwned && !purchaseInProgress
+
+internal fun lifetimeUnlockButtonLabel(price: String): String = "UNLOCK — $price"
+
 data class StoreColors(
     val isDark: Boolean,
     val storeBackground: Color,
@@ -338,7 +343,7 @@ internal fun StorePopupCard(
     lifetimeSelected: Boolean,
     lifetimePrice: String,
     lifetimeOwned: Boolean,
-    lifetimeCheckoutEnabled: Boolean,
+    lifetimePurchaseInProgress: Boolean,
     onSelectLifetime: () -> Unit,
     onPurchaseLifetime: () -> Unit,
     onClose: () -> Unit
@@ -580,7 +585,7 @@ internal fun StorePopupCard(
                         )
                         Button(
                             onClick = onPurchaseLifetime,
-                            enabled = !lifetimeOwned && lifetimeCheckoutEnabled,
+                            enabled = canTapLifetimeUnlock(lifetimeOwned, lifetimePurchaseInProgress),
                             shape = RectangleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colors.accentGreen,
@@ -590,17 +595,15 @@ internal fun StorePopupCard(
                                 .testTag("purchase_button_$productId")
                         ) {
                             Text(
-                                text = if (lifetimeOwned) "LIFETIME OWNED" else "BUY NOW",
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.ExtraBold
-                            )
-                        }
-                        if (!lifetimeOwned && !lifetimeCheckoutEnabled) {
-                            Text(
-                                text = "Lifetime checkout requires your signed-in Hyperion account, " +
-                                    "an active Google Play product, and server verification.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.textSecondary
+                                text = if (lifetimeOwned) "LIFETIME OWNED" else lifetimeUnlockButtonLabel(lifetimePrice),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontSize = 13.sp
+                                ),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     } else if (canExtendPlay) {
