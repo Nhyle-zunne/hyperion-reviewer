@@ -90,6 +90,8 @@ import com.nhyle.hyperionmaritime.viewmodel.Screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private const val LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS = 253_000_000_000_000L
+
 data class StoreColors(
     val isDark: Boolean,
     val storeBackground: Color,
@@ -1343,15 +1345,15 @@ fun StoreScreen(
                                         ?.let(billingManager::getLifetimePrice) ?: "Price unavailable",
                                     lifetimeOwned = when (productId) {
                                         BillingConstants.PRODUCT_OIC_NW_PASS ->
-                                            oicAccountExp >= 253_000_000_000_000L
+                                            oicAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
                                         BillingConstants.PRODUCT_GMDSS_PASS ->
-                                            gmdssAccountExp >= 253_000_000_000_000L
+                                            gmdssAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
                                         BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS ->
-                                            ewAccountExp >= 253_000_000_000_000L
+                                            ewAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
                                         BillingConstants.PRODUCT_DECK_MGT_PASS ->
-                                            dmAccountExp >= 253_000_000_000_000L
+                                            dmAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
                                         BillingConstants.PRODUCT_ENGINE_MGT_PASS ->
-                                            emAccountExp >= 253_000_000_000_000L
+                                            emAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
                                         else -> false
                                     },
                                     lifetimeCheckoutEnabled = lifetimeCheckoutReady == true &&
@@ -2260,6 +2262,7 @@ private fun SharpCycleBox(
 
 @Composable
 private fun formatRemainingDuration(expiryEpoch: Long): String {
+    if (expiryEpoch >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS) return "NO EXPIRATION"
     val context = androidx.compose.ui.platform.LocalContext.current
     val now = System.currentTimeMillis()
     val prefs = context.getSharedPreferences("hyperion_secure_license_v2", Context.MODE_PRIVATE)
@@ -2284,6 +2287,7 @@ private fun formatRemainingDuration(expiryEpoch: Long): String {
 }
 
 private fun formatExpiryDateString(expiryEpoch: Long): String {
+    if (expiryEpoch >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS) return "No expiration"
     if (expiryEpoch <= 0L) return "Active"
     val date = java.util.Date(expiryEpoch)
     val format = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
@@ -2507,6 +2511,7 @@ private fun ActiveLicenseOverviewCard(
 
                     val expirySubtitle = when {
                         isTampered -> "ERROR: System time set earlier than verification record. Restore correct device time."
+                        pass.activeExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS -> "No expiration"
                         pass.activeExp > 0L -> "Valid until ${formatExpiryDateString(pass.activeExp)}"
                         offlineInfo != null && offlineInfo.isActive -> "Valid offline at sea • ${offlineInfo.getFormattedExpiryDate()}"
                         else -> "Active terminal authorization"
