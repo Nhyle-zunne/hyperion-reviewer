@@ -97,7 +97,7 @@ internal fun canTapLifetimeUnlock(lifetimeOwned: Boolean, purchaseInProgress: Bo
 
 // Display-only: keep Google's actual Billing price and offer metadata unchanged.
 internal fun storeDisplayPrice(price: String): String =
-    price.replace(Regex("""(?<=\\d)\\.00(?=\\D|$)"""), "")
+    price.replace(Regex("""(?<=\d)\.00(?=\D|$)"""), "")
 
 internal fun lifetimeUnlockButtonLabel(price: String): String = "UNLOCK — ${storeDisplayPrice(price)}"
 
