@@ -383,6 +383,19 @@ internal fun canRefreshPlayVerification(
 internal fun shouldApplyPlayPurchaseSnapshot(hasValidatedInternet: Boolean): Boolean =
     hasValidatedInternet
 
+// Only send a completed, single-item non-consumable receipt to the authenticated
+// server. This is NOT proof of access; Play Developer API verification is required.
+internal fun isEligibleLifetimePurchase(purchased: Boolean, productIds: List<String>): Boolean =
+    purchased && productIds.size == 1 &&
+        productIds.single() in BillingConstants.LIFETIME_PRODUCT_IDS
+
+internal fun canOfferLifetimeCheckout(
+    accountId: String?,
+    playOfferAvailable: Boolean,
+    alreadyLifetimeOwned: Boolean,
+    serverEnabled: Boolean
+): Boolean = !accountId.isNullOrBlank() && playOfferAvailable && !alreadyLifetimeOwned && serverEnabled
+
 object BillingConstants {
     const val CLOCK_ROLLBACK_TOLERANCE_MS = 5L * 60L * 1000L
 
@@ -406,6 +419,26 @@ object BillingConstants {
         PRODUCT_GMDSS_LIFETIME, PRODUCT_DECK_MGT_LIFETIME,
         PRODUCT_ENGINE_MGT_LIFETIME
     )
+
+    fun lifetimeProductForSubscription(productId: String): String? = when (productId) {
+        PRODUCT_OIC_NW_PASS -> PRODUCT_OIC_NW_LIFETIME
+        PRODUCT_ENGINE_OIC_EW_PASS -> PRODUCT_ENGINE_OIC_EW_LIFETIME
+        PRODUCT_GMDSS_PASS -> PRODUCT_GMDSS_LIFETIME
+        PRODUCT_DECK_MGT_PASS -> PRODUCT_DECK_MGT_LIFETIME
+        PRODUCT_ENGINE_MGT_PASS -> PRODUCT_ENGINE_MGT_LIFETIME
+        else -> null
+    }
+
+    // Informational fallback until Play provides the buyer's real local price.
+    val DEFAULT_LIFETIME_PRICES = mapOf(
+        PRODUCT_OIC_NW_LIFETIME to "₱2,499",
+        PRODUCT_ENGINE_OIC_EW_LIFETIME to "₱2,499",
+        PRODUCT_GMDSS_LIFETIME to "₱1,999",
+        PRODUCT_DECK_MGT_LIFETIME to "₱4,999",
+        PRODUCT_ENGINE_MGT_LIFETIME to "₱4,999"
+    )
+    fun getFallbackLifetimePrice(lifetimeProductId: String): String =
+        DEFAULT_LIFETIME_PRICES[lifetimeProductId] ?: "Price unavailable"
 
     fun lifetimeProductForTrack(track: Track): String = when (track) {
         Track.DECK_OIC_NW -> PRODUCT_OIC_NW_LIFETIME
@@ -732,6 +765,12 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
     private val _productsDetails = MutableStateFlow<Map<String, ProductDetails>>(emptyMap())
     val productsDetails: StateFlow<Map<String, ProductDetails>> = _productsDetails.asStateFlow()
+
+    private val _lifetimeProductDetails = MutableStateFlow<Map<String, ProductDetails>>(emptyMap())
+    val lifetimeProductDetails: StateFlow<Map<String, ProductDetails>> = _lifetimeProductDetails.asStateFlow()
+    // Play's query only finds device purchases. These are NEVER local license grants.
+    private val _ownedLifetimePurchases = MutableStateFlow<List<PlayPurchaseForAccountLinking>>(emptyList())
+    private val unacknowledgedLifetimeTokens = mutableSetOf<String>()
 
     private val _isConnecting = MutableStateFlow(false)
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
