@@ -67,6 +67,9 @@ jobs:
       - name: Block plaintext question banks and verify encrypted manifest
         run: python3 scripts/tests/question-bank-asset-safety.py
 
+      - name: Verify direct Google Play prepaid extension
+        run: node scripts/tests/direct-prepaid-extension.test.mjs
+
       - name: Run Android unit tests
         env:
           TEST_FILTER: ${{ github.event_name == 'workflow_dispatch' && inputs.test_filter || '' }}
