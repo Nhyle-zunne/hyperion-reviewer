@@ -81,6 +81,7 @@ import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.BillingCycle
 import com.nhyle.hyperionmaritime.data.billing.PlayPlanMode
 import com.nhyle.hyperionmaritime.data.billing.PlayProductItem
+import com.nhyle.hyperionmaritime.data.auth.SupabaseAccountManager
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
 import com.nhyle.hyperionmaritime.ui.components.HyperionDrawerButton
@@ -88,6 +89,8 @@ import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
 import com.nhyle.hyperionmaritime.viewmodel.Screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private const val LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS = 253_000_000_000_000L
 
 data class StoreColors(
     val isDark: Boolean,
@@ -260,6 +263,50 @@ private fun PopupPlanBox(
     }
 }
 
+@Composable
+private fun PopupLifetimeBox(
+    price: String,
+    isSelected: Boolean,
+    colors: StoreColors,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RectangleShape,
+        color = if (isSelected) colors.accentGreen.copy(alpha = 0.14f) else colors.boxInactiveFill,
+        border = BorderStroke(
+            if (isSelected) 2.dp else 1.dp,
+            if (isSelected) colors.accentGreen else colors.borderInactive
+        ),
+        modifier = modifier.height(76.dp).clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(4.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "LIFETIME",
+                color = if (isSelected) colors.textPrimary else colors.textMuted,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = price,
+                color = if (isSelected) colors.accentGreen else colors.textPrimary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
 /**
  * The ten benefits of a licensed reviewer track, matching the Bond Store on
  * hyperionmaritime.org. No free access is promised for timed mock examinations.
@@ -288,6 +335,12 @@ internal fun StorePopupCard(
     selectedCardCycle: BillingCycle?,
     onSelectCycle: (BillingCycle) -> Unit,
     onPurchaseCycle: (BillingCycle) -> Unit,
+    lifetimeSelected: Boolean,
+    lifetimePrice: String,
+    lifetimeOwned: Boolean,
+    lifetimeCheckoutEnabled: Boolean,
+    onSelectLifetime: () -> Unit,
+    onPurchaseLifetime: () -> Unit,
     onClose: () -> Unit
 ) {
     var shown by remember { mutableStateOf(false) }
@@ -497,7 +550,7 @@ internal fun StorePopupCard(
                                 cycle = cycle,
                                 formattedPrice = cycleItem.shortFormattedPrice,
                                 savingsPercent = cycleItem.savingsPercentage,
-                                isSelected = activeCycle == cycle,
+                                isSelected = !lifetimeSelected && activeCycle == cycle,
                                 colors = colors,
                                 onClick = { onSelectCycle(cycle) },
                                 modifier = Modifier
@@ -505,9 +558,52 @@ internal fun StorePopupCard(
                                     .testTag("cycle_box_${productId}_${cycle.name.lowercase()}")
                             )
                         }
+                        PopupLifetimeBox(
+                            price = lifetimePrice,
+                            isSelected = lifetimeSelected,
+                            colors = colors,
+                            onClick = onSelectLifetime,
+                            modifier = Modifier.weight(1f)
+                                .testTag("cycle_box_${productId}_lifetime")
+                        )
                     }
 
-                    if (canExtendPlay) {
+                    if (lifetimeSelected) {
+                        Text(
+                            text = if (lifetimeOwned) "LIFETIME OWNED" else "NO EXPIRATION",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp
+                            ),
+                            color = colors.accentGreen
+                        )
+                        Button(
+                            onClick = onPurchaseLifetime,
+                            enabled = !lifetimeOwned && lifetimeCheckoutEnabled,
+                            shape = RectangleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accentGreen,
+                                contentColor = if (colors.isDark) Color.Black else Color.White
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                                .testTag("purchase_button_$productId")
+                        ) {
+                            Text(
+                                text = if (lifetimeOwned) "LIFETIME OWNED" else "BUY NOW",
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                        if (!lifetimeOwned && !lifetimeCheckoutEnabled) {
+                            Text(
+                                text = "Lifetime checkout requires your signed-in Hyperion account, " +
+                                    "an active Google Play product, and server verification.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
+                            )
+                        }
+                    } else if (canExtendPlay) {
                         val prepaidOfferAvailable = billingManager.getOfferToken(
                             productId, activeCycle, PlayPlanMode.PREPAID
                         ) != null
@@ -798,6 +894,9 @@ fun StoreScreen(
     }
     var prepaidConfirmation by remember { mutableStateOf<SelectedOffer?>(null) }
     var prepaidError by remember { mutableStateOf<String?>(null) }
+    var selectedLifetimeProductId by rememberSaveable { mutableStateOf<String?>(null) }
+    var lifetimeCheckoutReady by remember { mutableStateOf<Boolean?>(null) }
+    var lifetimeConfirmationProductId by remember { mutableStateOf<String?>(null) }
 
     var openProductId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -1215,6 +1314,7 @@ fun StoreScreen(
                             onDismissRequest = {
                                 openProductId = null
                                 selectedOffer = null
+                                selectedLifetimeProductId = null
                             },
                             properties = DialogProperties(usePlatformDefaultWidth = false)
                         ) {
@@ -1227,6 +1327,7 @@ fun StoreScreen(
                                     onClose = {
                                         openProductId = null
                                         selectedOffer = null
+                                        selectedLifetimeProductId = null
                                     },
                                     productId = productId,
                                     viewModel = viewModel,
@@ -1236,7 +1337,42 @@ fun StoreScreen(
                                     activeBadgeText = activeBadgeText,
                                     selectedCardCycle = selectedCardCycle,
                                     onSelectCycle = { cycle ->
+                                        selectedLifetimeProductId = null
                                         selectedOffer = SelectedOffer(productId, cycle)
+                                    },
+                                    lifetimeSelected = selectedLifetimeProductId == productId,
+                                    lifetimePrice = BillingConstants.lifetimeProductForSubscription(productId)
+                                        ?.let(billingManager::getLifetimePrice) ?: "Price unavailable",
+                                    lifetimeOwned = when (productId) {
+                                        BillingConstants.PRODUCT_OIC_NW_PASS ->
+                                            oicAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
+                                        BillingConstants.PRODUCT_GMDSS_PASS ->
+                                            gmdssAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
+                                        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS ->
+                                            ewAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
+                                        BillingConstants.PRODUCT_DECK_MGT_PASS ->
+                                            dmAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
+                                        BillingConstants.PRODUCT_ENGINE_MGT_PASS ->
+                                            emAccountExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS
+                                        else -> false
+                                    },
+                                    lifetimeCheckoutEnabled = lifetimeCheckoutReady == true &&
+                                        !LicenseManager.getCurrentAccountUserId(context).isNullOrBlank() &&
+                                        BillingConstants.lifetimeProductForSubscription(productId)
+                                            ?.let(billingManager::isLifetimeProductAvailable) == true,
+                                    onSelectLifetime = {
+                                        selectedOffer = null
+                                        selectedLifetimeProductId = productId
+                                        // Refresh readiness when the Lifetime option is chosen.
+                                        // The server controls rollout. No local purchase unlock.
+                                        lifetimeCheckoutReady = null
+                                        scope.launch {
+                                            lifetimeCheckoutReady =
+                                                SupabaseAccountManager.isLifetimeCheckoutAvailable(context)
+                                        }
+                                    },
+                                    onPurchaseLifetime = {
+                                        lifetimeConfirmationProductId = productId
                                     },
                                     onPurchaseCycle = { cycle ->
                                         selectedOffer = SelectedOffer(productId, cycle)
@@ -1316,10 +1452,16 @@ fun StoreScreen(
                             isRestoring = true
                             restoreFeedbackMessage = null
                             scope.launch {
-                                billingManager.queryPurchasesAsync()
+                                val subscriptionsRestored = billingManager.queryPurchasesAsync()
+                                val lifetimeRestored = billingManager.queryLifetimePurchasesAsync()
+                                if (subscriptionsRestored || lifetimeRestored) {
+                                    SupabaseAccountManager.syncAfterPlayPurchaseIfSignedIn(context)
+                                }
                                 delay(800)
                                 isRestoring = false
-                                restoreFeedbackMessage = "Purchase restoration scan completed."
+                                restoreFeedbackMessage = if (subscriptionsRestored || lifetimeRestored)
+                                    "Purchase restoration checked. Sync My Hyperion Account to verify active licenses."
+                                else "Could not refresh Google Play purchases. Connect to the internet and retry."
                             }
                         }
                     },
@@ -1436,6 +1578,51 @@ fun StoreScreen(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+
+    lifetimeConfirmationProductId?.let { selectedProduct ->
+        val lifetimeProduct = BillingConstants.lifetimeProductForSubscription(selectedProduct)
+        if (lifetimeProduct != null) {
+            AlertDialog(
+                onDismissRequest = { lifetimeConfirmationProductId = null },
+                title = { Text("LIFETIME ACCESS — NO EXPIRATION") },
+                text = {
+                    Text(
+                        "Review your selected track before proceeding to Google Play. " +
+                            "Price: ${billingManager.getLifetimePrice(lifetimeProduct)}. " +
+                            "Lifetime payment does not automatically cancel existing subscriptions. " +
+                            "Access activates only after Hyperion verifies the Google Play purchase."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        lifetimeConfirmationProductId = null
+                        scope.launch {
+                            if (!SupabaseAccountManager.isLifetimeCheckoutAvailable(context)) {
+                                prepaidError = "Lifetime checkout is not enabled yet. Retry once Google Play products are active."
+                                return@launch
+                            }
+                            val activity = context.findActivity()
+                            if (activity == null) {
+                                prepaidError = "Google Play checkout requires an Android activity."
+                                return@launch
+                            }
+                            val result = billingManager.launchLifetimeBillingFlow(activity, lifetimeProduct)
+                            if (result.responseCode != com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
+                                prepaidError = result.debugMessage.ifBlank {
+                                    "Could not start Google Play Lifetime checkout."
+                                }
+                            }
+                        }
+                    }) { Text("CONTINUE TO GOOGLE PLAY") }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { lifetimeConfirmationProductId = null }) {
+                        Text("CANCEL")
+                    }
+                }
+            )
         }
     }
 
@@ -2075,6 +2262,7 @@ private fun SharpCycleBox(
 
 @Composable
 private fun formatRemainingDuration(expiryEpoch: Long): String {
+    if (expiryEpoch >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS) return "NO EXPIRATION"
     val context = androidx.compose.ui.platform.LocalContext.current
     val now = System.currentTimeMillis()
     val prefs = context.getSharedPreferences("hyperion_secure_license_v2", Context.MODE_PRIVATE)
@@ -2099,6 +2287,7 @@ private fun formatRemainingDuration(expiryEpoch: Long): String {
 }
 
 private fun formatExpiryDateString(expiryEpoch: Long): String {
+    if (expiryEpoch >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS) return "No expiration"
     if (expiryEpoch <= 0L) return "Active"
     val date = java.util.Date(expiryEpoch)
     val format = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault())
@@ -2322,6 +2511,7 @@ private fun ActiveLicenseOverviewCard(
 
                     val expirySubtitle = when {
                         isTampered -> "ERROR: System time set earlier than verification record. Restore correct device time."
+                        pass.activeExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS -> "No expiration"
                         pass.activeExp > 0L -> "Valid until ${formatExpiryDateString(pass.activeExp)}"
                         offlineInfo != null && offlineInfo.isActive -> "Valid offline at sea • ${offlineInfo.getFormattedExpiryDate()}"
                         else -> "Active terminal authorization"

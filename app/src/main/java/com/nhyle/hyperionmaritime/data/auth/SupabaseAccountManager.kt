@@ -262,6 +262,30 @@ object SupabaseAccountManager {
         syncAndUpdateState(appContext, saved)
     }
 
+    /**
+     * Fail closed before opening Google Play's non-consumable payment dialog.
+     * Availability is checked against the authenticated, server-controlled rollout.
+     */
+    suspend fun isLifetimeCheckoutAvailable(context: Context): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val appContext = context.applicationContext
+            val saved = readSession(appContext) ?: return@withContext false
+            val fresh = getFreshSession(appContext, saved)
+            if (fresh.userId != LicenseManager.getCurrentAccountUserId(appContext))
+                return@withContext false
+            val response = requestText(
+                method = "POST",
+                url = BuildConfig.SUPABASE_URL.trimEnd('/') +
+                    "/functions/v1/link-google-play-lifetime",
+                accessToken = fresh.accessToken,
+                jsonBody = JSONObject().put("action", "status")
+            )
+            JSONObject(response).optBoolean("enabled", false)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun signOut(context: Context) {
         learningProgressReadCache.clear()
         try {
@@ -661,7 +685,7 @@ object SupabaseAccountManager {
                 messageParts += "A Google Play subscription is linked to a different Hyperion account. Sign in with the original account to sync it. Google Play access on this device is unchanged."
             }
             if (playLinks.hadFailures) {
-                messageParts += "Some Google Play subscriptions could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
+                messageParts += "Some Google Play purchases could not be verified or linked. Existing app access is unchanged; check your connection and tap Sync to retry."
             }
             messageParts += result.studyProgressMessage
             _state.value = SupabaseAccountState(
@@ -727,14 +751,17 @@ object SupabaseAccountManager {
             }
             if (connected == null) return PlayLinkSyncResult(activeCount = 0, hadFailures = true)
 
-            if (!billing.queryPurchasesAsync()) {
-                // Never link tokens from an older in-memory snapshot after Play's
-                // current ownership query failed or could not run online.
+            // Independent Play products: a failed INAPP query must not erase
+            // valid subscriptions, and vice versa.
+            val subscriptionsQueried = billing.queryPurchasesAsync()
+            val lifetimeQueried = billing.queryLifetimePurchasesAsync()
+            if (!subscriptionsQueried && !lifetimeQueried) {
                 return PlayLinkSyncResult(activeCount = 0, hadFailures = true)
             }
-            val purchases = billing.getOwnedPurchasesForAccountLinking()
+            val purchases = if (subscriptionsQueried)
+                billing.getOwnedPurchasesForAccountLinking() else emptyList()
             var activeCount = 0
-            var hadFailures = false
+            var hadFailures = !subscriptionsQueried || !lifetimeQueried
             var accountMismatch = false
             for (purchase in purchases) {
                 try {
@@ -747,10 +774,41 @@ object SupabaseAccountManager {
                     val response = JSONObject(body)
                     if (response.optBoolean("active", false)) activeCount++
                 } catch (error: Exception) {
-                    // A 409 is a permanent account-ownership conflict, not a transient backend
-                    // failure. Explain that the purchase must be synced by its original account.
                     if (isGooglePlayAccountLinkConflict(error)) accountMismatch = true
                     else hadFailures = true
+                }
+            }
+            // Linking to Hyperion happens only after Google's ProductPurchaseV2
+            // confirms ownership and product identity. No local Play receipt
+            // grants account or offline access by itself.
+            if (lifetimeQueried) {
+                for (purchase in billing.getOwnedLifetimePurchasesForAccountLinking()) {
+                    try {
+                        val result = requestText(
+                            method = "POST",
+                            url = BuildConfig.SUPABASE_URL.trimEnd('/') +
+                                "/functions/v1/link-google-play-lifetime",
+                            accessToken = session.accessToken,
+                            jsonBody = JSONObject()
+                                .put("action", "link")
+                                .put("productId", purchase.productId)
+                                .put("purchaseToken", purchase.purchaseToken)
+                        )
+                        val verified = JSONObject(result)
+                        if (!verified.optBoolean("linked", false) ||
+                            !verified.optBoolean("active", false)) {
+                            hadFailures = true
+                            continue
+                        }
+                        if (!billing.acknowledgeVerifiedLifetimePurchase(purchase.purchaseToken))
+                            hadFailures = true
+                    } catch (error: Exception) {
+                        if (isGooglePlayAccountLinkConflict(error) ||
+                            error.message?.contains("different Hyperion account", ignoreCase = true) == true ||
+                            error.message?.contains("another account or track", ignoreCase = true) == true
+                        ) accountMismatch = true
+                        else hadFailures = true
+                    }
                 }
             }
             PlayLinkSyncResult(activeCount, hadFailures, accountMismatch)
