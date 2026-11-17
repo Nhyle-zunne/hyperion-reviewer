@@ -74,10 +74,11 @@ class LifetimeBillingRulesTest {
 
     @Test
     fun firstPremiumFeatureMatchesSelectedDurationAndPreservesSharedBenefits() {
-        val weekly = premiumFeaturesForTrack("12", BillingCycle.WEEKLY)
-        val monthly = premiumFeaturesForTrack("12", BillingCycle.MONTHLY)
-        val yearly = premiumFeaturesForTrack("12", BillingCycle.YEARLY)
-        val lifetime = premiumFeaturesForTrack("12", BillingCycle.YEARLY, lifetimeSelected = true)
+        val productId = BillingConstants.PRODUCT_OIC_NW_PASS
+        val weekly = premiumFeaturesForTrack(productId, BillingCycle.WEEKLY)
+        val monthly = premiumFeaturesForTrack(productId, BillingCycle.MONTHLY)
+        val yearly = premiumFeaturesForTrack(productId, BillingCycle.YEARLY)
+        val lifetime = premiumFeaturesForTrack(productId, BillingCycle.YEARLY, lifetimeSelected = true)
         assertEquals("1 week unlimited access", weekly.first())
         assertEquals("1 month unlimited access", monthly.first())
         assertEquals("1 year unlimited access", yearly.first())
