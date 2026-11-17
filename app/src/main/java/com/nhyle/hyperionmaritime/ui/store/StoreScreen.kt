@@ -321,27 +321,38 @@ private fun PopupLifetimeBox(
  * hyperionmaritime.org. No free access is promised for timed mock examinations.
  */
 internal fun premiumFeaturesForTrack(
-    competencies: String,
+    productId: String,
     cycle: BillingCycle = BillingCycle.YEARLY,
     lifetimeSelected: Boolean = false
-): List<String> = listOf(
-    when {
+): List<String> {
+    val (name, topic) = when (productId) {
+        BillingConstants.PRODUCT_OIC_NW_PASS -> "Deck OIC-NW" to "deck navigation and watchkeeping"
+        BillingConstants.PRODUCT_ENGINE_OIC_EW_PASS -> "Engine OIC-EW" to "marine engineering and machinery"
+        BillingConstants.PRODUCT_GMDSS_PASS -> "GMDSS GOC" to "maritime radio communications"
+        BillingConstants.PRODUCT_DECK_MGT_PASS -> "Deck Management" to "deck leadership and command"
+        BillingConstants.PRODUCT_ENGINE_MGT_PASS -> "Engine Management" to "engine-room management"
+        else -> "Hyperion reviewer" to "maritime"
+    }
+    val access = when {
         lifetimeSelected -> "No expiration"
         cycle == BillingCycle.WEEKLY -> "1 week unlimited access"
         cycle == BillingCycle.MONTHLY -> "1 month unlimited access"
         else -> "1 year unlimited access"
-    },
-    "Unlimited practice sessions",
-    "Unlimited timed mock exams",
-    "Full question bank across $competencies competencies",
-    "Custom drills and question ranges",
-    "Quick Scan Mode",
-    "Mistakes Notebook and bookmarks",
-    "Full-text question search",
-    "Offline access",
-    "Study history and cross-device progress sync",
-    "Use your license across multiple devices and on the Hyperion website (PC, iOS, and Android)."
-)
+    }
+    return listOf(
+        access,
+        "Unlimited $name practice sessions",
+        "Unlimited $name timed mock exams",
+        "Full $name question bank",
+        "Custom $topic drills and question ranges",
+        "Quick Scan for $name questions",
+        "$name mistakes notebook and bookmarks",
+        "Full-text search of $name questions",
+        "Offline $name review after downloading",
+        "$name study history and cross-device progress sync",
+        "Use your $name license on Hyperion web and Android"
+    )
+}
 
 @Composable
 internal fun StorePopupCard(
@@ -423,7 +434,7 @@ internal fun StorePopupCard(
     val displayedMode = if (canExtendPlay) PlayPlanMode.PREPAID else PlayPlanMode.AUTO_RENEWING
     val activeItem = billingManager.getProductItem(productId, activeCycle, displayedMode)
 
-    val perks = premiumFeaturesForTrack(competencies, activeCycle, lifetimeSelected)
+    val perks = premiumFeaturesForTrack(productId, activeCycle, lifetimeSelected)
 
     AnimatedVisibility(
         visible = shown,
