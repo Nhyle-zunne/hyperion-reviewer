@@ -98,8 +98,25 @@ fun PaywallDialog(
     val lifetimeProductId = BillingConstants.lifetimeProductForSubscription(productId)
     var lifetimeSelected by rememberSaveable(effectiveTrack.name) { mutableStateOf(false) }
     var lifetimeCheckoutReady by remember { mutableStateOf(false) }
-    var lifetimePurchaseConfirm by remember { mutableStateOf(false) }
+    var lifetimePurchaseInProgress by remember { mutableStateOf(false) }
     var lifetimeError by remember { mutableStateOf<String?>(null) }
+
+    // Preload when the paywall opens; do not delay selection with a network request.
+    androidx.compose.runtime.LaunchedEffect(effectiveTrack) {
+        lifetimeCheckoutReady = SupabaseAccountManager.isLifetimeCheckoutAvailable(context)
+    }
+
+    val launchLifetimePurchase: (String) -> Unit = { product ->
+        val activity = context.findActivity()
+        if (activity == null) {
+            lifetimeError = "Google Play checkout requires an Android activity."
+        } else {
+            val result = billingManager.launchLifetimeBillingFlow(activity, product)
+            if (result.responseCode != com.android.billingclient.api.BillingClient.BillingResponseCode.OK) {
+                lifetimeError = result.debugMessage.ifBlank { "Could not open Google Play Lifetime checkout." }
+            }
+        }
+    }
 
     HyperionDialog(
         onDismissRequest = onDismiss,
@@ -130,16 +147,31 @@ fun PaywallDialog(
                 lifetimeOwned = LicenseManager.getAccountEntitlementExpiry(
                     context, effectiveTrack
                 ) >= 253_000_000_000_000L,
-                lifetimeCheckoutEnabled = lifetimeCheckoutReady &&
-                    lifetimeProductId?.let(billingManager::isLifetimeProductAvailable) == true,
-                onSelectLifetime = {
-                    lifetimeSelected = true
-                    lifetimeCheckoutReady = false
-                    scope.launch {
-                        lifetimeCheckoutReady = SupabaseAccountManager.isLifetimeCheckoutAvailable(context)
+                lifetimePurchaseInProgress = lifetimePurchaseInProgress,
+                onSelectLifetime = { lifetimeSelected = true },
+                onPurchaseLifetime = {
+                    val product = lifetimeProductId
+                    if (product == null) {
+                        lifetimeError = "This Google Play Lifetime product is unavailable."
+                    } else if (lifetimeCheckoutReady) {
+                        launchLifetimePurchase(product)
+                    } else {
+                        lifetimePurchaseInProgress = true
+                        scope.launch {
+                            try {
+                                val ready = SupabaseAccountManager.isLifetimeCheckoutAvailable(context)
+                                lifetimeCheckoutReady = ready
+                                if (ready) {
+                                    if (lifetimeSelected) launchLifetimePurchase(product)
+                                } else {
+                                    lifetimeError = "Lifetime checkout could not be verified. Check your connection and retry."
+                                }
+                            } finally {
+                                lifetimePurchaseInProgress = false
+                            }
+                        }
                     }
                 },
-                onPurchaseLifetime = { lifetimePurchaseConfirm = true },
                 onPurchaseCycle = { cycle ->
                     selectedCycle = cycle
                     val activity = context.findActivity()
@@ -156,41 +188,6 @@ fun PaywallDialog(
         }
     }
 
-    if (lifetimePurchaseConfirm && lifetimeProductId != null) {
-        AlertDialog(
-            onDismissRequest = { lifetimePurchaseConfirm = false },
-            title = { Text("LIFETIME ACCESS — NO EXPIRATION") },
-            text = {
-                Text(
-                    "Google Play will charge ${billingManager.getLifetimePrice(lifetimeProductId)} " +
-                        "for this track. Existing auto-renewing subscriptions must be cancelled " +
-                        "separately. Access activates only after Hyperion verifies this purchase."
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    lifetimePurchaseConfirm = false
-                    scope.launch {
-                        if (!SupabaseAccountManager.isLifetimeCheckoutAvailable(context)) {
-                            lifetimeError = "Lifetime checkout is not enabled yet."
-                            return@launch
-                        }
-                        val activity = context.findActivity()
-                        if (activity == null) {
-                            lifetimeError = "Google Play checkout requires an Android activity."
-                            return@launch
-                        }
-                        val result = billingManager.launchLifetimeBillingFlow(activity, lifetimeProductId)
-                        if (result.responseCode != com.android.billingclient.api.BillingClient.BillingResponseCode.OK)
-                            lifetimeError = result.debugMessage.ifBlank { "Could not open Google Play Lifetime checkout." }
-                    }
-                }) { Text("CONTINUE TO GOOGLE PLAY") }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { lifetimePurchaseConfirm = false }) { Text("CANCEL") }
-            }
-        )
-    }
     lifetimeError?.let { error ->
         AlertDialog(
             onDismissRequest = { lifetimeError = null },
