@@ -27,11 +27,11 @@ class LifetimeBillingRulesTest {
 
     @Test
     fun lifetimePricesMatchApprovedStoreCatalogWithoutUsingSubscriptionCycles() {
-        assertEquals("₱2,499", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_OIC_NW_LIFETIME))
-        assertEquals("₱2,499", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_ENGINE_OIC_EW_LIFETIME))
-        assertEquals("₱1,999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_GMDSS_LIFETIME))
-        assertEquals("₱4,999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_DECK_MGT_LIFETIME))
-        assertEquals("₱4,999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_ENGINE_MGT_LIFETIME))
+        assertEquals("₱999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_OIC_NW_LIFETIME))
+        assertEquals("₱999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_ENGINE_OIC_EW_LIFETIME))
+        assertEquals("₱599", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_GMDSS_LIFETIME))
+        assertEquals("₱1,999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_DECK_MGT_LIFETIME))
+        assertEquals("₱1,999", BillingConstants.getFallbackLifetimePrice(BillingConstants.PRODUCT_ENGINE_MGT_LIFETIME))
     }
 
     @Test
