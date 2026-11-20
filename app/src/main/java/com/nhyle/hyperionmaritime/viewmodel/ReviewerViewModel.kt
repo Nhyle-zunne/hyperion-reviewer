@@ -45,7 +45,7 @@ import com.nhyle.hyperionmaritime.data.billing.BillingManager
 import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
-import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
+import com.nhyle.hyperionmaritime.data.billing.subscriptionExpiryFromVerifiedSources
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
 import com.nhyle.hyperionmaritime.data.hype.HypePassManager
 import com.nhyle.hyperionmaritime.data.hype.HypePassRecord
@@ -516,10 +516,8 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val emOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineEngineMgtUnlocked(app))
         val allAccessOfflineActive = !isClockTampered && (app != null && LicenseManager.isOfflineHyperionUnlocked(app))
 
-        // Signed-in accounts receive exact per-track expiry timestamps from the
-        // Google Play SubscriptionsV2 API (via the server entitlement sync). Prefer
-        // those over BillingClient's local estimate, especially for accelerated test
-        // subscriptions. Unsynced purchases retain a calendar-period local fallback.
+        // Both account sync and Play restore can supply a verified Google Play expiry.
+        // Prefer verified timestamps over estimated periods after a reinstall.
         val accountOicExp = LicenseManager.getAccountEntitlementExpiry(app, Track.DECK_OIC_NW)
         val accountGmdssExp = LicenseManager.getAccountEntitlementExpiry(app, Track.GMDSS_GOC)
         val accountEwExp = LicenseManager.getAccountEntitlementExpiry(app, Track.ENGINE_OIC_EW)
@@ -546,12 +544,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         fun expiryCountdown(expiryEpochMs: Long): String =
             "${formatSubscriptionTimeRemaining(expiryEpochMs, subscriptionDisplayNow)} (${ActivePlanInfo(expiryTimestamp = expiryEpochMs).getFormattedExpiryDate()})"
 
-        val oicDisplayExp = subscriptionDisplayExpiry(accountOicExp, localPlanExpiry(oicPlan))
-        val gmdssDisplayExp = subscriptionDisplayExpiry(accountGmdssExp, localPlanExpiry(gmdssPlan))
-        val ewDisplayExp = subscriptionDisplayExpiry(accountEwExp, localPlanExpiry(ewPlan))
-        val dmDisplayExp = subscriptionDisplayExpiry(accountDmExp, localPlanExpiry(dmPlan))
-        val emDisplayExp = subscriptionDisplayExpiry(accountEmExp, localPlanExpiry(emPlan))
-        val allAccessDisplayExp = subscriptionDisplayExpiry(accountAllAccessExp, localPlanExpiry(allAccessPlan))
+        val oicDisplayExp = subscriptionExpiryFromVerifiedSources(accountOicExp, localPlanExpiry(oicPlan), oicPlan?.isExpiryVerified == true)
+        val gmdssDisplayExp = subscriptionExpiryFromVerifiedSources(accountGmdssExp, localPlanExpiry(gmdssPlan), gmdssPlan?.isExpiryVerified == true)
+        val ewDisplayExp = subscriptionExpiryFromVerifiedSources(accountEwExp, localPlanExpiry(ewPlan), ewPlan?.isExpiryVerified == true)
+        val dmDisplayExp = subscriptionExpiryFromVerifiedSources(accountDmExp, localPlanExpiry(dmPlan), dmPlan?.isExpiryVerified == true)
+        val emDisplayExp = subscriptionExpiryFromVerifiedSources(accountEmExp, localPlanExpiry(emPlan), emPlan?.isExpiryVerified == true)
+        val allAccessDisplayExp = subscriptionExpiryFromVerifiedSources(accountAllAccessExp, localPlanExpiry(allAccessPlan), allAccessPlan?.isExpiryVerified == true)
 
         val oicTimeLeft = when {
             oicDisplayExp > 0L -> expiryCountdown(oicDisplayExp)

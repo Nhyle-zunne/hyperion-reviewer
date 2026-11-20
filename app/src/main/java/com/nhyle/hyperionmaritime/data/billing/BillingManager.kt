@@ -44,6 +44,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
+import java.net.HttpURLConnection
+import java.net.URL
+import org.json.JSONObject
 
 /**
  * Creates the Google Play obfuscated account identifier for the signed-in Hyperion user.
@@ -148,8 +151,8 @@ internal fun canExtendTrackPlayPurchase(
  * recurring period, so it takes precedence over the offer's base-plan display name.
  */
 /**
- * Preserve a cycle explicitly saved when the checkout was launched. The monthly
- * fallback exists only for very old purchases with no recorded cycle metadata.
+ * Preserve a cycle explicitly saved when checkout was launched. The monthly
+ * fallback is provisional after reinstall until the Play server confirms the base plan.
  */
 internal fun resolveRequestedBillingCycle(requestedCycle: BillingCycle?): BillingCycle =
     requestedCycle ?: BillingCycle.MONTHLY
@@ -181,6 +184,37 @@ internal fun resolvePurchasedBillingCycle(
     if (pendingCycle != null && isNewPurchase) pendingCycle
     else activeCycle ?: BillingCycle.MONTHLY
 
+/** Google Play, not a new device's preferences, owns the purchased base plan. */
+internal fun billingCycleFromPlayBasePlanId(basePlanId: String): BillingCycle? {
+    val id = basePlanId.lowercase()
+    return when {
+        id.contains("weekly") -> BillingCycle.WEEKLY
+        id.contains("monthly") -> BillingCycle.MONTHLY
+        id.contains("yearly") || id.contains("annual") -> BillingCycle.YEARLY
+        else -> null
+    }
+}
+
+private const val PLAY_EXPIRY_REFRESH_MS = 24L * 60L * 60L * 1000L
+
+internal fun isFreshVerifiedPlayExpiry(
+    verifiedToken: String?, currentToken: String, verifiedAt: Long, now: Long
+): Boolean = !verifiedToken.isNullOrBlank() && verifiedToken == currentToken &&
+    verifiedAt > 0L && now >= verifiedAt && now - verifiedAt < PLAY_EXPIRY_REFRESH_MS
+
+/** Never transfer cached expiry metadata when a Play purchase token changes. */
+internal fun resolvePlayExpiryFromVerification(
+    verifiedExpiry: Long,
+    cachedExpiry: Long,
+    cachedVerifiedToken: String?,
+    currentPurchaseToken: String,
+    localEstimate: Long
+): Long = when {
+    verifiedExpiry > 0L -> verifiedExpiry
+    cachedVerifiedToken == currentPurchaseToken && cachedExpiry > 0L -> cachedExpiry
+    else -> localEstimate
+}
+
 internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: List<String>): Boolean {
     val recurringPeriod = billingPeriods.lastOrNull()?.uppercase().orEmpty()
     val recognizedPeriod = recurringPeriod in setOf("P1W", "P7D", "P1M", "P30D", "P1Y", "P365D", "P12M")
@@ -202,8 +236,8 @@ internal fun BillingCycle.matchesPlayOffer(basePlanId: String, billingPeriods: L
 
 /**
  * Local fallback only: BillingClient exposes subscription signup time, not its live
- * renewal expiry. The server-verified SubscriptionsV2 expiry must override this estimate
- * whenever the user has linked the purchase to a Hyperion account.
+ * renewal expiry. The server-verified SubscriptionsV2 expiry overrides this estimate
+ * after a restored purchase is checked, with or without a Hyperion account.
  */
 internal fun estimateNextSubscriptionExpiry(
     purchaseTimeEpochMs: Long,
@@ -229,6 +263,19 @@ internal fun subscriptionDisplayExpiry(
     serverVerifiedExpiryEpochMs: Long,
     estimatedLocalExpiryEpochMs: Long
 ): Long = serverVerifiedExpiryEpochMs.takeIf { it > 0L } ?: estimatedLocalExpiryEpochMs
+
+/** Only two independently Google-verified expiries may be compared for the longest grant. */
+internal fun subscriptionExpiryFromVerifiedSources(
+    accountVerifiedExpiry: Long,
+    playExpiry: Long,
+    playExpiryVerified: Boolean
+): Long = if (playExpiryVerified) maxOf(accountVerifiedExpiry, playExpiry)
+else subscriptionDisplayExpiry(accountVerifiedExpiry, playExpiry)
+
+private data class VerifiedPlaySubscriptionItem(
+    val expiryEpochMs: Long,
+    val basePlanId: String
+)
 
 /**
  * Consistent countdown formatter for dashboard and Store. Uses the actual supplied expiry,
@@ -274,6 +321,8 @@ data class ActivePlanInfo(
     val cycle: BillingCycle = BillingCycle.YEARLY,
     val planMode: PlayPlanMode = PlayPlanMode.AUTO_RENEWING,
     val isTerminalLicense: Boolean = false,
+    /** Only a matching token checked against Google's SubscriptionPurchaseV2 has an exact expiry. */
+    val isExpiryVerified: Boolean = false,
     val purchaseToken: String? = null,
     val purchaseTimestamp: Long = System.currentTimeMillis(),
     val expiryTimestamp: Long = System.currentTimeMillis() + (365L * 24L * 60L * 60L * 1000L),
@@ -1173,6 +1222,52 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         }
     }
 
+    /** Verify actual renewal dates without requiring or modifying a Hyperion account. */
+    private fun readVerifiedPlaySubscription(purchaseToken: String): Map<String, VerifiedPlaySubscriptionItem> {
+        if (purchaseToken.isBlank() || purchaseToken.startsWith("mock_sandbox_sub_token_")) return emptyMap()
+        val connection = (URL(
+            BuildConfig.SUPABASE_URL.trimEnd('/') + "/functions/v1/google-play-subscription-status"
+        ).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 5_000
+            readTimeout = 5_000
+            setRequestProperty("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            setRequestProperty("Accept", "application/json")
+            doOutput = true
+        }
+        return try {
+            val body = JSONObject().put("purchaseToken", purchaseToken).toString()
+                .toByteArray(Charsets.UTF_8)
+            connection.setFixedLengthStreamingMode(body.size)
+            connection.outputStream.use { it.write(body) }
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) return emptyMap()
+
+            val response = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val json = JSONObject(response)
+            if (!json.optBoolean("active")) return emptyMap()
+            val items = json.optJSONArray("items") ?: return emptyMap()
+            buildMap {
+                for (index in 0 until items.length()) {
+                    val item = items.optJSONObject(index) ?: continue
+                    val productId = item.optString("productId")
+                    val expiry = runCatching { Instant.parse(item.optString("expiresAt")).toEpochMilli() }
+                        .getOrNull() ?: continue
+                    if (productId.isNotBlank() && expiry > 0L) {
+                        put(productId, VerifiedPlaySubscriptionItem(expiry, item.optString("basePlanId")))
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            // Never log the purchase token or body. A transient network failure must
+            // not erase existing Play ownership or a previously verified expiry.
+            Log.w(TAG, "Google Play expiry verification deferred: ${error.javaClass.simpleName}")
+            emptyMap()
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private suspend fun processPurchases(purchases: List<Purchase>): Boolean = withContext(Dispatchers.IO) {
         // BillingClient may expose a locally cached or empty snapshot while offline.
         // Without validated internet it cannot be used to revoke the last known-good
@@ -1214,6 +1309,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         for (purchase in purchases) {
             when (purchase.purchaseState) {
                 Purchase.PurchaseState.PURCHASED -> {
+                    var verifiedItems: Map<String, VerifiedPlaySubscriptionItem>? = null
                     if (!purchase.isAcknowledged) {
                         val ackParams = AcknowledgePurchaseParams.newBuilder()
                             .setPurchaseToken(purchase.purchaseToken)
@@ -1231,7 +1327,6 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                     }
 
                     for (productId in purchase.products) {
-                        val details = _productsDetails.value[productId]
                         val cycleKey = when (productId) {
                             BillingConstants.PRODUCT_OIC_NW_PASS -> "play_plan_cycle_oic"
                             BillingConstants.PRODUCT_GMDSS_PASS -> "play_plan_cycle_gmdss"
@@ -1270,6 +1365,14 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             if (activeCycle != null) securePrefs.getLong(KEY_PURCHASE_TIME, 0L) else 0L
                         )
                         val previousPurchaseToken = securePrefs.getString(purchaseTokenKey, null)
+                        val lastVerifiedToken = securePrefs.getString("${cycleKey}_verified_token", null)
+                        val lastVerifiedTime = securePrefs.getLong("${cycleKey}_verified_at", 0L)
+                        if (!isFreshVerifiedPlayExpiry(
+                                lastVerifiedToken, purchase.purchaseToken, lastVerifiedTime, queryTimeEpoch
+                            ) && verifiedItems == null) {
+                            verifiedItems = readVerifiedPlaySubscription(purchase.purchaseToken)
+                        }
+                        val verifiedItem = verifiedItems?.get(productId)
                         val purchaseTime = if (purchase.purchaseTime > 0L) purchase.purchaseTime else queryTimeEpoch
                         val selectedCycleWasPurchased = isNewPlaySubscriptionPurchase(
                             previousPurchaseToken = previousPurchaseToken,
@@ -1277,11 +1380,13 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             previousPurchaseTimeEpochMs = previousPurchaseTime,
                             currentPurchaseTimeEpochMs = purchase.purchaseTime
                         )
-                        val cycle = resolvePurchasedBillingCycle(
-                            activeCycle = activeCycle,
-                            pendingCycle = pendingCycle,
-                            isNewPurchase = selectedCycleWasPurchased
-                        )
+                        val cycle = verifiedItem?.basePlanId
+                            ?.let(::billingCycleFromPlayBasePlanId)
+                            ?: resolvePurchasedBillingCycle(
+                                activeCycle = activeCycle,
+                                pendingCycle = pendingCycle,
+                                isNewPurchase = selectedCycleWasPurchased
+                            )
                         val previouslyPurchasedMode = securePrefs.getString("${cycleKey}_mode", null)
                             ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
                         val requestedMode = securePrefs.getString("${cycleKey}_pending_mode", null)
@@ -1304,29 +1409,40 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             }
                         }
 
-                        val offer = details?.subscriptionOfferDetails?.firstOrNull { candidate ->
-                            cycle.matchesPlayOffer(
-                                basePlanId = candidate.basePlanId,
-                                billingPeriods = candidate.pricingPhases.pricingPhaseList.map { it.billingPeriod }
-                            )
-                        }
                         val currentWaterMark = maxOf(savedHighWaterMark, purchaseTime, queryTimeEpoch)
                         val effectiveQueryTime = maxOf(queryTimeEpoch, currentWaterMark)
 
                         // BillingClient Purchase.getPurchaseTime() is the original subscription
-                        // signup time. Use calendar-period arithmetic for the offline display
-                        // fallback; linked accounts receive the exact expiry from Play's API.
-                        val expiryTime = estimateNextSubscriptionExpiry(
+                        // signup time. Use calendar-period arithmetic only when the
+                        // authoritative Play renewal date cannot yet be retrieved.
+                        val estimatedExpiry = estimateNextSubscriptionExpiry(
                             purchaseTimeEpochMs = purchaseTime,
                             nowEpochMs = effectiveQueryTime,
                             cycle = cycle
                         )
+                        val cachedVerifiedExpiryKey = "play_expiry_time_${cycleKey.removePrefix("play_plan_cycle_")}"
+                        val expiryTime = resolvePlayExpiryFromVerification(
+                            verifiedExpiry = verifiedItem?.expiryEpochMs ?: 0L,
+                            cachedExpiry = securePrefs.getLong(cachedVerifiedExpiryKey, 0L),
+                            cachedVerifiedToken = lastVerifiedToken,
+                            currentPurchaseToken = purchase.purchaseToken,
+                            localEstimate = estimatedExpiry
+                        )
+                        val expiryVerified = verifiedItem != null ||
+                            (lastVerifiedToken == purchase.purchaseToken &&
+                                securePrefs.getLong(cachedVerifiedExpiryKey, 0L) > 0L)
+                        if (verifiedItem != null) {
+                            editor.putString("${cycleKey}_verified_token", purchase.purchaseToken)
+                            editor.putLong("${cycleKey}_verified_at", queryTimeEpoch)
+                            lastBasePlan = verifiedItem.basePlanId
+                        }
 
                         when (productId) {
                             BillingConstants.PRODUCT_OIC_NW_PASS -> {
                                 oicPlan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1341,6 +1457,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 gmdssPlan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1355,6 +1472,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 engineOicEwPlan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1369,6 +1487,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 deckMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1383,6 +1502,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 engineMgtPlan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1397,6 +1517,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                                 val plan = ActivePlanInfo(
                                     cycle = cycle,
                                     planMode = purchasedMode,
+                                    isExpiryVerified = expiryVerified,
                                     purchaseToken = purchase.purchaseToken,
                                     purchaseTimestamp = purchaseTime,
                                     expiryTimestamp = expiryTime,
@@ -1533,6 +1654,8 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             allAccessPlan != null || engineOicEwPlan != null || deckMgtPlan != null || engineMgtPlan != null
 
         val observedProductIds = purchases.flatMap { it.products }.toSet()
+        val purchasedProductIds = purchases.filter { it.purchaseState == Purchase.PurchaseState.PURCHASED }
+            .flatMap { it.products }.toSet()
         val checkoutProductId = checkoutFlowProductId
         val productCycleKeys = mapOf(
             BillingConstants.PRODUCT_OIC_NW_PASS to "play_plan_cycle_oic",
@@ -1548,6 +1671,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             if (productId !in observedProductIds && checkoutProductId != productId) {
                 editor.remove("${cycleKey}_pending")
                 lastRequestedCycles.remove(productId)
+            }
+            if (productId !in purchasedProductIds) {
+                editor.remove("${cycleKey}_verified_token")
+                editor.remove("${cycleKey}_verified_at")
             }
         }
 
@@ -1636,6 +1763,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             ?.let { runCatching { PlayPlanMode.valueOf(it) }.getOrNull() }
             ?: PlayPlanMode.AUTO_RENEWING
 
+    private fun cachedPlayExpiryVerified(cycleKey: String, purchaseToken: String?): Boolean =
+        !purchaseToken.isNullOrBlank() &&
+            securePrefs.getString("${cycleKey}_verified_token", null) == purchaseToken
+
     private fun loadCachedEntitlements() {
         val readRevision = entitlementMutationRevision.get()
         migrateLegacyWeeklyFallbacks()
@@ -1664,19 +1795,22 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val now = localClock.epochMillis
         val oicPurchase = securePrefs.getLong("play_purchase_time_oic", if (purchaseTime > 0L) purchaseTime else now)
         var oicExpiry = securePrefs.getLong("play_expiry_time_oic", oicCycle.nextBillingPeriod(oicPurchase))
-        if (oic && oicExpiry < oicCycle.nextBillingPeriod(oicPurchase)) {
+        if (oic && !cachedPlayExpiryVerified("play_plan_cycle_oic", securePrefs.getString(KEY_OIC_TOKEN, null)) &&
+            oicExpiry < oicCycle.nextBillingPeriod(oicPurchase)) {
             oicExpiry = oicCycle.nextBillingPeriod(oicPurchase)
         }
 
         val gmdssPurchase = securePrefs.getLong("play_purchase_time_gmdss", if (purchaseTime > 0L) purchaseTime else now)
         var gmdssExpiry = securePrefs.getLong("play_expiry_time_gmdss", gmdssCycle.nextBillingPeriod(gmdssPurchase))
-        if (gmdss && gmdssExpiry < gmdssCycle.nextBillingPeriod(gmdssPurchase)) {
+        if (gmdss && !cachedPlayExpiryVerified("play_plan_cycle_gmdss", securePrefs.getString(KEY_GMDSS_TOKEN, null)) &&
+            gmdssExpiry < gmdssCycle.nextBillingPeriod(gmdssPurchase)) {
             gmdssExpiry = gmdssCycle.nextBillingPeriod(gmdssPurchase)
         }
 
         val allAccessPurchase = securePrefs.getLong("play_purchase_time_all_access", if (purchaseTime > 0L) purchaseTime else now)
         var allAccessExpiry = securePrefs.getLong("play_expiry_time_all_access", allAccessCycle.nextBillingPeriod(allAccessPurchase))
-        if (allAccess && allAccessExpiry < allAccessCycle.nextBillingPeriod(allAccessPurchase)) {
+        if (allAccess && !cachedPlayExpiryVerified("play_plan_cycle_all_access", securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null)) &&
+            allAccessExpiry < allAccessCycle.nextBillingPeriod(allAccessPurchase)) {
             allAccessExpiry = allAccessCycle.nextBillingPeriod(allAccessPurchase)
         }
 
@@ -1707,6 +1841,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val oicPlan = if (oic) ActivePlanInfo(
             cycle = oicCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_oic", securePrefs.getString(KEY_OIC_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_oic"),
             purchaseToken = securePrefs.getString(KEY_OIC_TOKEN, null),
             purchaseTimestamp = oicPurchase,
@@ -1720,6 +1855,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val gmdssPlan = if (gmdss) ActivePlanInfo(
             cycle = gmdssCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_gmdss", securePrefs.getString(KEY_GMDSS_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_gmdss"),
             purchaseToken = securePrefs.getString(KEY_GMDSS_TOKEN, null),
             purchaseTimestamp = gmdssPurchase,
@@ -1733,6 +1869,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
 
         val allAccessPlan = if (allAccess) ActivePlanInfo(
             cycle = allAccessCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_all_access", securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_all_access"),
             purchaseToken = securePrefs.getString(KEY_ALL_ACCESS_TOKEN, null),
             purchaseTimestamp = allAccessPurchase,
@@ -1749,6 +1886,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val ewExpiry = securePrefs.getLong("play_expiry_time_engine_ew", engineEwCycle.nextBillingPeriod(ewPurchase))
         val engineEwPlan = if (hasEw) ActivePlanInfo(
             cycle = engineEwCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_engine_ew", securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_engine_ew"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_OIC_EW_TOKEN, null),
             purchaseTimestamp = ewPurchase,
@@ -1765,6 +1903,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val dmExpiry = securePrefs.getLong("play_expiry_time_deck_mgt", deckMgtCycle.nextBillingPeriod(dmPurchase))
         val deckMgtPlan = if (hasDm) ActivePlanInfo(
             cycle = deckMgtCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_deck_mgt", securePrefs.getString(KEY_DECK_MGT_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_deck_mgt"),
             purchaseToken = securePrefs.getString(KEY_DECK_MGT_TOKEN, null),
             purchaseTimestamp = dmPurchase,
@@ -1781,6 +1920,7 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
         val emExpiry = securePrefs.getLong("play_expiry_time_engine_mgt", engineMgtCycle.nextBillingPeriod(emPurchase))
         val engineMgtPlan = if (hasEm) ActivePlanInfo(
             cycle = engineMgtCycle,
+            isExpiryVerified = cachedPlayExpiryVerified("play_plan_cycle_engine_mgt", securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null)),
             planMode = cachedPlanMode("play_plan_cycle_engine_mgt"),
             purchaseToken = securePrefs.getString(KEY_ENGINE_MGT_TOKEN, null),
             purchaseTimestamp = emPurchase,

@@ -10,8 +10,12 @@ import com.nhyle.hyperionmaritime.data.billing.estimateNextSubscriptionExpiry
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.matchesPlayOffer
 import com.nhyle.hyperionmaritime.data.billing.subscriptionDisplayExpiry
+import com.nhyle.hyperionmaritime.data.billing.subscriptionExpiryFromVerifiedSources
 import com.nhyle.hyperionmaritime.data.billing.resolveRequestedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.resolvePurchasedBillingCycle
+import com.nhyle.hyperionmaritime.data.billing.billingCycleFromPlayBasePlanId
+import com.nhyle.hyperionmaritime.data.billing.isFreshVerifiedPlayExpiry
+import com.nhyle.hyperionmaritime.data.billing.resolvePlayExpiryFromVerification
 import com.nhyle.hyperionmaritime.data.billing.isNewPlaySubscriptionPurchase
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
 import java.time.Instant
@@ -27,6 +31,8 @@ import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
+import com.nhyle.hyperionmaritime.ui.store.isPlayExpiryVerificationPending
+import com.nhyle.hyperionmaritime.ui.store.combineTrackDisplayExpiry
 import com.nhyle.hyperionmaritime.data.util.calculateOfflineTrustedTime
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
@@ -474,6 +480,73 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals("Weekly/monthly test renewal countdown must display the API's five-minute expiry", "5 mins remaining", formatSubscriptionTimeRemaining(weeklyTestExpiry, now))
         assertEquals("Yearly test renewal countdown must display the API's thirty-minute expiry", "30 mins remaining", formatSubscriptionTimeRemaining(yearlyTestExpiry, now))
         assertEquals("An unlinked purchase may use its local estimate", localWeeklyEstimate, subscriptionDisplayExpiry(0L, localWeeklyEstimate))
+        assertEquals("A newer, Play-verified renewal date must beat an older account snapshot", localWeeklyEstimate,
+            subscriptionExpiryFromVerifiedSources(weeklyTestExpiry, localWeeklyEstimate, true))
+        assertEquals("A guessed estimate must not beat an account-confirmed expiry", weeklyTestExpiry,
+            subscriptionExpiryFromVerifiedSources(weeklyTestExpiry, localWeeklyEstimate, false))
+    }
+
+    @Test
+    fun factoryResetRestoreUsesPlayAnnualExpiryInsteadOfTheMonthlyDefault() {
+        val purchaseDate = Instant.parse("2026-10-30T15:11:00Z").toEpochMilli()
+        val restoreDate = Instant.parse("2026-11-19T15:11:00Z").toEpochMilli()
+        val actualRenewal = Instant.parse("2027-10-30T15:11:00Z").toEpochMilli()
+        val incorrectLocalExpiry = estimateNextSubscriptionExpiry(purchaseDate, restoreDate, BillingCycle.MONTHLY)
+
+        assertEquals(Instant.parse("2026-11-30T15:11:00Z").toEpochMilli(), incorrectLocalExpiry)
+        assertEquals(BillingCycle.YEARLY, billingCycleFromPlayBasePlanId("oic-ew-yearly"))
+        assertEquals(BillingCycle.WEEKLY, billingCycleFromPlayBasePlanId("gmdss-prepaid-weekly"))
+        assertEquals(BillingCycle.MONTHLY, billingCycleFromPlayBasePlanId("oic-nw-monthly"))
+        assertEquals(null, billingCycleFromPlayBasePlanId("unknown-plan"))
+        assertEquals(
+            "Play's verified renewal date overrides the reconstructed monthly expiry",
+            actualRenewal,
+            resolvePlayExpiryFromVerification(actualRenewal, 0L, null, "restored-token", incorrectLocalExpiry)
+        )
+    }
+
+    @Test
+    fun verifiedExpiryCacheNeverFollowsAReplacedPurchaseToken() {
+        val now = Instant.parse("2026-11-19T12:00:00Z").toEpochMilli()
+        val verifiedDate = Instant.parse("2027-10-30T12:00:00Z").toEpochMilli()
+        val fallback = now + 11L * 24L * 60L * 60L * 1000L
+
+        assertTrue(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 60_000L, now))
+        assertFalse(isFreshVerifiedPlayExpiry("original-token", "replacement-token", now - 60_000L, now))
+        assertFalse(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 2L * 24L * 60L * 60L * 1000L, now))
+        assertEquals(verifiedDate, resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "original-token", fallback))
+        assertEquals("Never reuse another token's verified expiry", fallback,
+            resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "replacement-token", fallback))
+    }
+
+    @Test
+    fun unverifiedRestoreDateIsNotPresentedAsAnAuthoritativePlayExpiry() {
+        val now = System.currentTimeMillis()
+        val pending = ActivePlanInfo(
+            purchaseTimestamp = now,
+            expiryTimestamp = now + 11L * 24L * 60L * 60L * 1000L,
+            lastVerifiedAtEpoch = now,
+            isExpiryVerified = false
+        )
+        val confirmed = pending.copy(isExpiryVerified = true)
+        assertTrue("Restored Play ownership can stay active while expiry verification is pending", !pending.isExpired)
+        assertFalse("An estimated date cannot be labeled as Play-confirmed", pending.isExpiryVerified)
+        assertTrue("The authoritative Play API expiry is distinguished from the local estimate", confirmed.isExpiryVerified)
+        assertTrue(isPlayExpiryVerificationPending(pending, 0L, 0L, now))
+        assertFalse(isPlayExpiryVerificationPending(confirmed, 0L, 0L, now))
+        assertFalse("An account-verified expiry should not show a pending warning",
+            isPlayExpiryVerificationPending(pending, now + 1_000_000L, 0L, now))
+    }
+
+    @Test
+    fun exactVerifiedPlayRenewalDateWinsOverAStaleAccountExpiry() {
+        val oldAccount = Instant.parse("2026-11-30T12:00:00Z").toEpochMilli()
+        val verifiedPlay = Instant.parse("2027-10-30T12:00:00Z").toEpochMilli()
+        assertEquals(verifiedPlay, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, true, 0L))
+        assertEquals("Unverified local estimates may not override account-verified dates",
+            oldAccount, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, false, 0L))
+        assertEquals("Unsigned users retain Play-only expiry",
+            verifiedPlay, combineTrackDisplayExpiry(0L, 0L, verifiedPlay, true, 0L))
     }
 
     @Test

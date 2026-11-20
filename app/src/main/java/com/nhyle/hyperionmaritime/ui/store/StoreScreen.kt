@@ -1201,15 +1201,15 @@ fun StoreScreen(
             val emPlayExp = if (entitlements.engineMgtPlan?.isExpired == false) entitlements.engineMgtPlan!!.expiryTimestamp else 0L
             val allPlayExp = if (entitlements.allAccessPlan?.isExpired == false) entitlements.allAccessPlan!!.expiryTimestamp else 0L
 
-            // A linked account expiry is server-verified and includes the current Play
-            // subscription expiry from SubscriptionsV2. Never let BillingClient's local
-            // calendar estimate overwrite an accelerated tester expiry. Use the estimate
-            // only when no server-synced account expiry is available.
-            val effectiveOicExp = maxOf(oicOfflineExp, oicAccountExp, if (oicAccountExp > 0L) 0L else maxOf(oicPlayExp, allPlayExp), allOfflineExp)
-            val effectiveGmdssExp = maxOf(gmdssOfflineExp, gmdssAccountExp, if (gmdssAccountExp > 0L) 0L else maxOf(gmdssPlayExp, allPlayExp), allOfflineExp)
-            val effectiveEwExp = maxOf(ewOfflineExp, ewAccountExp, if (ewAccountExp > 0L) 0L else maxOf(ewPlayExp, allPlayExp), allOfflineExp)
-            val effectiveDmExp = maxOf(dmOfflineExp, dmAccountExp, if (dmAccountExp > 0L) 0L else maxOf(dmPlayExp, allPlayExp), allOfflineExp)
-            val effectiveEmExp = maxOf(emOfflineExp, emAccountExp, if (emAccountExp > 0L) 0L else maxOf(emPlayExp, allPlayExp), allOfflineExp)
+            // A linked account expiry wins over an unverified Play estimate. Once
+            // SubscriptionsV2 verifies the Play expiry for this purchase token, either
+            // verified source may supply the later active subscription end date.
+            val allPlayVerified = entitlements.allAccessPlan?.isExpiryVerified == true
+            val effectiveOicExp = combineTrackDisplayExpiry(oicOfflineExp, oicAccountExp, maxOf(oicPlayExp, allPlayExp), entitlements.oicNwPlan?.isExpiryVerified == true || allPlayVerified, allOfflineExp)
+            val effectiveGmdssExp = combineTrackDisplayExpiry(gmdssOfflineExp, gmdssAccountExp, maxOf(gmdssPlayExp, allPlayExp), entitlements.gmdssPlan?.isExpiryVerified == true || allPlayVerified, allOfflineExp)
+            val effectiveEwExp = combineTrackDisplayExpiry(ewOfflineExp, ewAccountExp, maxOf(ewPlayExp, allPlayExp), entitlements.engineOicEwPlan?.isExpiryVerified == true || allPlayVerified, allOfflineExp)
+            val effectiveDmExp = combineTrackDisplayExpiry(dmOfflineExp, dmAccountExp, maxOf(dmPlayExp, allPlayExp), entitlements.deckMgtPlan?.isExpiryVerified == true || allPlayVerified, allOfflineExp)
+            val effectiveEmExp = combineTrackDisplayExpiry(emOfflineExp, emAccountExp, maxOf(emPlayExp, allPlayExp), entitlements.engineMgtPlan?.isExpiryVerified == true || allPlayVerified, allOfflineExp)
 
             val hasDirectAllAccess = (allPlayExp > now) || (allOfflineExp > now)
             val hasActiveOic = (effectiveOicExp > now) || isOicOffline || entitlements.oicNwUnlocked
@@ -2305,8 +2305,29 @@ private data class ActivePassSummary(
     val activeExp: Long,
     val isOffline: Boolean,
     val isPlay: Boolean,
-    val isWebsite: Boolean
+    val isWebsite: Boolean,
+    val expiryVerificationPending: Boolean = false
 )
+
+internal fun combineTrackDisplayExpiry(
+    offlineExpiry: Long,
+    accountExpiry: Long,
+    playExpiry: Long,
+    isPlayExpiryVerified: Boolean,
+    allAccessOfflineExpiry: Long
+): Long = maxOf(
+    offlineExpiry, accountExpiry,
+    if (accountExpiry > 0L && !isPlayExpiryVerified) 0L else playExpiry,
+    allAccessOfflineExpiry
+)
+
+internal fun isPlayExpiryVerificationPending(
+    plan: com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo?,
+    accountExpiry: Long,
+    offlineExpiry: Long,
+    now: Long
+): Boolean = plan != null && !plan.isTerminalLicense && !plan.isExpiryVerified &&
+    !plan.isExpired && accountExpiry <= now && offlineExpiry <= now
 
 @Composable
 private fun ActiveLicenseOverviewCard(
@@ -2358,7 +2379,10 @@ private fun ActiveLicenseOverviewCard(
         oicPlayExp, gmdssPlayExp, ewPlayExp, dmPlayExp, emPlayExp,
         oicAccountExp, gmdssAccountExp, ewAccountExp, dmAccountExp, emAccountExp,
         entitlements.oicNwUnlocked, entitlements.gmdssUnlocked,
-        entitlements.engineOicEwUnlocked, entitlements.deckMgtUnlocked, entitlements.engineMgtUnlocked
+        entitlements.engineOicEwUnlocked, entitlements.deckMgtUnlocked, entitlements.engineMgtUnlocked,
+        entitlements.oicNwPlan?.isExpiryVerified, entitlements.gmdssPlan?.isExpiryVerified,
+        entitlements.engineOicEwPlan?.isExpiryVerified, entitlements.deckMgtPlan?.isExpiryVerified,
+        entitlements.engineMgtPlan?.isExpiryVerified
     ) {
         val list = mutableListOf<ActivePassSummary>()
         if (isOic) {
@@ -2368,7 +2392,8 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveOicExp,
                     isOffline = oicOfflineExp > now,
                     isPlay = (oicPlayExp > now) || entitlements.oicNwUnlocked,
-                    isWebsite = oicAccountExp > now
+                    isWebsite = oicAccountExp > now,
+                    expiryVerificationPending = isPlayExpiryVerificationPending(entitlements.oicNwPlan, oicAccountExp, oicOfflineExp, now)
                 )
             )
         }
@@ -2379,7 +2404,8 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveGmdssExp,
                     isOffline = gmdssOfflineExp > now,
                     isPlay = (gmdssPlayExp > now) || entitlements.gmdssUnlocked,
-                    isWebsite = gmdssAccountExp > now
+                    isWebsite = gmdssAccountExp > now,
+                    expiryVerificationPending = isPlayExpiryVerificationPending(entitlements.gmdssPlan, gmdssAccountExp, gmdssOfflineExp, now)
                 )
             )
         }
@@ -2390,7 +2416,8 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveEwExp,
                     isOffline = ewOfflineExp > now,
                     isPlay = (ewPlayExp > now) || entitlements.engineOicEwUnlocked,
-                    isWebsite = ewAccountExp > now
+                    isWebsite = ewAccountExp > now,
+                    expiryVerificationPending = isPlayExpiryVerificationPending(entitlements.engineOicEwPlan, ewAccountExp, ewOfflineExp, now)
                 )
             )
         }
@@ -2401,7 +2428,8 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveDmExp,
                     isOffline = dmOfflineExp > now,
                     isPlay = (dmPlayExp > now) || entitlements.deckMgtUnlocked,
-                    isWebsite = dmAccountExp > now
+                    isWebsite = dmAccountExp > now,
+                    expiryVerificationPending = isPlayExpiryVerificationPending(entitlements.deckMgtPlan, dmAccountExp, dmOfflineExp, now)
                 )
             )
         }
@@ -2412,7 +2440,8 @@ private fun ActiveLicenseOverviewCard(
                     activeExp = effectiveEmExp,
                     isOffline = emOfflineExp > now,
                     isPlay = (emPlayExp > now) || entitlements.engineMgtUnlocked,
-                    isWebsite = emAccountExp > now
+                    isWebsite = emAccountExp > now,
+                    expiryVerificationPending = isPlayExpiryVerificationPending(entitlements.engineMgtPlan, emAccountExp, emOfflineExp, now)
                 )
             )
         }
@@ -2501,6 +2530,7 @@ private fun ActiveLicenseOverviewCard(
                     val durationText = when {
                         isTampered -> "CLOCK ROLLBACK DETECTED"
                         isVerifiedLifetimeActive(pass.activeExp, now) -> "LIFETIME ACTIVE"
+                        pass.expiryVerificationPending -> "ACTIVE: EXPIRY VERIFICATION PENDING"
                         pass.activeExp > 0L -> "ACTIVE: ${formatRemainingDuration(pass.activeExp).uppercase()}"
                         offlineInfo != null && offlineInfo.isActive -> "ACTIVE: ${offlineInfo.getFormattedTimeRemaining().uppercase()}"
                         else -> "ACTIVE REVIEWER PASS"
@@ -2519,6 +2549,7 @@ private fun ActiveLicenseOverviewCard(
                     val expirySubtitle = when {
                         isTampered -> "ERROR: System time set earlier than verification record. Restore correct device time."
                         pass.activeExp >= LIFETIME_ACCOUNT_EXPIRY_THRESHOLD_MS -> "No expiration"
+                        pass.expiryVerificationPending -> "Connect to the internet and restore purchases to confirm the expiry date."
                         pass.activeExp > 0L -> "Valid until ${formatExpiryDateString(pass.activeExp)}"
                         offlineInfo != null && offlineInfo.isActive -> "Valid offline at sea • ${offlineInfo.getFormattedExpiryDate()}"
                         else -> "Active terminal authorization"
