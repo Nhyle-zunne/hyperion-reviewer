@@ -37,6 +37,7 @@ import com.nhyle.hyperionmaritime.ui.store.combineTrackDisplayExpiry
 import com.nhyle.hyperionmaritime.data.util.calculateOfflineTrustedTime
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
 import com.nhyle.hyperionmaritime.viewmodel.ReviewerViewModel
+import com.nhyle.hyperionmaritime.viewmodel.hasPendingCombinedPlayExpiry
 import com.nhyle.hyperionmaritime.viewmodel.Screen
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -547,6 +548,9 @@ class PlayBillingAndLicensingInvariantsTest {
         assertFalse(playExpiryVerificationPending(confirmed, 0L, 0L, now))
         assertFalse("An account-verified expiry should not show a pending warning",
             playExpiryVerificationPending(pending, now + 1_000_000L, 0L, now))
+        assertTrue("Combined OIC + GMDSS status cannot display a guessed countdown",
+            hasPendingCombinedPlayExpiry("Expiry verification pending", "364 days remaining"))
+        assertFalse(hasPendingCombinedPlayExpiry("20 days remaining", "364 days remaining"))
     }
 
     @Test

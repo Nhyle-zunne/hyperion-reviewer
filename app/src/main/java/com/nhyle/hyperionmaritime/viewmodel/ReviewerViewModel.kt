@@ -80,6 +80,9 @@ enum class DrillDeliveryMode {
     INTENSIVE
 }
 
+internal fun hasPendingCombinedPlayExpiry(oicLabel: String?, gmdssLabel: String?): Boolean =
+    oicLabel == "Expiry verification pending" || gmdssLabel == "Expiry verification pending"
+
 // Keep feedback visible briefly without slowing either practice delivery mode.
 internal const val AUTO_NEXT_MIN_DELAY_MS = 100
 internal const val AUTO_NEXT_MAX_DELAY_MS = 5000
@@ -620,11 +623,13 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         )
         val allAccessPlanExp = allAccessDisplayExp
         val allAccessOfflineExp = if (allAccessOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L
+        val combinedExpiryPending = hasPendingCombinedPlayExpiry(oicTimeLeft, gmdssTimeLeft)
 
         val allAccessTimeLeft = when {
             allAccessPlanExp > 0L -> playExpiryCountdown(allAccessPlan, accountAllAccessExp, allAccessOfflineActive, maxOf(allAccessOfflineExp, allAccessPlanExp))
             allAccessOfflineExp > 0L && offlineInfo != null -> "${offlineInfo.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             isHypeAll && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
+            oicExp > 0L && gmdssExp > 0L && combinedExpiryPending -> "Expiry verification pending"
             oicExp > 0L && gmdssExp > 0L -> {
                 val minExp = minOf(oicExp, gmdssExp)
                 val tempPlan = com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo(expiryTimestamp = minExp)
@@ -639,6 +644,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             licenseType == "PROMO_PASS" -> "ACTIVE (PROMO PASS · ALL ACCESS)"
             isSub -> when {
                 playEnt.allAccessUnlocked -> "ACTIVE (ALL-ACCESS PASS SUBSCRIPTION • ${allAccessTimeLeft?.substringBefore(" (") ?: ""})"
+                newOic && newGmdss && combinedExpiryPending -> "ACTIVE: EXPIRY VERIFICATION PENDING"
                 newOic && newGmdss -> {
                     val minExp = if (oicExp > 0L && gmdssExp > 0L) minOf(oicExp, gmdssExp) else maxOf(oicExp, gmdssExp)
                     val tempPlan = if (minExp > 0L) com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo(expiryTimestamp = minExp) else null
