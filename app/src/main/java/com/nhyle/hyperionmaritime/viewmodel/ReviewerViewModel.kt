@@ -46,6 +46,7 @@ import com.nhyle.hyperionmaritime.data.billing.BillingConstants
 import com.nhyle.hyperionmaritime.data.billing.ActivePlanInfo
 import com.nhyle.hyperionmaritime.data.billing.formatSubscriptionTimeRemaining
 import com.nhyle.hyperionmaritime.data.billing.subscriptionExpiryFromVerifiedSources
+import com.nhyle.hyperionmaritime.data.billing.playExpiryVerificationPending
 import com.nhyle.hyperionmaritime.data.billing.TrackEntitlements
 import com.nhyle.hyperionmaritime.data.hype.HypePassManager
 import com.nhyle.hyperionmaritime.data.hype.HypePassRecord
@@ -544,6 +545,12 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         fun expiryCountdown(expiryEpochMs: Long): String =
             "${formatSubscriptionTimeRemaining(expiryEpochMs, subscriptionDisplayNow)} (${ActivePlanInfo(expiryTimestamp = expiryEpochMs).getFormattedExpiryDate()})"
 
+        fun playExpiryCountdown(plan: ActivePlanInfo?, accountExpiry: Long, offlineActive: Boolean, displayExpiry: Long): String {
+            val offlineExpiry = if (offlineActive) offlineInfo?.expiryEpoch ?: 0L else 0L
+            return if (playExpiryVerificationPending(plan, accountExpiry, offlineExpiry, subscriptionDisplayNow))
+                "Expiry verification pending" else expiryCountdown(displayExpiry)
+        }
+
         val oicDisplayExp = subscriptionExpiryFromVerifiedSources(accountOicExp, localPlanExpiry(oicPlan), oicPlan?.isExpiryVerified == true)
         val gmdssDisplayExp = subscriptionExpiryFromVerifiedSources(accountGmdssExp, localPlanExpiry(gmdssPlan), gmdssPlan?.isExpiryVerified == true)
         val ewDisplayExp = subscriptionExpiryFromVerifiedSources(accountEwExp, localPlanExpiry(ewPlan), ewPlan?.isExpiryVerified == true)
@@ -552,7 +559,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val allAccessDisplayExp = subscriptionExpiryFromVerifiedSources(accountAllAccessExp, localPlanExpiry(allAccessPlan), allAccessPlan?.isExpiryVerified == true)
 
         val oicTimeLeft = when {
-            oicDisplayExp > 0L -> expiryCountdown(oicDisplayExp)
+            oicDisplayExp > 0L -> playExpiryCountdown(oicPlan, accountOicExp, oicOfflineActive, oicDisplayExp)
             oicOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_OIC_NW)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_OIC_NW)
@@ -563,7 +570,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val gmdssTimeLeft = when {
-            gmdssDisplayExp > 0L -> expiryCountdown(gmdssDisplayExp)
+            gmdssDisplayExp > 0L -> playExpiryCountdown(gmdssPlan, accountGmdssExp, gmdssOfflineActive, gmdssDisplayExp)
             gmdssOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.GMDSS_GOC)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.GMDSS_GOC)
@@ -574,7 +581,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val ewTimeLeft = when {
-            ewDisplayExp > 0L -> expiryCountdown(ewDisplayExp)
+            ewDisplayExp > 0L -> playExpiryCountdown(ewPlan, accountEwExp, ewOfflineActive, ewDisplayExp)
             ewOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_OIC_EW)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_OIC_EW)
@@ -584,7 +591,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val dmTimeLeft = when {
-            dmDisplayExp > 0L -> expiryCountdown(dmDisplayExp)
+            dmDisplayExp > 0L -> playExpiryCountdown(dmPlan, accountDmExp, dmOfflineActive, dmDisplayExp)
             dmOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.DECK_MGT)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.DECK_MGT)
@@ -594,7 +601,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         }
 
         val emTimeLeft = when {
-            emDisplayExp > 0L -> expiryCountdown(emDisplayExp)
+            emDisplayExp > 0L -> playExpiryCountdown(emPlan, accountEmExp, emOfflineActive, emDisplayExp)
             emOfflineActive && app != null -> {
                 val rem = LicenseManager.getOfflineTrackTimeRemaining(app, Track.ENGINE_MGT)
                 val exp = LicenseManager.getOfflineTrackFormattedExpiry(app, Track.ENGINE_MGT)
@@ -615,7 +622,7 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         val allAccessOfflineExp = if (allAccessOfflineActive && offlineInfo != null) offlineInfo.expiryEpoch else 0L
 
         val allAccessTimeLeft = when {
-            allAccessPlanExp > 0L -> expiryCountdown(maxOf(allAccessOfflineExp, allAccessPlanExp))
+            allAccessPlanExp > 0L -> playExpiryCountdown(allAccessPlan, accountAllAccessExp, allAccessOfflineActive, maxOf(allAccessOfflineExp, allAccessPlanExp))
             allAccessOfflineExp > 0L && offlineInfo != null -> "${offlineInfo.getFormattedTimeRemaining()} (${offlineInfo.getFormattedExpiryDate()})"
             isHypeAll && hypePass != null -> "${hypePass.getFormattedRemainingTime()} (${hypePass.getFormattedExpiryDate()})"
             oicExp > 0L && gmdssExp > 0L -> {

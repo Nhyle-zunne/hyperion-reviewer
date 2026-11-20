@@ -15,6 +15,8 @@ import com.nhyle.hyperionmaritime.data.billing.resolveRequestedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.resolvePurchasedBillingCycle
 import com.nhyle.hyperionmaritime.data.billing.billingCycleFromPlayBasePlanId
 import com.nhyle.hyperionmaritime.data.billing.isFreshVerifiedPlayExpiry
+import com.nhyle.hyperionmaritime.data.billing.playExpiryVerificationPending
+import com.nhyle.hyperionmaritime.data.billing.matchesVerifiedPlayToken
 import com.nhyle.hyperionmaritime.data.billing.resolvePlayExpiryFromVerification
 import com.nhyle.hyperionmaritime.data.billing.isNewPlaySubscriptionPurchase
 import com.nhyle.hyperionmaritime.data.billing.canRefreshPlayVerification
@@ -31,7 +33,6 @@ import com.nhyle.hyperionmaritime.data.model.QuizMode
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.util.LicenseManager
-import com.nhyle.hyperionmaritime.ui.store.isPlayExpiryVerificationPending
 import com.nhyle.hyperionmaritime.ui.store.combineTrackDisplayExpiry
 import com.nhyle.hyperionmaritime.data.util.calculateOfflineTrustedTime
 import com.nhyle.hyperionmaritime.viewmodel.DrillDeliveryMode
@@ -501,7 +502,7 @@ class PlayBillingAndLicensingInvariantsTest {
         assertEquals(
             "Play's verified renewal date overrides the reconstructed monthly expiry",
             actualRenewal,
-            resolvePlayExpiryFromVerification(actualRenewal, 0L, null, "restored-token", incorrectLocalExpiry)
+            resolvePlayExpiryFromVerification(actualRenewal, 0L, null, "restored-token", incorrectLocalExpiry, restoreDate)
         )
     }
 
@@ -511,12 +512,22 @@ class PlayBillingAndLicensingInvariantsTest {
         val verifiedDate = Instant.parse("2027-10-30T12:00:00Z").toEpochMilli()
         val fallback = now + 11L * 24L * 60L * 60L * 1000L
 
-        assertTrue(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 60_000L, now))
-        assertFalse(isFreshVerifiedPlayExpiry("original-token", "replacement-token", now - 60_000L, now))
-        assertFalse(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 2L * 24L * 60L * 60L * 1000L, now))
-        assertEquals(verifiedDate, resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "original-token", fallback))
+        assertTrue(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 60_000L, now, verifiedDate))
+        assertFalse(isFreshVerifiedPlayExpiry("original-token", "replacement-token", now - 60_000L, now, verifiedDate))
+        assertFalse(isFreshVerifiedPlayExpiry("original-token", "original-token", now - 2L * 24L * 60L * 60L * 1000L, now, verifiedDate))
+        assertEquals(verifiedDate, resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "original-token", fallback, now))
         assertEquals("Never reuse another token's verified expiry", fallback,
-            resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "replacement-token", fallback))
+            resolvePlayExpiryFromVerification(0L, verifiedDate, "original-token", "replacement-token", fallback, now))
+        assertFalse("A recently checked token must be reverified when its renewal date passes",
+            isFreshVerifiedPlayExpiry("original-token", "original-token", now - 60_000L, now, now - 1L))
+        assertFalse("Recheck shortly before renewal so access never freezes on an old expiry",
+            isFreshVerifiedPlayExpiry("original-token", "original-token", now - 60_000L, now, now + 5L * 60L * 1000L))
+        assertEquals("A successful Play ownership query remains provisionally usable if the expiry endpoint is down at renewal",
+            fallback, resolvePlayExpiryFromVerification(0L, now - 1L, "original-token", "original-token", fallback, now))
+        assertTrue("Legacy All Access verified metadata covers its derived track cards after restart",
+            matchesVerifiedPlayToken(null, "all-access-token", "all-access-token"))
+        assertFalse("An unrelated restored track token must not inherit All Access expiry",
+            matchesVerifiedPlayToken(null, "all-access-token", "separate-track-token"))
     }
 
     @Test
@@ -532,21 +543,23 @@ class PlayBillingAndLicensingInvariantsTest {
         assertTrue("Restored Play ownership can stay active while expiry verification is pending", !pending.isExpired)
         assertFalse("An estimated date cannot be labeled as Play-confirmed", pending.isExpiryVerified)
         assertTrue("The authoritative Play API expiry is distinguished from the local estimate", confirmed.isExpiryVerified)
-        assertTrue(isPlayExpiryVerificationPending(pending, 0L, 0L, now))
-        assertFalse(isPlayExpiryVerificationPending(confirmed, 0L, 0L, now))
+        assertTrue(playExpiryVerificationPending(pending, 0L, 0L, now))
+        assertFalse(playExpiryVerificationPending(confirmed, 0L, 0L, now))
         assertFalse("An account-verified expiry should not show a pending warning",
-            isPlayExpiryVerificationPending(pending, now + 1_000_000L, 0L, now))
+            playExpiryVerificationPending(pending, now + 1_000_000L, 0L, now))
     }
 
     @Test
     fun exactVerifiedPlayRenewalDateWinsOverAStaleAccountExpiry() {
         val oldAccount = Instant.parse("2026-11-30T12:00:00Z").toEpochMilli()
         val verifiedPlay = Instant.parse("2027-10-30T12:00:00Z").toEpochMilli()
-        assertEquals(verifiedPlay, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, true, 0L))
+        assertEquals(verifiedPlay, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, true, 0L, false, 0L))
         assertEquals("Unverified local estimates may not override account-verified dates",
-            oldAccount, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, false, 0L))
+            oldAccount, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, false, 0L, false, 0L))
         assertEquals("Unsigned users retain Play-only expiry",
-            verifiedPlay, combineTrackDisplayExpiry(0L, 0L, verifiedPlay, true, 0L))
+            verifiedPlay, combineTrackDisplayExpiry(0L, 0L, verifiedPlay, true, 0L, false, 0L))
+        assertEquals("An unverified legacy All Access estimate cannot override verified track expiry",
+            verifiedPlay, combineTrackDisplayExpiry(0L, oldAccount, verifiedPlay, true, verifiedPlay + 50_000_000L, false, 0L))
     }
 
     @Test

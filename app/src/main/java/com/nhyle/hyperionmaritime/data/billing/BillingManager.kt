@@ -196,11 +196,17 @@ internal fun billingCycleFromPlayBasePlanId(basePlanId: String): BillingCycle? {
 }
 
 private const val PLAY_EXPIRY_REFRESH_MS = 24L * 60L * 60L * 1000L
+private const val PLAY_RENEWAL_RECHECK_MARGIN_MS = 15L * 60L * 1000L
 
 internal fun isFreshVerifiedPlayExpiry(
-    verifiedToken: String?, currentToken: String, verifiedAt: Long, now: Long
+    verifiedToken: String?, currentToken: String, verifiedAt: Long, now: Long, cachedExpiry: Long
 ): Boolean = !verifiedToken.isNullOrBlank() && verifiedToken == currentToken &&
-    verifiedAt > 0L && now >= verifiedAt && now - verifiedAt < PLAY_EXPIRY_REFRESH_MS
+    verifiedAt > 0L && now >= verifiedAt && now - verifiedAt < PLAY_EXPIRY_REFRESH_MS &&
+    cachedExpiry > now && cachedExpiry - now > PLAY_RENEWAL_RECHECK_MARGIN_MS
+
+internal fun matchesVerifiedPlayToken(trackVerifiedToken: String?, allAccessVerifiedToken: String?, purchaseToken: String?): Boolean =
+    !purchaseToken.isNullOrBlank() &&
+        (trackVerifiedToken == purchaseToken || allAccessVerifiedToken == purchaseToken)
 
 /** Never transfer cached expiry metadata when a Play purchase token changes. */
 internal fun resolvePlayExpiryFromVerification(
@@ -208,10 +214,11 @@ internal fun resolvePlayExpiryFromVerification(
     cachedExpiry: Long,
     cachedVerifiedToken: String?,
     currentPurchaseToken: String,
-    localEstimate: Long
+    localEstimate: Long,
+    now: Long
 ): Long = when {
     verifiedExpiry > 0L -> verifiedExpiry
-    cachedVerifiedToken == currentPurchaseToken && cachedExpiry > 0L -> cachedExpiry
+    cachedVerifiedToken == currentPurchaseToken && cachedExpiry > now -> cachedExpiry
     else -> localEstimate
 }
 
@@ -409,6 +416,12 @@ data class ActivePlanInfo(
         return "${getFormattedTimeRemaining().uppercase()} • ${getFormattedExpiryDate().uppercase()}"
     }
 }
+
+/** A BillingClient ownership result is not proof of the actual renewal date. */
+internal fun playExpiryVerificationPending(
+    plan: ActivePlanInfo?, accountExpiry: Long, offlineExpiry: Long, now: Long
+): Boolean = plan != null && !plan.isTerminalLicense && !plan.isExpiryVerified &&
+    !plan.isExpired && accountExpiry <= now && offlineExpiry <= now
 
 /**
  * Standard Product IDs, Base Plans, and fallback metadata for Hyperion Google Play Subscriptions.
@@ -1367,8 +1380,10 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                         val previousPurchaseToken = securePrefs.getString(purchaseTokenKey, null)
                         val lastVerifiedToken = securePrefs.getString("${cycleKey}_verified_token", null)
                         val lastVerifiedTime = securePrefs.getLong("${cycleKey}_verified_at", 0L)
+                        val cachedVerifiedExpiryKey = "play_expiry_time_${cycleKey.removePrefix("play_plan_cycle_")}"
+                        val previousExpiry = securePrefs.getLong(cachedVerifiedExpiryKey, 0L)
                         if (!isFreshVerifiedPlayExpiry(
-                                lastVerifiedToken, purchase.purchaseToken, lastVerifiedTime, queryTimeEpoch
+                                lastVerifiedToken, purchase.purchaseToken, lastVerifiedTime, queryTimeEpoch, previousExpiry
                             ) && verifiedItems == null) {
                             verifiedItems = readVerifiedPlaySubscription(purchase.purchaseToken)
                         }
@@ -1420,17 +1435,17 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
                             nowEpochMs = effectiveQueryTime,
                             cycle = cycle
                         )
-                        val cachedVerifiedExpiryKey = "play_expiry_time_${cycleKey.removePrefix("play_plan_cycle_")}"
                         val expiryTime = resolvePlayExpiryFromVerification(
                             verifiedExpiry = verifiedItem?.expiryEpochMs ?: 0L,
-                            cachedExpiry = securePrefs.getLong(cachedVerifiedExpiryKey, 0L),
+                            cachedExpiry = previousExpiry,
                             cachedVerifiedToken = lastVerifiedToken,
                             currentPurchaseToken = purchase.purchaseToken,
-                            localEstimate = estimatedExpiry
+                            localEstimate = estimatedExpiry,
+                            now = queryTimeEpoch
                         )
                         val expiryVerified = verifiedItem != null ||
                             (lastVerifiedToken == purchase.purchaseToken &&
-                                securePrefs.getLong(cachedVerifiedExpiryKey, 0L) > 0L)
+                                previousExpiry > queryTimeEpoch)
                         if (verifiedItem != null) {
                             editor.putString("${cycleKey}_verified_token", purchase.purchaseToken)
                             editor.putLong("${cycleKey}_verified_at", queryTimeEpoch)
@@ -1764,8 +1779,11 @@ class BillingManager private constructor(context: Context) : PurchasesUpdatedLis
             ?: PlayPlanMode.AUTO_RENEWING
 
     private fun cachedPlayExpiryVerified(cycleKey: String, purchaseToken: String?): Boolean =
-        !purchaseToken.isNullOrBlank() &&
-            securePrefs.getString("${cycleKey}_verified_token", null) == purchaseToken
+        matchesVerifiedPlayToken(
+            securePrefs.getString("${cycleKey}_verified_token", null),
+            securePrefs.getString("play_plan_cycle_all_access_verified_token", null),
+            purchaseToken
+        )
 
     private fun loadCachedEntitlements() {
         val readRevision = entitlementMutationRevision.get()
