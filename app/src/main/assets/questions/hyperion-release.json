@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "b4bf2dfa9644bac6f92fa55253ea32fcb4579c03",
-  "manifestSha256": "9f87093dbafb5f4a1f0f7f9b9dcdd25a67f235132956a7a20062d0ba72d7b719",
-  "publishedAt": "2026-11-23T13:40:59.066Z",
-  "publicationId": "c7-explanations-899036f6-5755-4902-86ca-daa67964a545",
-  "inputDigest": "213147d2ecdd3a670d9ea7ee3e0f50e80731176f7c40c7c619b33b6946015f49",
-  "previousRevision": "667f1010a48f84a2393770b138baf76563f7970c"
+  "revision": "9dec28a4ede3df69ec25e75d5fa0edd492ea2a57",
+  "manifestSha256": "93734b7b8b9f04cd7bc67c1824b6a08b24c188d5f91d690b02f104e6f8f9351d",
+  "publishedAt": "2026-11-23T13:47:41.702Z",
+  "publicationId": "c9-explanations-51ea5903-198d-4aef-ad76-7a5645702603",
+  "inputDigest": "f41b5f79c9b13909ef45cf4e8905f1346eb7f9647a43ec22ec58bf98dc652c3c",
+  "previousRevision": "b4bf2dfa9644bac6f92fa55253ea32fcb4579c03"
 }
