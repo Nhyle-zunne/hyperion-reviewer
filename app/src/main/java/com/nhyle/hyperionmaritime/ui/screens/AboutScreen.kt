@@ -177,7 +177,7 @@ fun AboutScreen(
             )
             AboutItemCard(
                 title = "PLATFORM BILLING",
-                description = "Google Play handles Android subscription billing. Website purchases use website checkout and PayMongo. Linking eligible entitlements to one Hyperion account does not merge billing, cancellation, or refund processes.",
+                description = "Google Play handles Android subscription billing. Current website purchases use QR Ph or InstaPay bank transfer with administrator verification. Previously purchased website licenses retain their recorded terms. Linking eligible entitlements to one Hyperion account does not merge billing, cancellation, or refund processes.",
                 icon = Icons.Default.Description
             )
             AboutItemCard(
