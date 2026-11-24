@@ -110,8 +110,8 @@
     },
     {
       "path": "deck/oic_nw_c12.csv.enc",
-      "bytes": 100064,
-      "sha256": "88ad5ce336936755b2bf69a96661c0bcc88a00d65ac3727483e5840ff4b3711f"
+      "bytes": 181766,
+      "sha256": "c7051b11fdb926849be3a07a689a1a6da4a497b3ea8973f5600405dd0c864d7b"
     },
     {
       "path": "deck/oic_nw_c13.csv.enc",
