@@ -5,11 +5,11 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object PrivacyPolicyText {
     const val TITLE = "PRIVACY POLICY"
-    const val LAST_UPDATED = "Effective Date: October 31, 2026 · Last Updated: November 14, 2026"
+    const val LAST_UPDATED = "Effective Date: October 31, 2026 · Last Updated: November 25, 2026"
 
     const val CONTENT = """HYPERION MARITIME REVIEWER
 PRIVACY POLICY
-Effective Date: October 31, 2026 · Last Updated: November 14, 2026
+Effective Date: October 31, 2026 · Last Updated: November 25, 2026
 
 PERSONAL INFORMATION CONTROLLER / DEVELOPER
 Hyperion Maritime
@@ -23,7 +23,7 @@ Hyperion Maritime ("Hyperion", "we", "our", or "us") provides Hyperion Maritime 
 • Android study records are saved locally first. When you sign in to a Hyperion account and an internet connection is available, bookmarks, mistakes/review records, per-question correct/incorrect attempt history, study-time segments, and completed session history are automatically synchronized with the same account used by the website/PWA. Android sign-in remains optional; records that have not synchronized remain on the device.
 • Google sign-in on Android is optional. When you sign in, Hyperion uses your Supabase account to synchronize eligible license entitlements and supported study progress between the Android app and website/PWA. Study synchronization runs when a connection is available and does not prevent offline study.
 • Website/PWA users can sign in with Google. Supported website learning progress can be synchronized with the signed-in Hyperion account across supported browsers and devices.
-• Google Play subscriptions are billed and managed by Google Play. Website/PWA licenses are purchased through the website and processed through PayMongo or reviewed after a manual QR-payment submission. These are separate billing products, although eligible entitlements can be linked to the same Hyperion account when you sign in and synchronize.
+• Google Play subscriptions are billed and managed by Google Play. Current website/PWA purchases use QR Ph or InstaPay bank transfer with administrator verification. Historical website payments from an earlier hosted checkout retain their recorded licenses. These are separate billing products, although eligible entitlements can be linked to the same Hyperion account when you sign in and synchronize.
 • Hyperion does not display third-party advertisements or sell personal information for advertising.
 • Free Reviewer on the website/PWA can be prepared for offline use by saving the public free question pool and diagrams while online. Full-reviewer tools such as Timed Mock Exam, Quick Scan, and complete offline question banks require an active license for the selected track. Signing in alone does not unlock paid access.
 • You can permanently delete a signed-in Hyperion account from the website or Android app. Account deletion does not cancel Google Play billing or erase Android study data stored locally on your device.
@@ -52,7 +52,7 @@ Profile details: the name you save to your account and optional company or schoo
 
 Orders and website licenses: user/account ID, selected track, week/month/year term, amount and currency, order and checkout references, payment method, provider identifiers, payment/reference status, timestamps, entitlement state, and expiry information.
 
-PayMongo checkout: PayMongo and the selected payment method provider process the information required to complete and protect a payment. Depending on the chosen method, that can include payer name and email, payment credentials or account details, transaction amount, device/network information, and fraud or security signals. Hyperion's website checkout does not ask you to enter a full card number or card security code directly into a Hyperion form. Hyperion receives order, payment-reference, payment-method, amount, status, and related checkout information needed to administer the purchase.
+Historical hosted checkout: for earlier website transactions, the former checkout and selected payment method provider processed payment information such as payer identity, amount, account or payment details, device/network information, and fraud/security signals. Hyperion retains associated order and payment references, amounts, status, and license records to verify purchases and handle refunds or disputes. We do not ask for full card numbers or security codes in a Hyperion form.
 
 Manual QR-payment submissions: your account, name, selected product and term, amount, transaction/reference number, optional company/school and notes, proof image if submitted, submission status, and administrative review records. A manual submission does not activate a license until it has been verified and approved. If you send a payment screenshot through Facebook/Messenger or email, the relevant provider also processes that image. Avoid including unrelated personal or financial details in a screenshot.
 
@@ -79,7 +79,7 @@ Under the Philippine Data Privacy Act of 2012 (Republic Act No. 10173) and its I
 Supabase: Google-based authentication, account sessions, database, account-linked progress, entitlement records, and backend functions. Privacy Policy: https://supabase.com/privacy
 Google and Google Play: Google sign-in, Play Billing, purchase verification through the Google Play Developer API, and Firebase Remote Config for Android promo-code and activation-status checks. Firebase Remote Config uses a Firebase Installation ID to select configuration values and Google/Firebase may process related technical service information. Privacy Policy: https://policies.google.com/privacy
 Firebase privacy information: https://firebase.google.com/support/privacy
-PayMongo: hosted website checkout, payment processing, and payment status/reference information. Privacy Policy: https://www.paymongo.com/privacy
+Former checkout provider (PayMongo): earlier website purchases only; historical payment status, reconciliation, and refunds may still be handled by this provider. New website purchases do not open its checkout. Privacy Policy: https://www.paymongo.com/privacy
 Cloudflare: website/PWA hosting, content delivery, and security. Privacy Policy: https://www.cloudflare.com/privacypolicy/
 Meta: Facebook Page/Messenger support when you choose to contact us or send a screenshot through those channels. Privacy Policy: https://www.facebook.com/privacy/policy/
 Email providers: delivery and storage of messages you send to or receive from our support email address, under the provider's own terms and privacy practices.
@@ -96,18 +96,18 @@ Website account and account-linked learning progress, including supported synchr
 
 Website payment and license records are used to grant access, verify payments, manage expiry, resolve payment questions, prevent duplicate transactions, and meet legal or accounting obligations. The account-deletion flow removes account-linked website orders and entitlements when it completes, but some provider records, backups, security logs, or records required or permitted by law may remain.
 
-Support messages and device activation records may be retained for a reasonable period needed to resolve the request, administer a license, maintain security, or establish or defend legal claims. Google Play, PayMongo, Google Cloud, Meta, and other providers may retain their own billing, payment, technical, or support records under their separate policies and legal requirements. Hyperion cannot delete records held independently by those providers through your Hyperion account.
+Support messages and device activation records may be retained for a reasonable period needed to resolve the request, administer a license, maintain security, or establish or defend legal claims. Google Play, former checkout providers, Google Cloud, Meta, and other providers may retain their own billing, payment, technical, or support records under their separate policies and legal requirements. Hyperion cannot delete records held independently by those providers through your Hyperion account.
 
 8. ACCOUNT DELETION AND YOUR CHOICES
 After signing in, you can start permanent account deletion on the website through Account → Delete account, or in the Android app through the app drawer → My Hyperion Account → Delete Account. The app and website use the same authenticated account-deletion service. The process requires explicit typed confirmation.
 
-When the server confirms deletion, it deletes the Hyperion sign-in account and associated account-linked records, including website and linked Google Play entitlement records, website orders/payment submissions, and account-linked website learning progress. The deletion process may refuse to continue while a website payment submission or checkout is pending, while an unresolved PayMongo checkout requires reconciliation, or where an administrative audit trail must be preserved. Resolve the payment issue or contact support before retrying.
+When the server confirms deletion, it deletes the Hyperion sign-in account and associated account-linked records, including website and linked Google Play entitlement records, website orders/payment submissions, and account-linked website learning progress. The deletion process may refuse to continue while a website payment submission or historical checkout is pending, while an unresolved payment requires reconciliation, or where an administrative audit trail must be preserved. Resolve the payment issue or contact support before retrying.
 
 IMPORTANT ACTIVE-LICENSE WARNING: deleting an account removes website/PWA licenses linked to that account and removes the server-side link for Google Play entitlements associated with it. Any access that depends on the deleted Hyperion account will stop. Read the in-app or website warning carefully before confirming.
 
 GOOGLE PLAY IS SEPARATE: deleting your Hyperion account does not cancel a Google Play subscription, stop future Play renewals, or issue a refund. Google may continue billing the Google Play account that made the purchase until the subscription is cancelled through Google Play: https://play.google.com/store/account/subscriptions. An active Play purchase may remain recognized locally by the Android app while Google Play reports it as active, but deleting the Hyperion account removes its server-side account link. Newer purchases bound to a specific Hyperion account may not be linkable to a different Hyperion account afterward.
 
-Account deletion does not erase study data stored locally inside the Android app or clear browser-only data on your devices. Clear app storage/uninstall Android or clear browser storage separately if you also want to remove those local copies. Data already held by Google, Google Play, PayMongo, Meta, or another provider is subject to that provider's own deletion and retention rules.
+Account deletion does not erase study data stored locally inside the Android app or clear browser-only data on your devices. Clear app storage/uninstall Android or clear browser storage separately if you also want to remove those local copies. Data already held by Google, Google Play, former checkout providers, Meta, or another provider is subject to that provider's own deletion and retention rules.
 
 You can sign out in the Android account dialog or website account area. Signing out clears the Android app's Hyperion session and linked entitlement cache, but does not cancel a Google Play subscription or remove the Play purchase from the device. Clearing Android app storage or uninstalling the app removes local study data and locally stored app information. Clearing browser storage may remove local PWA data, cached assets, and sign-in state.
 
@@ -120,7 +120,7 @@ To exercise a privacy right, contact hyperionmaritimex@gmail.com. Do not send pa
 We use reasonable technical and organizational safeguards, including HTTPS/TLS, authenticated backend requests, restricted server-side access, database access controls, purchase verification, Android's application sandbox, and encrypted Android storage for account sessions and entitlement caches. No electronic system is completely secure. If a personal data breach requires notification under applicable law, we will provide the notices required by law.
 
 11. INTERNATIONAL PROCESSING AND CHILDREN
-Our service providers may process information in countries other than the Philippines, including countries where Google, Supabase, PayMongo, Cloudflare, Meta, or their subprocessors operate. Cross-border processing is subject to applicable provider safeguards and legal requirements.
+Our service providers may process information in countries other than the Philippines, including countries where Google, Supabase, former checkout providers, Cloudflare, Meta, or their subprocessors operate. Cross-border processing is subject to applicable provider safeguards and legal requirements.
 
 Hyperion is designed for adult maritime candidates and is not directed to children under 18. We do not knowingly collect personal information from children under 18. If you believe a child has provided personal information to Hyperion, contact hyperionmaritimex@gmail.com so we can review the request.
 

@@ -6,13 +6,13 @@ package com.nhyle.hyperionmaritime.data.model
  */
 object LegalAgreementText {
     const val TITLE = "TERMS OF USE"
-    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: November 14, 2026"
+    const val LAST_REVISED = "Effective Date: October 30, 2026 · Last Updated: November 25, 2026"
     const val TERMS_VERSION = "2026-10-31-2"
 
     const val DISCLAIMER_SUMMARY = """Hyperion Maritime Reviewer is an independent educational resource. It is not MARINA, a government service, a maritime administration, a licensing board, or an examination authority, and it is not affiliated with, endorsed by, or authorized by those bodies. It does not guarantee examination results, a Certificate of Competency, an endorsement, or employment."""
 
     const val FULL_AGREEMENT_TEXT = """TERMS OF USE
-Effective Date: October 30, 2026 · Last Updated: November 14, 2026
+Effective Date: October 30, 2026 · Last Updated: November 25, 2026
 Service / Developer: Hyperion Maritime
 Website: https://hyperionmaritime.org
 Contact: hyperionmaritimex@gmail.com
@@ -47,7 +47,7 @@ Manage or cancel a Play subscription through Google Play Store or https://play.g
 4.2 Website/PWA licenses
 Website licenses are purchased through the Bond Store/Checkout at hyperionmaritime.org and are linked to the signed-in Hyperion account used at checkout. Plans are fixed-term for the track and duration selected and displayed before payment (for example, one week, one month, or one year). Website plans do not automatically renew unless a particular offer expressly says otherwise.
 
-PayMongo hosted checkout processes website payments using the payment methods available at checkout. A manual QR payment is a submission for review; entering a transaction reference or sending proof does not itself activate a license. Manual access is granted only after Hyperion verifies and approves the payment. Website order, payment, and refund questions should be sent to hyperionmaritimex@gmail.com with the website order reference. Requests are reviewed under applicable law and purchase conditions; a request or account deletion does not automatically guarantee a refund.
+Current website payments use QR Ph or InstaPay bank transfer followed by proof of payment through Messenger. Do not use PESONet when an instant transfer is required. Sending proof does not itself activate a license; Hyperion verifies and approves the payment first. Allow 24–48 hours for activation, then contact the Hyperion Facebook page for follow-ups. Earlier website purchases retain their recorded license terms. Website order, payment, and refund questions should be sent to hyperionmaritimex@gmail.com with the website order reference. Requests are reviewed under applicable law and purchase conditions; a request or account deletion does not automatically guarantee a refund.
 
 REFUNDS AND BILLING DISPUTES
 For an Android purchase made through Google Play, submit refund requests through Google Play using the Google account that made the purchase. Google Play controls the applicable refund process and decision. Hyperion cannot issue a Google Play refund from the app or website.
@@ -85,7 +85,7 @@ You can request permanent account deletion from Website Account → Delete accou
 
 Account deletion does not cancel a Google Play subscription, stop future Play renewals, or issue a refund. Google Play may continue billing the Google account that made the purchase until the subscription is separately cancelled through Google Play. Deleting the Hyperion account does not erase Android study records stored locally on the device. Read the warnings displayed before confirming deletion; the loss of linked licenses and account data is permanent.
 
-The deletion service may refuse to proceed while website payment submissions, open checkouts, unresolved PayMongo sessions, or required administrative audit-trail dependencies remain. Resolve the issue or contact support before retrying.
+The deletion service may refuse to proceed while website payment submissions, open historical checkouts, unresolved payment confirmations, or required administrative audit-trail dependencies remain. Resolve the issue or contact support before retrying.
 
 For an account without an active website or linked Google Play entitlement, 30 consecutive days without a recorded authenticated account-activity timestamp marks it inactive, followed by a separate 30-day grace period. Active entitlements defer inactivity-based deletion. After a license expires, at least a 30-day expiry-based grace period applies. Automated deletion is considered only after both the expiry-based grace period and inactivity-plus-grace deadline have passed, using the later deadline. Pending payments and administrative audit dependencies may defer or exclude deletion.
 
@@ -98,7 +98,7 @@ We may restrict or terminate access where we reasonably believe a user has viola
 To the extent permitted by applicable law, Hyperion is provided on an "as is" and "as available" basis. We make no warranty that the service or content will be uninterrupted, complete, error-free, current, or suitable for every user's requirements. To the extent permitted by law, Hyperion is not liable for indirect, incidental, special, consequential, or punitive losses, loss of data, lost opportunities, or examination outcomes arising from use of or inability to use the service. Nothing in these Terms excludes or limits liability or consumer rights that cannot lawfully be excluded or limited.
 
 10. THIRD-PARTY SERVICES
-Hyperion relies on Google and Google Play (Google sign-in, Android billing, and purchase verification), Firebase Remote Config (Android promo-code and activation-status configuration), Supabase (authentication, database, and backend functions), PayMongo (website checkout and payment processing), Cloudflare (website hosting, delivery, and security), and Meta/Facebook or email providers when you choose to contact support through those channels. The current Android app version does not use Cloud Firestore for promo-code activation. These providers' services are governed by their own terms and privacy policies. We do not control their independent systems, billing decisions, or retention rules, except that our own use remains subject to applicable law.
+Hyperion relies on Google and Google Play (Google sign-in, Android billing, and purchase verification), Firebase Remote Config (Android promo-code and activation-status configuration), Supabase (authentication, database, and backend functions), Cloudflare (website hosting, delivery, and security), and Meta/Facebook or email providers when you choose to contact support or send payment proof. A former hosted checkout provider may still process confirmations or refunds for earlier website purchases. The current Android app version does not use Cloud Firestore for promo-code activation. These providers' services are governed by their own terms and privacy policies. We do not control their independent systems, billing decisions, or retention rules, except that our own use remains subject to applicable law.
 
 11. CONSUMER COMPLAINTS AND INTERNAL REDRESS
 To raise a complaint about a website/PWA purchase, license, or digital service, email hyperionmaritimex@gmail.com using the email associated with your Hyperion account. Include your order reference (if applicable), relevant dates, and a clear description of the issue. Do not send passwords, one-time codes, or full payment-card details. We will review the complaint through this internal redress channel and communicate using the contact details you provide. Under Section 24 of the Philippine Internet Transactions Act of 2023, the internal redress mechanism is deemed exhausted if the complaint remains unresolved after seven (7) calendar days from filing. This does not waive any rights or remedies available under applicable law. Google Play billing complaints for Android purchases must also be raised through the relevant Google Play support process.
