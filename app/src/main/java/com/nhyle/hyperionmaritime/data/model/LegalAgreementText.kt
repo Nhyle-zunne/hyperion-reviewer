@@ -12,7 +12,7 @@ object LegalAgreementText {
     const val DISCLAIMER_SUMMARY = """Hyperion Maritime Reviewer is an independent educational resource. It is not MARINA, a government service, a maritime administration, a licensing board, or an examination authority, and it is not affiliated with, endorsed by, or authorized by those bodies. It does not guarantee examination results, a Certificate of Competency, an endorsement, or employment."""
 
     const val FULL_AGREEMENT_TEXT = """TERMS OF USE
-Effective Date: October 30, 2026 · Last Updated: November 14, 2026
+Effective Date: October 30, 2026 · Last Updated: November 25, 2026
 Service / Developer: Hyperion Maritime
 Website: https://hyperionmaritime.org
 Contact: hyperionmaritimex@gmail.com
