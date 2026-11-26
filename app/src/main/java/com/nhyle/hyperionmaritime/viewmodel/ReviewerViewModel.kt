@@ -35,6 +35,7 @@ import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.model.UserQuestionState
 import com.nhyle.hyperionmaritime.data.repository.MarinaScoringEngine
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
+import com.nhyle.hyperionmaritime.data.repository.MistakePracticePool
 import com.nhyle.hyperionmaritime.data.repository.RetiredQuestionPolicy
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBankGmdss
@@ -2787,6 +2788,11 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
             triggerPaywall(_selectedTrack.value)
             return
         }
+        var questions = MistakePracticePool.resolve(
+            _mistakeEntries.value, MaritimeQuestionBank.ALL_QUESTIONS, _selectedTrack.value, competenceId
+        )
+        if (questions.isEmpty()) return
+
         setRequiredMistakePasses(requiredPasses)
         timerJob?.cancel()
         purgeExamSessionFromBackStack()
@@ -2804,17 +2810,6 @@ class ReviewerViewModel(application: Application) : AndroidViewModel(application
         _isPaletteOpen.value = false
         _isShuffled.value = shuffleQuestions
         activeEvaluationAttemptCommittedId = null
-
-        val currentTrack = _selectedTrack.value
-        var trackMistakes = _mistakeEntries.value.filter { it.track.equals(currentTrack.name, ignoreCase = true) }
-        if (competenceId != null) {
-            trackMistakes = trackMistakes.filter { entry ->
-                entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
-            }
-        }
-        var questions = RetiredQuestionPolicy.active(trackMistakes.map { entry ->
-            MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId } ?: entry.question
-        })
 
         if (endItem != null && endItem >= startItem && questions.isNotEmpty()) {
             val fromIndex = (startItem - 1).coerceIn(0, questions.size - 1)
