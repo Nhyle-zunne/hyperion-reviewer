@@ -46,7 +46,15 @@ object MistakesVaultManager {
                 val question = if (qObj != null) {
                     val id = qObj.optString("id", questionId)
                     val qTrackName = qObj.optString("track", track)
-                    val qTrack = try { Track.valueOf(qTrackName) } catch (_: Exception) { Track.DECK_OIC_NW }
+                    val qTrack = Track.entries.firstOrNull {
+                        it.name.equals(qTrackName.trim(), ignoreCase = true) ||
+                            it.shortName.equals(qTrackName.trim(), ignoreCase = true) ||
+                            it.title.equals(qTrackName.trim(), ignoreCase = true)
+                    } ?: if (qTrackName.trim().equals("GMDSS", ignoreCase = true)) {
+                        Track.GMDSS_GOC
+                    } else {
+                        Track.DECK_OIC_NW
+                    }
                     val functionId = qObj.optString("functionId", "")
                     val competenceId = qObj.optString("competenceId", competenceOrPart)
                     val topic = qObj.optString("topic", "")
@@ -88,7 +96,7 @@ object MistakesVaultManager {
                         competenceId = competenceOrPart,
                         topic = "",
                         questionText = "Question data unavailable",
-                        options = listOf("A", "B", "C", "D"),
+                        options = emptyList(),
                         correctAnswerIndex = 0,
                         explanation = "",
                         difficulty = Difficulty.EASY,

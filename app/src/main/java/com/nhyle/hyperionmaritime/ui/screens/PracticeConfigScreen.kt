@@ -102,6 +102,7 @@ import com.nhyle.hyperionmaritime.ui.components.MianRuleCard
 import com.nhyle.hyperionmaritime.data.model.Track
 import com.nhyle.hyperionmaritime.data.repository.MaritimeCompetenceRegistry
 import com.nhyle.hyperionmaritime.data.repository.MaritimeQuestionBank
+import com.nhyle.hyperionmaritime.data.repository.MistakePracticePool
 import com.nhyle.hyperionmaritime.data.repository.ProQuestionRepository
 import com.nhyle.hyperionmaritime.ui.components.IndustrialToggleSwitch
 import com.nhyle.hyperionmaritime.ui.components.LuminousDeskSupportButton
@@ -192,8 +193,16 @@ fun PracticeConfigScreen(
     val isAdvancedLocked = !isVerified
     val isRangeUnlocked = isActivated || isVerified || isMTestMDrill
 
+    val mistakeCount = remember(isMistakesMode, mistakeEntries, selectedTrack, competenceId) {
+        if (isMistakesMode) {
+            MistakePracticePool.resolve(mistakeEntries, MaritimeQuestionBank.ALL_QUESTIONS, selectedTrack, competenceId).size
+        } else {
+            0
+        }
+    }
+
     // Dynamic max available questions
-    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isCrpMode, context, isTrackLicensed, isOperationalReview, isMTestMDrill, activeImportedSheet, isBookmarksMode, isMistakesMode, bookmarkedIds, mistakeEntries) {
+    val maxAvailable = remember(competenceId, selectedPart, selectedTrack, isCrpMode, context, isTrackLicensed, isOperationalReview, isMTestMDrill, activeImportedSheet, isBookmarksMode, isMistakesMode, bookmarkedIds, mistakeCount) {
         if (isBookmarksMode) {
             var list = MaritimeQuestionBank.ALL_QUESTIONS.filter { it.id in bookmarkedIds }
             if (competenceId != null && competenceId != "ALL") {
@@ -208,21 +217,7 @@ fun PracticeConfigScreen(
             }
             (if (isTrackLicensed) list.size else minOf(list.size, 5)).coerceAtLeast(1)
         } else if (isMistakesMode) {
-            var trackMistakes = mistakeEntries.filter { entry ->
-                entry.track.equals(selectedTrack.name, ignoreCase = true) ||
-                entry.track.equals(selectedTrack.shortName, ignoreCase = true) ||
-                entry.track.equals(selectedTrack.title, ignoreCase = true) ||
-                entry.question.track == selectedTrack
-            }
-            if (competenceId != null) {
-                trackMistakes = trackMistakes.filter { entry ->
-                    entry.competenceId.equals(competenceId, ignoreCase = true) || entry.question.competenceId.equals(competenceId, ignoreCase = true)
-                }
-            }
-            val questions = trackMistakes.mapNotNull { entry ->
-                MaritimeQuestionBank.ALL_QUESTIONS.find { it.id == entry.questionId }
-            }
-            questions.size.coerceAtLeast(1)
+            mistakeCount
         } else if (isMTestMDrill) {
             activeImportedSheet?.questions?.size ?: 1
         } else {
@@ -344,7 +339,7 @@ fun PracticeConfigScreen(
     val greetingSubtitle = if (isBookmarksMode) {
         "Saved Questions • $maxAvailable Items Available"
     } else if (isMistakesMode) {
-        "Vault Redemption • $maxAvailable Items to Redeem"
+        "Vault Redemption • $mistakeCount Items to Redeem"
     } else if (isMTestMDrill) {
         "Imported Question Bank • $maxAvailable Total Items"
     } else if (compInfo != null) {
@@ -1715,6 +1710,7 @@ fun PracticeConfigScreen(
             item {
                 val launchLabel = when {
                     isBookmarksMode -> "Start Reviewing Bookmarks ($selectedItemCount Items: #$startItem–#$endItem)"
+                    isMistakesMode && mistakeCount == 0 -> "No mistakes available for practice"
                     isMistakesMode -> "Start Reviewing Mistakes ($selectedItemCount Items: #$startItem–#$endItem)"
                     selectedDeliveryFormat == DrillDeliveryMode.INTENSIVE -> "Start Reviewing (Intensive Mode)"
                     isCrpMode && selectedTrack == Track.DECK_OIC_NW -> "Start Reviewing (MARINA CRP)"
@@ -1768,6 +1764,7 @@ fun PracticeConfigScreen(
                         .fillMaxWidth()
                         .heightIn(min = 56.dp)
                         .testTag("launch_practice_drill_button"),
+                    enabled = !isMistakesMode || mistakeCount > 0,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = PassGreen,
                         contentColor = PureWhite

@@ -93,6 +93,8 @@ fun VaultScreen(
     var expandedCompetencies by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val allMistakes = mistakeEntries
+    val practiceTracks = remember(allMistakes) { allMistakes.groupingBy { it.question.track }.eachCount() }
+    val practiceTrack = selectedTrack.takeIf { it in practiceTracks } ?: practiceTracks.keys.singleOrNull()
     val filteredMistakes = remember(allMistakes, searchQuery) {
         if (searchQuery.isBlank()) {
             allMistakes
@@ -263,10 +265,11 @@ fun VaultScreen(
                             Spacer(modifier = Modifier.height(14.dp))
                             OutlinedButton(
                                 onClick = {
-                                    if (allMistakes.isNotEmpty()) {
-                                        viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = null))
+                                    practiceTrack?.let { track ->
+                                        viewModel.navigateTo(Screen.PracticeConfig(track = track, isMistakesMode = true))
                                     }
                                 },
+                                enabled = practiceTrack != null,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RectangleShape,
                                 border = BorderStroke(1.dp, colors.accent),
@@ -275,7 +278,12 @@ fun VaultScreen(
                             ) {
                                 Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp), tint = colors.accent)
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("PRACTICE ALL MISTAKES (${allMistakes.size})", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                val label = when {
+                                    practiceTrack == null -> "CHOOSE A TRACK BELOW"
+                                    practiceTracks.size == 1 -> "PRACTICE ALL MISTAKES (${allMistakes.size})"
+                                    else -> "PRACTICE ${practiceTrack.shortName} MISTAKES (${practiceTracks[practiceTrack]})"
+                                }
+                                Text(label, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -383,8 +391,7 @@ fun VaultScreen(
                                     }
                                     OutlinedButton(
                                         onClick = {
-                                            viewModel.setTrack(track)
-                                            viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = null))
+                                            viewModel.navigateTo(Screen.PracticeConfig(track = track, isMistakesMode = true))
                                         },
                                         shape = RectangleShape,
                                         border = BorderStroke(1.dp, colors.accent),
@@ -453,8 +460,7 @@ fun VaultScreen(
                                         ) {
                                             OutlinedButton(
                                                 onClick = {
-                                                    viewModel.setTrack(track)
-                                                    viewModel.navigateTo(Screen.PracticeConfig(isMistakesMode = true, competenceId = competenceId))
+                                                    viewModel.navigateTo(Screen.PracticeConfig(track = track, isMistakesMode = true, competenceId = competenceId))
                                                 },
                                                 shape = RectangleShape,
                                                 border = BorderStroke(1.dp, colors.accent),
