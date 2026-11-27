@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "bbdcd5b68967bcb49b6a5f4b083fae1e707f8d00",
-  "manifestSha256": "8b8efc328454efbd46dfcc9507f862059936df177e1e6224b13ee3b2ffde5917",
-  "publishedAt": "2026-11-27T16:23:00.415Z",
-  "publicationId": "engine-management-explanations-4db5a7d3-975f-47bb-92f8-e149a09c25ee",
-  "inputDigest": "c7671891178c048d92e88db5428e148ec276598390be9ff767e689f64499b481",
-  "previousRevision": "644e961b3b6685d1c42233882800e457f8f5cc91"
+  "revision": "19553fa5c6019f965de48c355b63fe91d43ea135",
+  "manifestSha256": "ba3cff3fcddf983a7e44b760a6216ab0c2894bb210a4849574107c32952f7210",
+  "publishedAt": "2026-11-27T16:24:33.423Z",
+  "publicationId": "engine-management-explanations-a7c96e82-d877-4e66-8142-46fb6249715c",
+  "inputDigest": "4da79fb28547ae1bf6c001a52e57f85bcdc0ad6dc9917aeeeb0977e8c617cbd3",
+  "previousRevision": "bbdcd5b68967bcb49b6a5f4b083fae1e707f8d00"
 }
