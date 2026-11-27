@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "83ea94a82371425d9faaa78c6bb2147f51c6569a",
-  "manifestSha256": "b65d73eaf681f6c86fa0d214fe7dbc27a5e9de5b817a1cc9e942037325b41672",
-  "publishedAt": "2026-11-27T10:50:35.122Z",
-  "publicationId": "deck-management-explanations-5de8a588-1688-4b7a-a547-fae75af6163b",
-  "inputDigest": "aeaf97d1055090f245ad8171038fe1800f6eff46aa4f60ba517702edfbc0723f",
-  "previousRevision": "153295aea315507ae94b2e22f79114d37805c1da"
+  "revision": "76be66b111f24354e2e38f27640534f94e97e288",
+  "manifestSha256": "35824798c89324d350e35ada0f2a9ea0475943892757ea010a7a88a1db7e091f",
+  "publishedAt": "2026-11-27T10:54:30.482Z",
+  "publicationId": "deck-management-explanations-05ef2a04-16c3-4620-bccd-99f19dd8f741",
+  "inputDigest": "2a5f6621445c37e961f51ffc21b634b17fc701850ee0ae589a94a72790a0529e",
+  "previousRevision": "83ea94a82371425d9faaa78c6bb2147f51c6569a"
 }
