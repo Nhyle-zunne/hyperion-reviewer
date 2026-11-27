@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "032b427684030c2750dab2fd4d56e6617a8c2e80",
-  "manifestSha256": "c04c48d22241821ac70d338aa5b855e821d2d1b5fd78da1f1d86792822bee797",
-  "publishedAt": "2026-11-27T15:47:47.605Z",
-  "publicationId": "deck-management-explanations-1ef6f565-9de6-40d3-ad26-ed57232cbd6b",
-  "inputDigest": "d995b91f67b327dbfbf18adc6a37bd7f4ff24d0f0ce2deebce2ada3fc9bf91a5",
-  "previousRevision": "76be66b111f24354e2e38f27640534f94e97e288"
+  "revision": "644e961b3b6685d1c42233882800e457f8f5cc91",
+  "manifestSha256": "b3a76f801d2846fd6fd7b7b8a3ddaedffe6c8dd5de3367393d8e833fddd48f6c",
+  "publishedAt": "2026-11-27T16:22:24.534Z",
+  "publicationId": "engine-management-explanations-3c98f604-68ce-40e6-a14d-b2b38f6990fb",
+  "inputDigest": "b2318b0caea71509e921ebcfdf5f66178d76894b0439d744c8a5bca7790fef3f",
+  "previousRevision": "032b427684030c2750dab2fd4d56e6617a8c2e80"
 }
