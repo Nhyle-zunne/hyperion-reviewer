@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "revision": "55d957e92422f0c480e83490e3957110fac67c06",
-  "manifestSha256": "265805cb2f997c958b30c2057a51d6f85984842cc1124d19b4137babd9fbb687",
-  "publishedAt": "2026-11-27T06:23:42.557Z",
-  "publicationId": "oic-ew-explanations-ffdc669f-c0c4-4eec-8892-26943fe15763",
-  "inputDigest": "30aa0055a4006768e9763477539a817d8612602297ff48395c70d18ab0fd278a",
-  "previousRevision": "028b5dc23d0819b656500f1fb421820d5d485ff7"
+  "revision": "153295aea315507ae94b2e22f79114d37805c1da",
+  "manifestSha256": "78301d44430eea4e811c90c89071603080112b29fc352883f684ab8c3d45a482",
+  "publishedAt": "2026-11-27T10:46:19.237Z",
+  "publicationId": "deck-management-explanations-50744fa2-3acc-4c6a-a52e-d04d4181266e",
+  "inputDigest": "4665300d548d95eb59c35fd5a5e1244e546145d9ed29dbfa76891fad775bc59c",
+  "previousRevision": "55d957e92422f0c480e83490e3957110fac67c06"
 }
