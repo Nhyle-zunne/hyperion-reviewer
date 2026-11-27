@@ -320,8 +320,8 @@
     },
     {
       "path": "gmdss/c1_part6.csv.enc",
-      "bytes": 76355,
-      "sha256": "32b95edece411f8d94b72126660f2ec790ca844c612377683228d4f6d1ae9d08"
+      "bytes": 76418,
+      "sha256": "5a0da10cf33c6d974fc7b2fd8d1845e17244e2a555a3054557b39d366eabb616"
     },
     {
       "path": "gmdss/c1_part7.csv.enc",
